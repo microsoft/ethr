@@ -10,3 +10,10 @@
 
 # Output of the go coverage tool, specifically when used with LiteIDE
 *.out
+
+# VIM related files
+*.un~
+*.swp
+
+# Log files
+*.log
