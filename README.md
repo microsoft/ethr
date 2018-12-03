@@ -34,6 +34,18 @@ Client:
 ethr -c <server ip>
 ```
 
+Example:
+```bash
+// Start server
+ethr -s
+
+// Start client for default (bandwidth) test measurement using 1 thread
+ethr -c localhost
+
+// Start connections/s test using 64 threads
+ethr -c localhost -t c -n 64 
+```
+
 # Status
 
 Protocol  | Bandwidth | Connections/s | Packets/s | Latency
@@ -43,6 +55,34 @@ UDP  | No | NA | Yes | No
 HTTP | Yes | No | No | No
 HTTPS | No | No | No | No
 ICMP | No | NA | No | No
+
+# Platform Support
+
+**Windows**
+
+Tested: Windows 10
+
+Untested: Other Windows versions
+
+**Linux**
+
+Tested: Ubuntu Linux 18.04.1 LTS
+
+Untested: Other Linux versions
+
+**Other**
+
+No other platforms are tested at this time
+
+# Todo List
+
+Todo list work items are shown below. Contributions are most welcome for these work items or any other features and bugfixes.
+
+* Test Ethr on other Windows versions, other Linux versions, FreeBSD and other OS
+* Support for UDP bandwidth & latency testing
+* Support for HTTPS bandwidth, latency, requests/s
+* Support for HTTP latency and requests/s
+* Support for ICMP bandwidth, latency and packets/s
 
 # Contributing
 
