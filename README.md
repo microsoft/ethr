@@ -6,9 +6,18 @@ Ethr is a cross platform network performance measurement tool written in golang.
   <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49360895-629cce80-f68f-11e8-967a-ed1f4c0ae6b6.png">
 </p>
 
-# Building
+# Download
 
 ```bash
+For Windows 10: https://github.com/Microsoft/Ethr/files/2640289/ethr.zip
+For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
+```
+
+# Building from Source
+
+```bash
+git clone https://github.com/Microsoft/ethr.git
+cd ethr
 go build
 ```
 
