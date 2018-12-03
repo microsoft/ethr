@@ -1,4 +1,52 @@
 
+# Ethr
+
+Ethr is a cross platform network performance measurement tool written in golang. Goal of this project is to provide common performance measurements such as bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS etc.
+
+<p align="center">
+  <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49360895-629cce80-f68f-11e8-967a-ed1f4c0ae6b6.png">
+</p>
+
+Status of various supported measurements and protocols is listed in the status section below.
+
+# Status
+
+| Protocol | Bandwidth | Connections/s | Packets/s | Latency |
+| -------- | -----|--- | ------------- | --------- | ------- |
+| TCP | Yes | Yes | No | Yes |
+| UDP | No | NA | Yes | No |
+| HTTP | Yes | No | No | No |
+| HTTPS | No | No | No | No |
+| ICMP | No | No | No | No |
+
+# Building
+
+```bash
+go build
+```
+
+# Usage
+
+Help:
+```bash
+./ethr -h
+```
+
+Server:
+```bash
+./ethr -s
+```
+
+Server with Text UI:
+```bash
+./ethr -s -ui
+```
+
+Client:
+```bash
+./ethr -c <server ip>
+```
+
 # Contributing
 
 This project welcomes contributions and suggestions.  Most contributions require you to agree to a
