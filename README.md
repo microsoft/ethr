@@ -16,22 +16,22 @@ go build
 
 Help:
 ```bash
-./ethr -h
+ethr -h
 ```
 
 Server:
 ```bash
-./ethr -s
+ethr -s
 ```
 
 Server with Text UI:
 ```bash
-./ethr -s -ui
+ethr -s -ui
 ```
 
 Client:
 ```bash
-./ethr -c <server ip>
+ethr -c <server ip>
 ```
 
 # Status
