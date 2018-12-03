@@ -42,7 +42,7 @@ TCP  | Yes | Yes | No | Yes
 UDP  | No | NA | Yes | No
 HTTP | Yes | No | No | No
 HTTPS | No | No | No | No
-ICMP | No | No | No | No
+ICMP | No | NA | No | No
 
 # Contributing
 
