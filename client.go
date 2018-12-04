@@ -172,10 +172,11 @@ func runBandwidthTest(test *ethrTest) {
 			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 				ec.fd, lserver, lport, rserver, rport)
 			blen := len(buff)
+		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
-					break
+					break ExitForLoop
 				default:
 					n, err := conn.Write(buff)
 					if err != nil {
@@ -202,10 +203,11 @@ func runCpsTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
+		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
-					break
+					break ExitForLoop
 				default:
 					conn, err := net.Dial(protoTCP, server+":"+tcpCpsPort)
 					if err == nil {
@@ -244,10 +246,11 @@ func runPpsTest(test *ethrTest) {
 			   sendSessionMsg(test.enc, ethrMsg)
 			*/
 			blen := len(buff)
+		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
-					break
+					break ExitForLoop
 				default:
 					n, err := conn.Write(buff)
 					if err != nil {
@@ -287,11 +290,12 @@ func runLatencyTest(test *ethrTest) {
 	blen := len(buff)
 	rttCount := test.testParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
+ExitForLoop:
 	for {
-	LOOP:
+	ExitSelect:
 		select {
 		case <-test.done:
-			break
+			break ExitForLoop
 		default:
 			for i := uint32(0); i < rttCount; i++ {
 				s1 := time.Now()
@@ -299,18 +303,18 @@ func runLatencyTest(test *ethrTest) {
 				if err != nil {
 					// ui.printErr(err)
 					// return
-					break LOOP
+					break ExitSelect
 				}
 				if n < blen {
 					// ui.printErr("Partial write: " + strconv.Itoa(n))
 					// return
-					break LOOP
+					break ExitSelect
 				}
 				_, err = io.ReadFull(conn, buff)
 				if err != nil {
 					// ui.printErr(err)
 					// return
-					break LOOP
+					break ExitSelect
 				}
 				e2 := time.Since(s1)
 				latencyNumbers[i] = e2
@@ -364,27 +368,27 @@ func runHttpTest(test *ethrTest) {
 		tr := &http.Transport{DisableCompression: true}
 		client := &http.Client{Transport: tr}
 		go func() {
+		ExitForLoop:
 			for {
-			LOOP:
 				select {
 				case <-test.done:
-					break
+					break ExitForLoop
 				default:
 					// response, err := http.Get(uri)
 					response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
 					if err != nil {
 						// ui.printErr("%v", err)
-						break LOOP
+						continue
 					} else {
 						if response.StatusCode != http.StatusOK {
-							break LOOP
+							continue
 						}
 						// contents, err := ioutil.ReadAll(response.Body)
 						_, err = ioutil.ReadAll(response.Body)
 						response.Body.Close()
 						if err != nil {
 							// ui.printErr("%v", err)
-							break LOOP
+							continue
 						}
 						// ui.printMsg("%s", string(contents))
 					}

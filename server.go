@@ -148,14 +148,23 @@ func runServerBandwidthTest() {
 	}(l)
 }
 
+func closeConn(conn net.Conn) {
+	ui.printDbg("Closing TCP connection: %v", conn)
+	err := conn.Close()
+	if err != nil {
+		ui.printDbg("Failed to close TCP connection, error: %v", err)
+	}
+}
+
 func runBandwidthHandler(conn net.Conn, test *ethrTest) {
-	defer conn.Close()
+	defer closeConn(conn)
 	size := test.testParam.BufferSize
 	bytes := make([]byte, size)
+ExitForLoop:
 	for {
 		select {
 		case <-test.done:
-			break
+			break ExitForLoop
 		default:
 			_, err := io.ReadFull(conn, bytes)
 			if err != nil {
