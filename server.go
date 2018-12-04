@@ -68,13 +68,21 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 	testParam := ethrMsg.Syn.TestParam
-	server, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		ui.printMsg(fmt.Sprintf("remote: split host port: %v",err))
+		return
+	}
 	ethrUnused(port)
-	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
+	if err != nil {
+		ui.printMsg(fmt.Sprintf("local: split host port: %v",err))
+		return
+	}
 	ethrUnused(lserver, lport)
 	ui.printMsg("New control connection from " + server + ", port " + port)
 	ui.printMsg("Starting " + protoToString(testParam.TestId.Protocol) + " " +
-		testToString(testParam.TestId.Type) + " test from " + server)
+	testToString(testParam.TestId.Type) + " test from " + server)
 	test, err := newTest(server, conn, testParam, enc, dec)
 	if err != nil {
 		msg := "Rejected duplicate " + protoToString(testParam.TestId.Protocol) + " " +
@@ -84,28 +92,27 @@ func handleRequest(conn net.Conn) {
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
-	cleanupFunc := func() {
+	defer func() {
 		test.ctrlConn.Close()
 		close(test.done)
 		deleteTest(test)
-	}
+	}()
 	ui.emitTestHdr()
 	if test.testParam.TestId.Type == Pps {
 		err = runServerPpsTest(test)
 		if err != nil {
-			cleanupFunc()
+			ui.printMsg(fmt.Sprintf("run server pps test: %v",err))
 			return
 		}
 	}
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
-		cleanupFunc()
+		ui.printMsg(fmt.Sprintf("send session message: %v",err))
 		return
 	}
 	ethrMsg = recvSessionMsg(dec)
 	if ethrMsg.Type != EthrAck {
-		cleanupFunc()
 		return
 	}
 	test.isActive = true
@@ -113,11 +120,9 @@ func handleRequest(conn net.Conn) {
 	_, err = test.ctrlConn.Read(b[0:])
 	ui.printMsg("Ending " + testToString(testParam.TestId.Type) + " test from " + server)
 	test.isActive = false
-	cleanupFunc()
 	if len(gSessionKeys) > 0 {
 		ui.emitTestHdr()
 	}
-	return
 }
 
 func runServerBandwidthTest() {
