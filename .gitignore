@@ -17,3 +17,8 @@
 
 # Log files
 *.log
+
+# Files without extension (Linux binary, for example)
+*
+!/**/
+!*.*
