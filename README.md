@@ -23,9 +23,7 @@ For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
 
 Note: go version 1.10 or higher is required building it from the source.
 ```bash
-git clone https://github.com/Microsoft/ethr.git
-cd ethr
-go build
+go get github.com/Microsoft/ethr
 ```
 
 # Usage
