@@ -136,8 +136,12 @@ func printHLineText(x, y int, w int, text string) {
 	}
 	offset := (w - runewidth.StringWidth(text)) / 2
 	textArr := []rune(text)
+	xoff := 0
 	for i := 0; i < len(text); i++ {
-		tm.SetCell(x+offset+i, y, textArr[i], tm.ColorWhite, tm.ColorDefault)
+		tm.SetCell(x+offset+i+xoff, y, textArr[i], tm.ColorWhite, tm.ColorDefault)
+		if runewidth.RuneWidth(textArr[i]) == 2 {
+			xoff++
+		}
 	}
 }
 
@@ -153,8 +157,12 @@ func printText(x, y, w int, text string, fg, bg tm.Attribute) {
 	for i := 0; i < w; i++ {
 		tm.SetCell(x+i, y, ' ', fg, bg)
 	}
+	xoff := 0
 	for i := 0; i < len(textArr); i++ {
-		tm.SetCell(x+i, y, textArr[i], fg, bg)
+		tm.SetCell(x+i+xoff, y, textArr[i], fg, bg)
+		if runewidth.RuneWidth(textArr[i]) == 2 {
+			xoff++
+		}
 	}
 }
 
@@ -164,8 +172,12 @@ func printCenterText(x, y, w int, text string, fg, bg tm.Attribute) {
 	for i := 0; i < w; i++ {
 		tm.SetCell(x+i, y, ' ', fg, bg)
 	}
+	xoff := 0
 	for i := 0; i < len(textArr); i++ {
-		tm.SetCell(x+offset+i, y, textArr[i], fg, bg)
+		tm.SetCell(x+offset+i+xoff, y, textArr[i], fg, bg)
+		if runewidth.RuneWidth(textArr[i]) == 2 {
+			xoff++
+		}
 	}
 }
 
