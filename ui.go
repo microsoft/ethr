@@ -134,7 +134,7 @@ func printHLineText(x, y int, w int, text string) {
 	for i := 0; i < w; i++ {
 		tm.SetCell(x+i, y, symbols[horizontal], tm.ColorWhite, tm.ColorDefault)
 	}
-	offset := (w - len(text)) / 2
+	offset := (w - runewidth.StringWidth(text)) / 2
 	textArr := []rune(text)
 	for i := 0; i < len(text); i++ {
 		tm.SetCell(x+offset+i, y, textArr[i], tm.ColorWhite, tm.ColorDefault)
@@ -159,7 +159,7 @@ func printText(x, y, w int, text string, fg, bg tm.Attribute) {
 }
 
 func printCenterText(x, y, w int, text string, fg, bg tm.Attribute) {
-	offset := (w - len(text)) / 2
+	offset := (w - runewidth.StringWidth(text)) / 2
 	textArr := []rune(text)
 	for i := 0; i < w; i++ {
 		tm.SetCell(x+i, y, ' ', fg, bg)
