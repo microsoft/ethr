@@ -1,0 +1,11 @@
+[[constraint]]
+  name = "github.com/mattn/go-runewidth"
+  version = "0.0.3"
+
+[[constraint]]
+  branch = "master"
+  name = "github.com/nsf/termbox-go"
+
+[prune]
+  go-tests = true
+  unused-packages = true
