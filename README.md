@@ -25,6 +25,7 @@ Note: go version 1.10 or higher is required building it from the source.
 ```bash
 git clone https://github.com/Microsoft/ethr.git
 cd ethr
+dep ensure -v
 go build
 ```
 
