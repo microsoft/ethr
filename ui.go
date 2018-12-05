@@ -10,6 +10,7 @@ import (
 	"math"
 	"time"
 
+	"github.com/mattn/go-runewidth"
 	tm "github.com/nsf/termbox-go"
 )
 
@@ -55,6 +56,12 @@ type table struct {
 	cr      int
 	justify int
 	border  int
+}
+
+func init() {
+	if runewidth.IsEastAsian() {
+		symbols = []rune{'+', '-', '+', '|', '+', '+', '+', '+', '+', '+', '+', ' ', '░', '▒', '▓', '█', '^', 'v'}
+	}
 }
 
 func (t *table) drawTblRow(ledge, redge, middle, spr rune, fg, bg tm.Attribute) {
