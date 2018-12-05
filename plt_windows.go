@@ -6,11 +6,12 @@
 package main
 
 import (
-	tm "github.com/nsf/termbox-go"
 	"net"
 	"strings"
 	"syscall"
 	"unsafe"
+
+	tm "github.com/nsf/termbox-go"
 )
 
 var kernel32 = syscall.NewLazyDLL("kernel32.dll")

@@ -7,9 +7,10 @@ package main
 
 import (
 	"fmt"
-	tm "github.com/nsf/termbox-go"
 	"math"
 	"time"
+
+	tm "github.com/nsf/termbox-go"
 )
 
 const (
