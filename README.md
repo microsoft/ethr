@@ -19,14 +19,23 @@ For Windows 10: https://github.com/Microsoft/Ethr/files/2640289/ethr.zip
 For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
 ```
 
-# Building from Source
+# Installation
 
 Note: go version 1.10 or higher is required building it from the source.
+
+## Building from Source
+
 ```bash
 git clone https://github.com/Microsoft/ethr.git
 cd ethr
 dep ensure -v
 go build
+```
+
+## Using go get
+
+```bash
+go get github.com/Microsoft/ethr
 ```
 
 # Usage
