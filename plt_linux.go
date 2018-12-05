@@ -7,11 +7,12 @@ package main
 
 import (
 	"bufio"
-	tm "github.com/nsf/termbox-go"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+
+	tm "github.com/nsf/termbox-go"
 )
 
 type ethrNetDevInfo struct {

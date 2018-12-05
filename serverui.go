@@ -8,11 +8,12 @@ package main
 import (
 	"errors"
 	"fmt"
-	tm "github.com/nsf/termbox-go"
 	"os"
 	"sync"
 	"sync/atomic"
 	"time"
+
+	tm "github.com/nsf/termbox-go"
 )
 
 type ethrTestResultAggregate struct {
