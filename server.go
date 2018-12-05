@@ -68,13 +68,21 @@ func handleRequest(conn net.Conn) {
 		return
 	}
 	testParam := ethrMsg.Syn.TestParam
-	server, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
+	if err != nil {
+		ui.printErr("remote: split host port: %v",err)
+		return
+	}
 	ethrUnused(port)
-	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
+	if err != nil {
+		ui.printErr("local: split host port: %v",err)
+		return
+	}
 	ethrUnused(lserver, lport)
 	ui.printMsg("New control connection from " + server + ", port " + port)
 	ui.printMsg("Starting " + protoToString(testParam.TestId.Protocol) + " " +
-		testToString(testParam.TestId.Type) + " test from " + server)
+	testToString(testParam.TestId.Type) + " test from " + server)
 	test, err := newTest(server, conn, testParam, enc, dec)
 	if err != nil {
 		msg := "Rejected duplicate " + protoToString(testParam.TestId.Protocol) + " " +
@@ -93,6 +101,7 @@ func handleRequest(conn net.Conn) {
 	if test.testParam.TestId.Type == Pps {
 		err = runServerPpsTest(test)
 		if err != nil {
+			ui.printErr("run server pps test: %v",err)
 			cleanupFunc()
 			return
 		}
@@ -100,6 +109,7 @@ func handleRequest(conn net.Conn) {
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
+		ui.printErr("send session message: %v",err)
 		cleanupFunc()
 		return
 	}
@@ -117,7 +127,6 @@ func handleRequest(conn net.Conn) {
 	if len(gSessionKeys) > 0 {
 		ui.emitTestHdr()
 	}
-	return
 }
 
 func runServerBandwidthTest() {
