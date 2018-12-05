@@ -92,16 +92,17 @@ func handleRequest(conn net.Conn) {
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
-	defer func() {
+	cleanupFunc := func() {
 		test.ctrlConn.Close()
 		close(test.done)
 		deleteTest(test)
-	}()
+	}
 	ui.emitTestHdr()
 	if test.testParam.TestId.Type == Pps {
 		err = runServerPpsTest(test)
 		if err != nil {
 			ui.printErr("run server pps test: %v",err)
+			cleanupFunc()
 			return
 		}
 	}
@@ -109,10 +110,12 @@ func handleRequest(conn net.Conn) {
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
 		ui.printErr("send session message: %v",err)
+		cleanupFunc()
 		return
 	}
 	ethrMsg = recvSessionMsg(dec)
 	if ethrMsg.Type != EthrAck {
+		cleanupFunc()
 		return
 	}
 	test.isActive = true
@@ -120,6 +123,7 @@ func handleRequest(conn net.Conn) {
 	_, err = test.ctrlConn.Read(b[0:])
 	ui.printMsg("Ending " + testToString(testParam.TestId.Type) + " test from " + server)
 	test.isActive = false
+	cleanupFunc()
 	if len(gSessionKeys) > 0 {
 		ui.emitTestHdr()
 	}
