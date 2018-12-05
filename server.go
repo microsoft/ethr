@@ -70,13 +70,13 @@ func handleRequest(conn net.Conn) {
 	testParam := ethrMsg.Syn.TestParam
 	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
-		ui.printMsg(fmt.Sprintf("remote: split host port: %v",err))
+		ui.printErr("remote: split host port: %v",err)
 		return
 	}
 	ethrUnused(port)
 	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
-		ui.printMsg(fmt.Sprintf("local: split host port: %v",err))
+		ui.printErr("local: split host port: %v",err)
 		return
 	}
 	ethrUnused(lserver, lport)
@@ -101,14 +101,14 @@ func handleRequest(conn net.Conn) {
 	if test.testParam.TestId.Type == Pps {
 		err = runServerPpsTest(test)
 		if err != nil {
-			ui.printMsg(fmt.Sprintf("run server pps test: %v",err))
+			ui.printErr("run server pps test: %v",err)
 			return
 		}
 	}
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
-		ui.printMsg(fmt.Sprintf("send session message: %v",err))
+		ui.printErr("send session message: %v",err)
 		return
 	}
 	ethrMsg = recvSessionMsg(dec)
