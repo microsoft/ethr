@@ -86,13 +86,13 @@ ICMP | No | NA | No | No
 
 **Windows**
 
-Tested: Windows 10
+Tested: Windows 10, Windows 7 SP1
 
 Untested: Other Windows versions
 
 **Linux**
 
-Tested: Ubuntu Linux 18.04.1 LTS
+Tested: Ubuntu Linux 18.04.1 LTS, OpenSuse Leap 15
 
 Untested: Other Linux versions
 
