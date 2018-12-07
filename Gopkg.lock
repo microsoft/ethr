@@ -17,12 +17,21 @@
   pruneopts = "UT"
   revision = "60ab7e3d12ed91bc1b2486559c4b3a6b62297577"
 
+[[projects]]
+  branch = "master"
+  digest = "1:9399de11945e643d7131cf070736122b76800d92d57a80494bd9a4e73e6979f3"
+  name = "golang.org/x/sys"
+  packages = ["unix"]
+  pruneopts = "UT"
+  revision = "70b957f3b65e069b4930ea94e2721eefa0f8f695"
+
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
   input-imports = [
     "github.com/mattn/go-runewidth",
     "github.com/nsf/termbox-go",
+    "golang.org/x/sys/unix",
   ]
   solver-name = "gps-cdcl"
   solver-version = 1
