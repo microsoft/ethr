@@ -41,6 +41,15 @@ func getNetDevStats(stats *ethrNetStat) {
 	}
 }
 
+func getTcpStats(stats *ethrNetStat) {
+}
+
+func hideCursor() {
+}
+
+func blockWindowResize() {
+}
+
 func getIfaceData(index int) (*ifMsghdr2, error) {
 	var data ifMsghdr2
 	rawData, err := unix.SysctlRaw("net", unix.AF_ROUTE, 0, 0, unix.NET_RT_IFLIST2, index)
