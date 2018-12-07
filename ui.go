@@ -15,24 +15,24 @@ import (
 )
 
 const (
-	lefttop      = 0
-	horizontal   = 1
-	righttop     = 2
-	vertical     = 3
-	leftbottom   = 4
-	rightbottom  = 5
-	middlebottom = 6
-	middletop    = 7
-	middleleft   = 8
-	middleright  = 9
-	middlemiddle = 10
-	space        = 11
-	box1         = 12
-	box2         = 13
-	box3         = 14
-	box4         = 15
-	uparrow      = 16
-	dnarrow      = 17
+	lefttop = iota
+	horizontal
+	righttop
+	vertical
+	leftbottom
+	rightbottom
+	middlebottom
+	middletop
+	middleleft
+	middleright
+	middlemiddle
+	space
+	box1
+	box2
+	box3
+	box4
+	uparrow
+	dnarrow
 )
 
 var symbols = []rune{'┌', '─', '┐', '│', '└', '┘', '┴', '┬', '├', '┤', '┼', ' ', '░', '▒', '▓', '█', '↑', '↓'}
