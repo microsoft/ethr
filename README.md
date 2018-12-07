@@ -1,4 +1,4 @@
-# Ethr 
+# Ethr
 
 Ethr is a cross platform network performance measurement tool written in golang. Goal of this project is to provide a native tool for network performance measurements of bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS, and across multiple platforms such as Windows, Linux and other Unix systems.
 
@@ -14,7 +14,7 @@ Ethr provides more test measurements as compared to other tools, e.g. it provide
 
 # Download
 
-```bash
+```
 For Windows 10: https://github.com/Microsoft/Ethr/files/2640289/ethr.zip
 For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
 ```
@@ -25,7 +25,7 @@ Note: go version 1.10 or higher is required building it from the source.
 
 ## Building from Source
 
-```bash
+```
 git clone https://github.com/Microsoft/ethr.git
 cd ethr
 dep ensure -v
@@ -34,34 +34,34 @@ go build
 
 ## Using go get
 
-```bash
+```
 go get github.com/Microsoft/ethr
 ```
 
 # Usage
 
 Help:
-```bash
+```
 ethr -h
 ```
 
 Server:
-```bash
+```
 ethr -s
 ```
 
 Server with Text UI:
-```bash
+```
 ethr -s -ui
 ```
 
 Client:
-```bash
+```
 ethr -c <server ip>
 ```
 
 Example:
-```bash
+```
 // Start server
 ethr -s
 
@@ -69,7 +69,7 @@ ethr -s
 ethr -c localhost
 
 // Start connections/s test using 64 threads
-ethr -c localhost -t c -n 64 
+ethr -c localhost -t c -n 64
 ```
 
 # Status
