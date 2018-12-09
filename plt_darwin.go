@@ -10,6 +10,7 @@ import (
 	"encoding/binary"
 	"net"
 
+	"github.com/nsf/termbox-go"
 	"golang.org/x/sys/unix"
 )
 
@@ -45,6 +46,7 @@ func getTcpStats(stats *ethrNetStat) {
 }
 
 func hideCursor() {
+	termbox.SetCursor(0, 0)
 }
 
 func blockWindowResize() {
