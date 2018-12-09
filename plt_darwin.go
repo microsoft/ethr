@@ -69,6 +69,7 @@ type ifMsghdr2 struct {
 	Addrs      int32
 	Flags      int32
 	Index      uint16
+	_          [2]byte
 	Snd_len    int32
 	Snd_maxlen int32
 	Snd_drops  int32
