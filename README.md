@@ -44,7 +44,7 @@ go get github.com/Microsoft/ethr
 Assuming you are using [`yay`](https://aur.archlinux.org/packages/yay/) (https://github.com/Jguer/yay):
 
 ```
-yay -s ethr
+yay -S ethr
 ```
 
 # Usage
