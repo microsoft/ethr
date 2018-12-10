@@ -8,7 +8,6 @@ package main
 import (
 	"container/list"
 	"encoding/gob"
-	"fmt"
 	"net"
 	"os"
 	"sync"
@@ -245,7 +244,7 @@ func watchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
 				break
 			}
 			test.rcvdMsgs <- ethrMsg
-			fmt.Println(ethrMsg)
+			ui.printDbg("%v", ethrMsg)
 		}
 		waitForChannelStop <- true
 	}()
