@@ -8,7 +8,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	"fmt"
+//	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -57,6 +57,7 @@ func establishSession(testParam EthrTestParam, server string) (err error, test *
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
+    /**
 	ethrMsg = recvSessionMsg(test.dec)
 	if ethrMsg.Type != EthrAck {
 		if ethrMsg.Type == EthrFin {
@@ -66,6 +67,12 @@ func establishSession(testParam EthrTestParam, server string) (err error, test *
 		}
 		deleteTest(test)
 	}
+	ethrMsg = createAckMsg()
+	err = sendSessionMsg(test.enc, ethrMsg)
+	if err != nil {
+		os.Exit(1)
+	}
+    **/
 	return
 }
 
@@ -127,11 +134,6 @@ func runTest(test *ethrTest, d time.Duration) {
 		go runHttpTest(test)
 	}
 	test.isActive = true
-	ethrMsg := createAckMsg()
-	err := sendSessionMsg(test.enc, ethrMsg)
-	if err != nil {
-		os.Exit(1)
-	}
 	toStop := make(chan int, 1)
 	runDurationTimer(d, toStop)
 	monitorControlChannel(test, toStop)
@@ -225,11 +227,14 @@ func runCpsTest(test *ethrTest) {
 }
 
 func runPpsTest(test *ethrTest) {
-	server := test.session.remoteAddr
+	// server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
-			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(protoUDP, server+":"+udpPpsPort)
+			// buff := make([]byte, test.testParam.BufferSize)
+			buff := make([]byte, 1)
+			// conn, err := net.Dial(protoUDP, server+":"+udpPpsPort)
+            raddr, err := net.ResolveUDPAddr(protoUDP, ":"+udpPpsPort)
+			conn, err := net.DialUDP(protoUDP, nil, raddr)
 			if err != nil {
 				ui.printErr("%v", err)
 				os.Exit(1)
@@ -240,11 +245,10 @@ func runPpsTest(test *ethrTest) {
 			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 			ui.printMsg("[udp] local %s port %s connected to %s port %s",
 				lserver, lport, rserver, rport)
-			/*
+			/**/
 			   ethrMsg := createBgnMsg(lport)
 			   sendSessionMsg(test.enc, ethrMsg)
-			   sendSessionMsg(test.enc, ethrMsg)
-			*/
+			/**/
 			blen := len(buff)
 		ExitForLoop:
 			for {
@@ -254,12 +258,12 @@ func runPpsTest(test *ethrTest) {
 				default:
 					n, err := conn.Write(buff)
 					if err != nil {
-						// ui.printErr(err)
+                        ui.printDbg("%v", err)
 						// return
 						continue
 					}
 					if n < blen {
-						// ui.printErr("Partial write: " + strconv.Itoa(n))
+						ui.printDbg("Partial write: %d", n)
 						// return
 						continue
 					}

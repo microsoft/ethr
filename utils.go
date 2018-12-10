@@ -15,17 +15,32 @@ import (
 	"unicode/utf8"
 )
 
+//
+// TODO: Use a better way to define ports. The core logic is:
+// Find a base port, such as 9999, and the Bandwidth is: base - 0,
+// Cps is base - 1, Pps is base - 2 and Latency is base - 3
+//
 const (
-	hostAddr          = ""
-	ctrlPort          = "9991"
-	tcpBandwidthPort  = "9999"
-	tcpCpsPort        = "9998"
-	tcpPpsPort        = "9997"
-	tcpLatencyPort    = "9996"
-	udpPpsPort        = "9997"
-	httpBandwidthPort = "8080"
-	protoTCP          = "tcp"
-	protoUDP          = "udp"
+	hostAddr           = ""
+	ctrlPort           = "8888"
+	tcpBandwidthPort   = "9999"
+	tcpCpsPort         = "9998"
+	tcpPpsPort         = "9997"
+	tcpLatencyPort     = "9996"
+	udpBandwidthPort   = "9999"
+	udpCpsPort         = "9998"
+	udpPpsPort         = "9997"
+	udpLatencyPort     = "9996"
+	httpBandwidthPort  = "9899"
+	httpCpsPort        = "9898"
+	httpPpsPort        = "9897"
+	httpLatencyPort    = "9896"
+	httpsBandwidthPort = "9799"
+	httpsCpsPort       = "9798"
+	httpsPpsPort       = "9797"
+	httpsLatencyPort   = "9796"
+	protoTCP           = "tcp"
+	protoUDP           = "udp"
 )
 
 var gDone = false
