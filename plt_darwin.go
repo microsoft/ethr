@@ -6,6 +6,8 @@
 package main
 
 import (
+	"bytes"
+	"encoding/binary"
 	"fmt"
 	"net"
 	"os/exec"
@@ -13,21 +15,11 @@ import (
 	"strconv"
 	"strings"
 
-	tm "github.com/nsf/termbox-go"
+	"github.com/nsf/termbox-go"
+	"golang.org/x/sys/unix"
 )
 
 var netstatPath = "/usr/sbin/netstat"
-
-type ethrNetDevInfo struct {
-	bytes      uint64
-	packets    uint64
-	drop       uint64
-	errs       uint64
-	fifo       uint64
-	frame      uint64
-	compressed uint64
-	multicast  uint64
-}
 
 func getNetDevStats(stats *ethrNetStat) {
 	ifs, err := net.Interfaces()
@@ -36,53 +28,25 @@ func getNetDevStats(stats *ethrNetStat) {
 		return
 	}
 
-	for _, netIf := range ifs {
-		if netIf.Flags&net.FlagUp == 0 {
+	for _, iface := range ifs {
+		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}
 
-		netIfStats, err := getNetInterfaceStats(netIf.Name)
+		ifaceData, err := getIfaceData(iface.Index)
 		if err != nil {
-			ui.printErr("Failed to get stats for interface %s: %v", netIf.Name, err)
+			ui.printErr("failed to load data for interface %q: %v", iface.Name, err)
 			continue
 		}
-		stats.netDevStats = append(stats.netDevStats, netIfStats)
+
+		stats.netDevStats = append(stats.netDevStats, ethrNetDevStat{
+			interfaceName: iface.Name,
+			rxBytes:       ifaceData.Data.Ibytes,
+			rxPkts:        ifaceData.Data.Ipackets,
+			txBytes:       ifaceData.Data.Obytes,
+			txPkts:        ifaceData.Data.Opackets,
+		})
 	}
-}
-
-func getNetInterfaceStats(name string) (ethrNetDevStat, error) {
-
-	var intfStats ethrNetDevStat
-
-	// use netstat to get the interface stats
-	args := []string{"-ib", "-I", name}
-	output, err := exec.Command(netstatPath, args...).Output()
-	if err != nil {
-		return intfStats, err
-	}
-	lines := strings.Split(string(output), "\n")
-	numLines := len(lines)
-
-	if numLines <= 1 {
-		return intfStats, fmt.Errorf("No interface stats available for %s", name)
-	}
-
-	// Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
-	// en0   1500  <Link#4>    18:65:90:d2:af:c7   859944     0  773619217   714294     0  183006466     0
-	for _, line := range lines[1:] {
-		fields := strings.Fields(line)
-		if len(fields) < 11 {
-			continue
-		}
-		return ethrNetDevStat{
-			interfaceName: name,
-			rxBytes:       toInt(fields[6]),
-			txBytes:       toInt(fields[9]),
-			rxPkts:        toInt(fields[4]),
-			txPkts:        toInt(fields[7]),
-		}, nil
-	}
-	return intfStats, nil
 }
 
 func getTcpStats(stats *ethrNetStat) {
@@ -110,4 +74,57 @@ func hideCursor() {
 }
 
 func blockWindowResize() {
+}
+
+func getIfaceData(index int) (*ifMsghdr2, error) {
+	var data ifMsghdr2
+	rawData, err := unix.SysctlRaw("net", unix.AF_ROUTE, 0, 0, unix.NET_RT_IFLIST2, index)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Read(bytes.NewReader(rawData), binary.LittleEndian, &data)
+	return &data, err
+}
+
+type ifMsghdr2 struct {
+	Msglen     uint16
+	Version    uint8
+	Type       uint8
+	Addrs      int32
+	Flags      int32
+	Index      uint16
+	_          [2]byte
+	Snd_len    int32
+	Snd_maxlen int32
+	Snd_drops  int32
+	Timer      int32
+	Data       ifData64
+}
+
+type ifData64 struct {
+	Type       uint8
+	Typelen    uint8
+	Physical   uint8
+	Addrlen    uint8
+	Hdrlen     uint8
+	Recvquota  uint8
+	Xmitquota  uint8
+	Unused1    uint8
+	Mtu        uint32
+	Metric     uint32
+	Baudrate   uint64
+	Ipackets   uint64
+	Ierrors    uint64
+	Opackets   uint64
+	Oerrors    uint64
+	Collisions uint64
+	Ibytes     uint64
+	Obytes     uint64
+	Imcasts    uint64
+	Omcasts    uint64
+	Iqdrops    uint64
+	Noproto    uint64
+	Recvtiming uint32
+	Xmittiming uint32
+	Lastchange unix.Timeval32
 }

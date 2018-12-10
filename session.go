@@ -96,6 +96,7 @@ type ethrTest struct {
 	ctrlConn   net.Conn
 	enc        *gob.Encoder
 	dec        *gob.Decoder
+	rcvdMsgs   chan *EthrMsg
 	testParam  EthrTestParam
 	testResult ethrTestResult
 	done       chan struct{}
@@ -155,6 +156,7 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 	test.ctrlConn = conn
 	test.enc = enc
 	test.dec = dec
+	test.rcvdMsgs = make(chan *EthrMsg)
 	test.testParam = testParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
@@ -232,6 +234,20 @@ func (test *ethrTest) connListDo(f func(*ethrConn)) {
 		ec := e.Value.(*ethrConn)
 		f(ec)
 	}
+}
+
+func watchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
+	go func() {
+		for {
+			ethrMsg := recvSessionMsg(test.dec)
+			if ethrMsg.Type == EthrInv {
+				break
+			}
+			test.rcvdMsgs <- ethrMsg
+			ui.printDbg("%v", ethrMsg)
+		}
+		waitForChannelStop <- true
+	}()
 }
 
 func recvSessionMsg(dec *gob.Decoder) (ethrMsg *EthrMsg) {

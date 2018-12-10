@@ -17,6 +17,7 @@ Ethr provides more test measurements as compared to other tools, e.g. it provide
 ```
 For Windows 10: https://github.com/Microsoft/Ethr/files/2640289/ethr.zip
 For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
+For ArchLinux: https://aur.archlinux.org/packages/ethr
 ```
 
 # Installation
@@ -38,8 +39,17 @@ go build
 go get github.com/Microsoft/ethr
 ```
 
+## Using ArchLinux AUR
+
+Assuming you are using [`yay`](https://aur.archlinux.org/packages/yay/) (https://github.com/Jguer/yay):
+
+```
+yay -S ethr
+```
+
 # Usage
 
+## Simple Usage
 Help:
 ```
 ethr -h
@@ -70,6 +80,31 @@ ethr -c localhost
 
 // Start connections/s test using 64 threads
 ethr -c localhost -t c -n 64
+```
+
+## Complete Command Line
+### Common Parameters
+```
+-h                        Help
+-no                       Disable logging to a file
+-o <filename>             Log to the file specified by filename. 
+                          By default Ethr logs to ./ethrs.log for server & ./ethrc.log for client mode
+-debug                    Log debug output
+```
+### Server Parameters
+```
+-s                        Server mode
+-ui                       Display text UI
+```
+### Client Parameters
+```
+-c <server>                   Client mode, connect to name or IP specified by server
+-t <b|c|p|l>                  Test to be done, b: bandwidth, c: connections/s, p: packets/s, l: latency
+                              Default is bandwidth test
+-p <tcp|udp|http|https|icmp>  Protocol to use, default is TCP
+-n <number>                   Number of sessions/threads to use
+-l <number>                   Buffer size to use for each request
+-i <number>                   Number of iterations for latency test
 ```
 
 # Status
