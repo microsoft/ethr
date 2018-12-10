@@ -8,10 +8,10 @@ package main
 import (
 	"container/list"
 	"encoding/gob"
+	"fmt"
 	"net"
 	"os"
 	"sync"
-    "fmt"
 )
 
 type EthrTestType uint32
@@ -97,7 +97,7 @@ type ethrTest struct {
 	ctrlConn   net.Conn
 	enc        *gob.Encoder
 	dec        *gob.Decoder
-    rcvdMsgs   chan *EthrMsg
+	rcvdMsgs   chan *EthrMsg
 	testParam  EthrTestParam
 	testResult ethrTestResult
 	done       chan struct{}
@@ -157,7 +157,7 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 	test.ctrlConn = conn
 	test.enc = enc
 	test.dec = dec
-    test.rcvdMsgs = make(chan *EthrMsg)
+	test.rcvdMsgs = make(chan *EthrMsg)
 	test.testParam = testParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
@@ -239,14 +239,14 @@ func (test *ethrTest) connListDo(f func(*ethrConn)) {
 
 func watchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
 	go func() {
-        for {
-            ethrMsg := recvSessionMsg(test.dec)
-            if ethrMsg.Type == EthrInv {
-                break
-            }
-            test.rcvdMsgs <- ethrMsg
-            fmt.Println(ethrMsg)
-        }
+		for {
+			ethrMsg := recvSessionMsg(test.dec)
+			if ethrMsg.Type == EthrInv {
+				break
+			}
+			test.rcvdMsgs <- ethrMsg
+			fmt.Println(ethrMsg)
+		}
 		waitForChannelStop <- true
 	}()
 }

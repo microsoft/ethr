@@ -8,7 +8,7 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-//	"fmt"
+	//	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -57,24 +57,24 @@ func establishSession(testParam EthrTestParam, server string) (err error, test *
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
-    // TODO: Enable this in future, right now there is not much value coming
-    // from this.
-    /**
-	ethrMsg = recvSessionMsg(test.dec)
-	if ethrMsg.Type != EthrAck {
-		if ethrMsg.Type == EthrFin {
-			err = fmt.Errorf("%s", ethrMsg.Fin.Message)
-		} else {
-			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
+	// TODO: Enable this in future, right now there is not much value coming
+	// from this.
+	/**
+		ethrMsg = recvSessionMsg(test.dec)
+		if ethrMsg.Type != EthrAck {
+			if ethrMsg.Type == EthrFin {
+				err = fmt.Errorf("%s", ethrMsg.Fin.Message)
+			} else {
+				err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
+			}
+			deleteTest(test)
 		}
-		deleteTest(test)
-	}
-	ethrMsg = createAckMsg()
-	err = sendSessionMsg(test.enc, ethrMsg)
-	if err != nil {
-		os.Exit(1)
-	}
-    **/
+		ethrMsg = createAckMsg()
+		err = sendSessionMsg(test.enc, ethrMsg)
+		if err != nil {
+			os.Exit(1)
+		}
+	    **/
 	return
 }
 
@@ -111,9 +111,9 @@ func runDurationTimer(d time.Duration, toStop chan int) {
 
 func clientWatchControlChannel(test *ethrTest, toStop chan int) {
 	go func() {
-        waitForChannelStop := make(chan bool, 1)
-        watchControlChannel(test, waitForChannelStop)
-        <-waitForChannelStop
+		waitForChannelStop := make(chan bool, 1)
+		watchControlChannel(test, waitForChannelStop)
+		<-waitForChannelStop
 		toStop <- serverDone
 	}()
 }
@@ -234,10 +234,9 @@ func runPpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
 			buff := make([]byte, test.testParam.BufferSize)
-            raddr, err := net.ResolveUDPAddr(protoUDP, server+":"+udpPpsPort)
-			conn, err := net.DialUDP(protoUDP, nil, raddr)
+			conn, err := net.Dial(protoUDP, server+":"+udpPpsPort)
 			if err != nil {
-                ui.printDbg("Unable to dial UDP, error: %v", err)
+				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
 			}
 			defer conn.Close()
@@ -245,11 +244,7 @@ func runPpsTest(test *ethrTest) {
 			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 			ui.printMsg("[udp] local %s port %s connected to %s port %s",
 				lserver, lport, rserver, rport)
-			// Send the local port to server, so it can create a "connected"
-            // UDP socket.
-            ethrMsg := createBgnMsg(lport)
-            sendSessionMsg(test.enc, ethrMsg)
-		    blen := len(buff)
+			blen := len(buff)
 		ExitForLoop:
 			for {
 				select {
@@ -258,7 +253,7 @@ func runPpsTest(test *ethrTest) {
 				default:
 					n, err := conn.Write(buff)
 					if err != nil {
-                        ui.printDbg("%v", err)
+						ui.printDbg("%v", err)
 						continue
 					}
 					if n < blen {

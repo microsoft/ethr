@@ -13,7 +13,7 @@ import (
 	"net"
 	"net/http"
 	"os"
-//	"runtime"
+	"runtime"
 	"sort"
 	"sync/atomic"
 	"time"
@@ -70,19 +70,19 @@ func handleRequest(conn net.Conn) {
 	testParam := ethrMsg.Syn.TestParam
 	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
-		ui.printDbg("RemoteAddr: Split host port failed: %v",err)
+		ui.printDbg("RemoteAddr: Split host port failed: %v", err)
 		return
 	}
 	ethrUnused(port)
 	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
-		ui.printDbg("LocalAddr: Split host port failed: %v",err)
+		ui.printDbg("LocalAddr: Split host port failed: %v", err)
 		return
 	}
 	ethrUnused(lserver, lport)
 	ui.printMsg("New control connection from " + server + ", port " + port)
 	ui.printMsg("Starting " + protoToString(testParam.TestId.Protocol) + " " +
-	testToString(testParam.TestId.Type) + " test from " + server)
+		testToString(testParam.TestId.Type) + " test from " + server)
 	test, err := newTest(server, conn, testParam, enc, dec)
 	if err != nil {
 		msg := "Rejected duplicate " + protoToString(testParam.TestId.Protocol) + " " +
@@ -101,31 +101,31 @@ func handleRequest(conn net.Conn) {
 	if test.testParam.TestId.Type == Pps {
 		err = runUdpPpsServer(test)
 		if err != nil {
-            ui.printDbg("Error encounterd in running Pkt/s test: %v",err)
+			ui.printDbg("Error encounterd in running Pkt/s test: %v", err)
 			cleanupFunc()
 			return
 		}
 	}
-    // TODO: Enable this in future, right now there is not much value coming
-    // from this.
-    /**
-	ethrMsg = createAckMsg()
-	err = sendSessionMsg(enc, ethrMsg)
-	if err != nil {
-		ui.printErr("send session message: %v",err)
-		cleanupFunc()
-		return
-	}
-	ethrMsg = recvSessionMsg(dec)
-	if ethrMsg.Type != EthrAck {
-		cleanupFunc()
-		return
-	}
-    **/
+	// TODO: Enable this in future, right now there is not much value coming
+	// from this.
+	/**
+		ethrMsg = createAckMsg()
+		err = sendSessionMsg(enc, ethrMsg)
+		if err != nil {
+			ui.printErr("send session message: %v",err)
+			cleanupFunc()
+			return
+		}
+		ethrMsg = recvSessionMsg(dec)
+		if ethrMsg.Type != EthrAck {
+			cleanupFunc()
+			return
+		}
+	    **/
 	test.isActive = true
 	waitForChannelStop := make(chan bool, 1)
-    serverWatchControlChannel(test, waitForChannelStop)
-    <-waitForChannelStop
+	serverWatchControlChannel(test, waitForChannelStop)
+	<-waitForChannelStop
 	ui.printMsg("Ending " + testToString(testParam.TestId.Type) + " test from " + server)
 	test.isActive = false
 	cleanupFunc()
@@ -135,7 +135,7 @@ func handleRequest(conn net.Conn) {
 }
 
 func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
-    watchControlChannel(test, waitForChannelStop)
+	watchControlChannel(test, waitForChannelStop)
 }
 
 func runTcpBandwidthServer() {
@@ -318,56 +318,48 @@ func runTcpLatencyHandler(conn net.Conn, test *ethrTest) {
 }
 
 func runUdpPpsServer(test *ethrTest) error {
-    ludpAddr, err := net.ResolveUDPAddr(protoUDP, ":"+udpPpsPort)
-    if err != nil {
+	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpPpsPort)
+	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
-    }
-    go func() {
-        for i := 0; i < int(test.testParam.NumThreads); i++ {
-            ui.printMsg("Listening for Bgn message from client.")
-            ethrMsg := <-test.rcvdMsgs
-            ui.printMsg("Received: %v", ethrMsg)
-            if ethrMsg.Type != EthrBgn {
-                ui.printErr("%v", ethrMsg)
-                continue
-            }
-            rudpPort := ethrMsg.Bgn.UdpPort
-            rudpAddr, err := net.ResolveUDPAddr(protoUDP, ":"+rudpPort)
-            if err != nil {
-                ui.printDbg("Unable to resolve UDP address: %v", err)
-                continue
-            }
-            conn, err := net.DialUDP(protoUDP, ludpAddr, rudpAddr)
-            if err != nil {
-                ui.printDbg("Unable to dial UDP, error: %v", err)
-                continue
-            }
-            rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-            lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-            ui.printMsg("[udp] local %s port %s connected to %s port %s",
-                lserver, lport, rserver, rport)
-            go runUdpPpsHandler(test, conn)
-        }
-    }()
-    return nil
+	}
+	l, err := net.ListenUDP(protoUDP, udpAddr)
+	if err != nil {
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
+		return err
+	}
+	go func(l *net.UDPConn) {
+		defer l.Close()
+		//
+		// We use NumCPU here instead of NumThreads passed from client. The
+		// reason is that for UDP, there is no connection, so all packets come
+		// on same CPU, so it isn't clear if there are any benefits to running
+		// more threads than NumCPU(). TODO: Evaluate this in future.
+		//
+		for i := 0; i < runtime.NumCPU(); i++ {
+			go runUdpPpsHandler(test, l)
+		}
+		<-test.done
+	}(l)
+	return nil
 }
 
 func runUdpPpsHandler(test *ethrTest, conn *net.UDPConn) {
-    defer conn.Close()
-    buffer := make([]byte, test.testParam.BufferSize)
-ExitForLoop:
-	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-            _, err := conn.Read(buffer)
-            if err != nil {
-                ui.printDbg("Error receiving data from UDP for pkt/s test: %v", err)
-                continue
-            }
+	buffer := make([]byte, test.testParam.BufferSize)
+	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+	for err == nil {
+		n, remoteAddr, err = conn.ReadFromUDP(buffer)
+		if err != nil {
+			ui.printDbg("Error receiving data from UDP for pkt/s test: %v", err)
+			continue
+		}
+		ethrUnused(n)
+		server, port, _ := net.SplitHostPort(remoteAddr.String())
+		test := getTest(server, Udp, Pps)
+		if test != nil {
 			atomic.AddUint64(&test.testResult.data, 1)
+		} else {
+			ui.printDbg("Received unsolicited UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
 		}
 	}
 }
@@ -408,4 +400,3 @@ func runHttpBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 		atomic.AddUint64(&test.testResult.data, uint64(r.ContentLength))
 	}
 }
-
