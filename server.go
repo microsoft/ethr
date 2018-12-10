@@ -70,13 +70,13 @@ func handleRequest(conn net.Conn) {
 	testParam := ethrMsg.Syn.TestParam
 	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 	if err != nil {
-		ui.printErr("remote: split host port: %v",err)
+		ui.printDbg("RemoteAddr: Split host port failed: %v",err)
 		return
 	}
 	ethrUnused(port)
 	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
-		ui.printErr("local: split host port: %v",err)
+		ui.printDbg("LocalAddr: Split host port failed: %v",err)
 		return
 	}
 	ethrUnused(lserver, lport)
@@ -101,11 +101,13 @@ func handleRequest(conn net.Conn) {
 	if test.testParam.TestId.Type == Pps {
 		err = runUdpPpsServer(test)
 		if err != nil {
-			ui.printErr("run server pps test: %v",err)
+            ui.printDbg("Error encounterd in running Pkt/s test: %v",err)
 			cleanupFunc()
 			return
 		}
 	}
+    // TODO: Enable this in future, right now there is not much value coming
+    // from this.
     /**
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(enc, ethrMsg)
@@ -121,9 +123,9 @@ func handleRequest(conn net.Conn) {
 	}
     **/
 	test.isActive = true
-    <-test.done
-	var b [1]byte
-	_, err = test.ctrlConn.Read(b[0:])
+	waitForChannelStop := make(chan bool, 1)
+    serverWatchControlChannel(test, waitForChannelStop)
+    <-waitForChannelStop
 	ui.printMsg("Ending " + testToString(testParam.TestId.Type) + " test from " + server)
 	test.isActive = false
 	cleanupFunc()
@@ -132,7 +134,8 @@ func handleRequest(conn net.Conn) {
 	}
 }
 
-type tcpServer struct {
+func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
+    watchControlChannel(test, waitForChannelStop)
 }
 
 func runTcpBandwidthServer() {
@@ -315,102 +318,58 @@ func runTcpLatencyHandler(conn net.Conn, test *ethrTest) {
 }
 
 func runUdpPpsServer(test *ethrTest) error {
-    /*
-	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpPpsPort)
-	if err != nil {
-		ui.printDbg("Unable to resolve UDP address: %v", err)
-		return err
-	}
-	l, err := net.ListenUDP(protoUDP, udpAddr)
-	if err != nil {
-		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
-		return err
-	}
-	go func(l *net.UDPConn) {
-		defer l.Close()
-        //
-        // We use NumCPU here instead of NumThreads passed from client. The
-        // reason is that for UDP, there is no connection, so all packets come
-        // on same CPU, so it isn't clear if there are any benefits to running
-        // more threads than NumCPU(). TODO: Evaluate this in future.
-        //
-		for i := 0; i < runtime.NumCPU(); i++ {
-			go runUdpPpsHandler(test, l)
-		}
-		<-test.done
-	}(l)
-	return nil
-    */
-    /**/
     ludpAddr, err := net.ResolveUDPAddr(protoUDP, ":"+udpPpsPort)
     if err != nil {
-        ui.printErr("%v", err)
-        os.Exit(1)
+		ui.printDbg("Unable to resolve UDP address: %v", err)
+		return err
     }
-    for i := 0; i < int(test.testParam.NumThreads); i++ {
-        ui.printMsg("Waiting for Bgn message")
-        ethrMsg := recvSessionMsg(test.dec)
-        if ethrMsg.Type != EthrBgn {
-            ui.printErr("%v", ethrMsg)
-            continue
+    go func() {
+        for i := 0; i < int(test.testParam.NumThreads); i++ {
+            ui.printMsg("Listening for Bgn message from client.")
+            ethrMsg := <-test.rcvdMsgs
+            ui.printMsg("Received: %v", ethrMsg)
+            if ethrMsg.Type != EthrBgn {
+                ui.printErr("%v", ethrMsg)
+                continue
+            }
+            rudpPort := ethrMsg.Bgn.UdpPort
+            rudpAddr, err := net.ResolveUDPAddr(protoUDP, ":"+rudpPort)
+            if err != nil {
+                ui.printDbg("Unable to resolve UDP address: %v", err)
+                continue
+            }
+            conn, err := net.DialUDP(protoUDP, ludpAddr, rudpAddr)
+            if err != nil {
+                ui.printDbg("Unable to dial UDP, error: %v", err)
+                continue
+            }
+            rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+            lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+            ui.printMsg("[udp] local %s port %s connected to %s port %s",
+                lserver, lport, rserver, rport)
+            go runUdpPpsHandler(test, conn)
         }
-        rudpPort := ethrMsg.Bgn.UdpPort
-        ui.printMsg("Bgn message received, UDP port: %s", rudpPort)
-        // rudpAddr, err := net.ResolveUDPAddr(protoUDP, test.session.remoteAddr+":"+rudpPort)
-        rudpAddr, err := net.ResolveUDPAddr(protoUDP, ":"+rudpPort)
-        if err != nil {
-            ui.printErr("%v", err)
-            os.Exit(1)
-        }
-        conn, err := net.DialUDP(protoUDP, ludpAddr, rudpAddr)
-        if err != nil {
-            ui.printErr("%v", err)
-            os.Exit(1)
-        }
-        rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-        lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-        ui.printMsg("[udp] local %s port %s connected to %s port %s",
-            lserver, lport, rserver, rport)
-        ui.printMsg("Running UDP Packets/s handler")
-        go runUdpPpsHandler(test, conn)
-    }
+    }()
     return nil
-    /**/
 }
 
 func runUdpPpsHandler(test *ethrTest, conn *net.UDPConn) {
-	buffer := make([]byte, 1)
-    /**
-	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
-	for err == nil {
-        ui.printMsg("Waiting for UDP packets.")
-		n, remoteAddr, err = conn.ReadFromUDP(buffer)
-		if err != nil {
-			ui.printDbg("Error receiving data from UDP for pkt/s test: %v", err)
-			continue
-		}
-        ui.printMsg("Received UDP packets.")
-		ethrUnused(n)
-		server, port, _ := net.SplitHostPort(remoteAddr.String())
-		test := getTest(server, Udp, Pps)
-		if test != nil {
+    defer conn.Close()
+    buffer := make([]byte, test.testParam.BufferSize)
+ExitForLoop:
+	for {
+		select {
+		case <-test.done:
+			break ExitForLoop
+		default:
+            _, err := conn.Read(buffer)
+            if err != nil {
+                ui.printDbg("Error receiving data from UDP for pkt/s test: %v", err)
+                continue
+            }
 			atomic.AddUint64(&test.testResult.data, 1)
-		} else {
-			ui.printDbg("Received unsolicited UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
 		}
 	}
-    **/
-    for {
-        n, err := conn.Read(buffer)
-        if err != nil {
-            ui.printErr("%v", err)
-            os.Exit(1)
-            break
-        }
-        ethrUnused(n)
-        // ui.printMsg("Received UDP packet, size: %d", n)
-        atomic.AddUint64(&test.testResult.data, 1)
-    }
 }
 
 func runHttpBandwidthServer() {

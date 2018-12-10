@@ -307,6 +307,7 @@ func (u *serverCli) printMsg(format string, a ...interface{}) {
 
 func (u *serverCli) printDbg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
+	fmt.Println(s)
 	logDbg(s)
 }
 

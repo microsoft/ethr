@@ -57,6 +57,8 @@ func establishSession(testParam EthrTestParam, server string) (err error, test *
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
+    // TODO: Enable this in future, right now there is not much value coming
+    // from this.
     /**
 	ethrMsg = recvSessionMsg(test.dec)
 	if ethrMsg.Type != EthrAck {
@@ -107,10 +109,11 @@ func runDurationTimer(d time.Duration, toStop chan int) {
 	}()
 }
 
-func monitorControlChannel(test *ethrTest, toStop chan int) {
+func clientWatchControlChannel(test *ethrTest, toStop chan int) {
 	go func() {
-		var b [1]byte
-		_, _ = test.ctrlConn.Read(b[0:])
+        waitForChannelStop := make(chan bool, 1)
+        watchControlChannel(test, waitForChannelStop)
+        <-waitForChannelStop
 		toStop <- serverDone
 	}()
 }
@@ -136,7 +139,7 @@ func runTest(test *ethrTest, d time.Duration) {
 	test.isActive = true
 	toStop := make(chan int, 1)
 	runDurationTimer(d, toStop)
-	monitorControlChannel(test, toStop)
+	clientWatchControlChannel(test, toStop)
 	handleCtrlC(toStop)
 	reason := <-toStop
 	close(test.done)
@@ -227,17 +230,14 @@ func runCpsTest(test *ethrTest) {
 }
 
 func runPpsTest(test *ethrTest) {
-	// server := test.session.remoteAddr
+	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
-			// buff := make([]byte, test.testParam.BufferSize)
-			buff := make([]byte, 1)
-			// conn, err := net.Dial(protoUDP, server+":"+udpPpsPort)
-            raddr, err := net.ResolveUDPAddr(protoUDP, ":"+udpPpsPort)
+			buff := make([]byte, test.testParam.BufferSize)
+            raddr, err := net.ResolveUDPAddr(protoUDP, server+":"+udpPpsPort)
 			conn, err := net.DialUDP(protoUDP, nil, raddr)
 			if err != nil {
-				ui.printErr("%v", err)
-				os.Exit(1)
+                ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
 			}
 			defer conn.Close()
@@ -245,11 +245,11 @@ func runPpsTest(test *ethrTest) {
 			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 			ui.printMsg("[udp] local %s port %s connected to %s port %s",
 				lserver, lport, rserver, rport)
-			/**/
-			   ethrMsg := createBgnMsg(lport)
-			   sendSessionMsg(test.enc, ethrMsg)
-			/**/
-			blen := len(buff)
+			// Send the local port to server, so it can create a "connected"
+            // UDP socket.
+            ethrMsg := createBgnMsg(lport)
+            sendSessionMsg(test.enc, ethrMsg)
+		    blen := len(buff)
 		ExitForLoop:
 			for {
 				select {
@@ -259,12 +259,10 @@ func runPpsTest(test *ethrTest) {
 					n, err := conn.Write(buff)
 					if err != nil {
                         ui.printDbg("%v", err)
-						// return
 						continue
 					}
 					if n < blen {
 						ui.printDbg("Partial write: %d", n)
-						// return
 						continue
 					}
 					atomic.AddUint64(&test.testResult.data, 1)
