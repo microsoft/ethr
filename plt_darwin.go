@@ -6,15 +6,17 @@
 package main
 
 import (
-	"bufio"
-	"exec"
+	"fmt"
 	"net"
-	"os"
+	"os/exec"
+	"regexp"
 	"strconv"
 	"strings"
 
 	tm "github.com/nsf/termbox-go"
 )
+
+var netstatPath = "/usr/sbin/netstat"
 
 type ethrNetDevInfo struct {
 	bytes      uint64
@@ -44,65 +46,55 @@ func getNetDevStats(stats *ethrNetStat) {
 			ui.printErr("Failed to get stats for interface %s: %v", netIf.Name, err)
 			continue
 		}
-
 		stats.netDevStats = append(stats.netDevStats, netIfStats)
 	}
 }
 
-func getNetInterfaceStats(name string) (ethrNetStat, error) {
+func getNetInterfaceStats(name string) (ethrNetDevStat, error) {
 
-	var intfStats ethrNetStat
+	var intfStats ethrNetDevStat
 
 	// use netstat to get the interface stats
-	args := []string{"-ib", name}
-	output, err := exec.Command(netstatPath, args).Output()
+	args := []string{"-ib", "-I", name}
+	output, err := exec.Command(netstatPath, args...).Output()
 	if err != nil {
-		return nil, err
+		return intfStats, err
 	}
+	lines := strings.Split(string(output), "\n")
+	numLines := len(lines)
+
+	if numLines <= 1 {
+		return intfStats, fmt.Errorf("No interface stats available for %s", name)
+	}
+
 	// Name  Mtu   Network       Address            Ipkts Ierrs     Ibytes    Opkts Oerrs     Obytes  Coll
 	// en0   1500  <Link#4>    18:65:90:d2:af:c7   859944     0  773619217   714294     0  183006466     0
-
-	//var line string
-	return intfStats
-}
-
-func buildNetDevStat(line string) ethrNetDevStat {
-	fields := strings.Fields(line)
-	interfaceName := strings.TrimSuffix(fields[0], ":")
-	rxInfo := toNetDevInfo(fields[1:9])
-	txInfo := toNetDevInfo(fields[9:17])
-	return ethrNetDevStat{
-		interfaceName: interfaceName,
-		rxBytes:       rxInfo.bytes,
-		txBytes:       txInfo.bytes,
-		rxPkts:        rxInfo.packets,
-		txPkts:        txInfo.packets,
-	}
-}
-
-func toNetDevInfo(fields []string) ethrNetDevInfo {
-	return ethrNetDevInfo{
-		bytes:      toInt(fields[0]),
-		packets:    toInt(fields[1]),
-		errs:       toInt(fields[2]),
-		drop:       toInt(fields[3]),
-		fifo:       toInt(fields[4]),
-		frame:      toInt(fields[5]),
-		compressed: toInt(fields[6]),
-		multicast:  toInt(fields[7]),
-	}
-}
-
-func isIfUp(ifName string, ifs []net.Interface) bool {
-	for _, ifi := range ifs {
-		if ifi.Name == ifName {
-			if (ifi.Flags & net.FlagUp) != 0 {
-				return true
-			}
-			return false
+	for _, line := range lines[1:] {
+		fields := strings.Fields(line)
+		if len(fields) < 11 {
+			continue
 		}
+		return ethrNetDevStat{
+			interfaceName: name,
+			rxBytes:       toInt(fields[6]),
+			txBytes:       toInt(fields[9]),
+			rxPkts:        toInt(fields[4]),
+			txPkts:        toInt(fields[7]),
+		}, nil
 	}
-	return false
+	return intfStats, nil
+}
+
+func getTcpStats(stats *ethrNetStat) {
+	// use netstat to get the interface stats
+	args := []string{"-s", "-p", "tcp"}
+	output, err := exec.Command(netstatPath, args...).Output()
+	if err != nil {
+		ui.printErr("%v", err)
+		return
+	}
+	match := regexp.MustCompile("(?m)^\\s*(\\d+) data packets \\((\\d+) bytes\\) retransmitted").FindStringSubmatch(string(output))
+	stats.tcpStats.segRetrans = toInt(match[1])
 }
 
 func toInt(str string) uint64 {
@@ -111,34 +103,6 @@ func toInt(str string) uint64 {
 		panic(err)
 	}
 	return res
-}
-
-func getTcpStats(stats *ethrNetStat) {
-	snmpStatsFile, err := os.Open("/proc/net/snmp")
-	if err != nil {
-		ui.printErr("%v", err)
-		return
-	}
-	defer snmpStatsFile.Close()
-
-	reader := bufio.NewReader(snmpStatsFile)
-
-	var line string
-	for err == nil {
-		// Tcp: RtoAlgorithm RtoMin RtoMax MaxConn ActiveOpens PassiveOpens AttemptFails EstabResets
-		//      CurrEstab InSegs OutSegs RetransSegs InErrs OutRsts InCsumErrors
-		line, err = reader.ReadString('\n')
-		if line == "" || !strings.HasPrefix(line, "Tcp") {
-			continue
-		}
-		// Skip the first line starting with Tcp
-		line, err = reader.ReadString('\n')
-		if !strings.HasPrefix(line, "Tcp") {
-			break
-		}
-		fields := strings.Fields(line)
-		stats.tcpStats.segRetrans = toInt(fields[12])
-	}
 }
 
 func hideCursor() {
