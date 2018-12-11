@@ -164,15 +164,15 @@ func (u *serverTui) printErr(format string, a ...interface{}) {
 }
 
 func (u *serverTui) printDbg(format string, a ...interface{}) {
-    if logDebug {
-        s := fmt.Sprintf(format, a...)
-        logDbg(s)
-        ss := splitString(s, u.errW)
-        u.ringLock.Lock()
-        u.errRing = u.errRing[len(ss):]
-        u.errRing = append(u.errRing, ss...)
-        u.ringLock.Unlock()
-    }
+	if logDebug {
+		s := fmt.Sprintf(format, a...)
+		logDbg(s)
+		ss := splitString(s, u.errW)
+		u.ringLock.Lock()
+		u.errRing = u.errRing[len(ss):]
+		u.errRing = append(u.errRing, ss...)
+		u.ringLock.Unlock()
+	}
 }
 
 func (u *serverTui) emitTestResultBegin() {
@@ -308,11 +308,11 @@ func (u *serverCli) printMsg(format string, a ...interface{}) {
 }
 
 func (u *serverCli) printDbg(format string, a ...interface{}) {
-    if logDebug {
-        s := fmt.Sprintf(format, a...)
-        fmt.Println(s)
-        logDbg(s)
-    }
+	if logDebug {
+		s := fmt.Sprintf(format, a...)
+		fmt.Println(s)
+		logDbg(s)
+	}
 }
 
 func (u *serverCli) printErr(format string, a ...interface{}) {
