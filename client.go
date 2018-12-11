@@ -8,7 +8,6 @@ package main
 import (
 	"bytes"
 	"encoding/gob"
-	//	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -122,19 +121,23 @@ func runTest(test *ethrTest, d time.Duration) {
 	startStatsTimer()
 	if test.testParam.TestID.Protocol == TCP {
 		if test.testParam.TestID.Type == Bandwidth {
-			go runBandwidthTest(test)
+			go runTCPBandwidthTest(test)
 		} else if test.testParam.TestID.Type == Cps {
-			go runCpsTest(test)
+			go runTCPCpsTest(test)
 		} else if test.testParam.TestID.Type == Latency {
 			ui.emitLatencyHdr()
-			go runLatencyTest(test)
+			go runTCPLatencyTest(test)
 		}
 	} else if test.testParam.TestID.Protocol == UDP {
-		if test.testParam.TestID.Type == Pps {
-			go runPpsTest(test)
+		if test.testParam.TestID.Type == Bandwidth {
+			go runUDPBandwidthTest(test)
+		} else if test.testParam.TestID.Type == Pps {
+			go runUDPPpsTest(test)
 		}
 	} else if test.testParam.TestID.Protocol == HTTP {
-		go runHTTPTest(test)
+		if test.testParam.TestID.Type == Bandwidth {
+			go runHTTPBandwidthTest(test)
+		}
 	}
 	test.isActive = true
 	toStop := make(chan int, 1)
@@ -155,7 +158,7 @@ func runTest(test *ethrTest, d time.Duration) {
 	}
 }
 
-func runBandwidthTest(test *ethrTest) {
+func runTCPBandwidthTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	ui.printMsg("Connecting to host %s, port %s", server, tcpBandwidthPort)
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
@@ -204,7 +207,7 @@ func runBandwidthTest(test *ethrTest) {
 	}
 }
 
-func runCpsTest(test *ethrTest) {
+func runTCPCpsTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
@@ -229,7 +232,47 @@ func runCpsTest(test *ethrTest) {
 	}
 }
 
-func runPpsTest(test *ethrTest) {
+func runUDPBandwidthTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		go func() {
+			buff := make([]byte, test.testParam.BufferSize)
+			conn, err := net.Dial(protoUDP, server+":"+udpBandwidthPort)
+			if err != nil {
+				ui.printDbg("Unable to dial UDP, error: %v", err)
+				return
+			}
+			defer conn.Close()
+			ec := test.newConn(conn)
+			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
+				ec.fd, lserver, lport, rserver, rport)
+			blen := len(buff)
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					n, err := conn.Write(buff)
+					if err != nil {
+						ui.printDbg("%v", err)
+						continue
+					}
+					if n < blen {
+						ui.printDbg("Partial write: %d", n)
+						continue
+					}
+					atomic.AddUint64(&ec.data, uint64(n))
+					atomic.AddUint64(&test.testResult.data, uint64(n))
+				}
+			}
+		}()
+	}
+}
+
+func runUDPPpsTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
@@ -267,7 +310,7 @@ func runPpsTest(test *ethrTest) {
 	}
 }
 
-func runLatencyTest(test *ethrTest) {
+func runTCPLatencyTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	conn, err := net.Dial(protoTCP, server+":"+tcpLatencyPort)
 	if err != nil {
@@ -353,7 +396,7 @@ ExitForLoop:
 	}
 }
 
-func runHTTPTest(test *ethrTest) {
+func runHTTPBandwidthTest(test *ethrTest) {
 	uri := test.session.remoteAddr
 	uri = "http://" + uri + ":" + httpBandwidthPort
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {

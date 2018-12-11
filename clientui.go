@@ -88,7 +88,8 @@ func initClientUI() {
 var gInterval uint64
 
 func printTestResult(test *ethrTest, value uint64) {
-	if test.testParam.TestID.Type == Bandwidth && test.testParam.TestID.Protocol == TCP {
+	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
+		test.testParam.TestID.Protocol == UDP) {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
 			ui.printMsg("[ ID]   Protocol    Interval      Bits/s")

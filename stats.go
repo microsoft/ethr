@@ -98,63 +98,6 @@ func stopStatsTimer() {
 	statsEnabled = false
 }
 
-/*
-func startStatsTimer(test *ethrTest) {
-	ticker := time.NewTicker(time.Second)
-	statsEnabled = true
-	go func() {
-		for statsEnabled {
-			select {
-			case <-test.done:
-				break
-			case <-ticker.C:
-				cPrintStats(test)
-			}
-		}
-		ticker.Stop()
-		return
-	}()
-}
-*/
-/*
-func emitClientStats(remote string, proto EthrProtocol, bw uint64, bwTestOn bool,
-    cps uint64, cpsTestOn bool, pps uint64, ppsTestOn bool, lat uint64, latTestOn bool) {
-	if proto == Tcp {
-        if bwTestOn {
-            if gInterval == 0 {
-                ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-                ui.printMsg("[ ID]   Protocol    Interval      Bits/s")
-            }
-			ui.printMsg("[SUM]     %-5s    %03d-%03d sec   %7s",
-				protoToString(proto), gInterval, gInterval+1, bytesToRate(bw))
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-        } else if cpsTestOn {
-            if gInterval == 0 {
-                ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-                ui.printMsg("Protocol    Interval      Conn/s")
-            }
-            ui.printMsg("  %-5s    %03d-%03d sec   %7s",
-                protoToString(proto), gInterval, gInterval+1, cpsToString(cps))
-        }
-    } else if ppsTestOn {
-            if gInterval == 0 {
-                ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-                ui.printMsg("Protocol    Interval      Pkts/s")
-            }
-            ui.printMsg("  %-5s    %03d-%03d sec   %7s",
-                protoToString(proto), gInterval, gInterval+1, ppsToString(pps))
-	} else if proto == Http && bwTestOn {
-		if gInterval == 0 {
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("Protocol    Interval      Bits/s")
-		}
-		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
-			protoToString(proto), gInterval, gInterval+1, bytesToRate(bw))
-	}
-	gInterval++
-}
-*/
-
 func emitStats() {
 	ui.emitTestResultBegin()
 	emitTestResults()
