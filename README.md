@@ -112,7 +112,7 @@ ethr -c localhost -t c -n 64
 Protocol  | Bandwidth | Connections/s | Packets/s | Latency
 ------------- | ------------- | ------------- | ------------- | -------------
 TCP  | Yes | Yes | No | Yes
-UDP  | No | NA | Yes | No
+UDP  | Yes | NA | Yes | No
 HTTP | Yes | No | No | No
 HTTPS | No | No | No | No
 ICMP | No | NA | No | No
