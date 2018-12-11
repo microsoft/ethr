@@ -113,7 +113,7 @@ func main() {
 	duration, err := time.ParseDuration(*durationStr)
 	if err != nil {
 		fmt.Printf("Invalid value \"%s\" specified for parameter \"-d\".\n",
-			durationStr)
+			*durationStr)
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
