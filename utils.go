@@ -253,6 +253,11 @@ func getFd(conn net.Conn) uintptr {
 		if err != nil {
 			return 0
 		}
+	case *net.UDPConn:
+		rc, err = ct.SyscallConn()
+		if err != nil {
+			return 0
+		}
 	default:
 		return 0
 	}

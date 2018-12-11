@@ -98,10 +98,15 @@ func handleRequest(conn net.Conn) {
 		deleteTest(test)
 	}
 	ui.emitTestHdr()
-	if test.testParam.TestID.Type == Pps {
-		err = runUDPPpsServer(test)
+	if test.testParam.TestID.Protocol == UDP {
+		if test.testParam.TestID.Type == Bandwidth {
+			err = runUDPBandwidthServer(test)
+		} else if test.testParam.TestID.Type == Pps {
+			err = runUDPPpsServer(test)
+		}
 		if err != nil {
-			ui.printDbg("Error encounterd in running Pkt/s test: %v", err)
+			ui.printDbg("Error encounterd in running UDP test (%s): %v",
+				testToString(testParam.TestID.Type), err)
 			cleanupFunc()
 			return
 		}
@@ -314,6 +319,53 @@ func runTCPLatencyHandler(conn net.Conn, test *ethrTest) {
 			test.session.remoteAddr,
 			protoToString(test.testParam.TestID.Protocol),
 			avg, min, max, p50, p90, p95, p99, p999, p9999)
+	}
+}
+
+func runUDPBandwidthServer(test *ethrTest) error {
+	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpBandwidthPort)
+	if err != nil {
+		ui.printDbg("Unable to resolve UDP address: %v", err)
+		return err
+	}
+	l, err := net.ListenUDP(protoUDP, udpAddr)
+	if err != nil {
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
+		return err
+	}
+	go func(l *net.UDPConn) {
+		defer l.Close()
+		//
+		// We use NumCPU here instead of NumThreads passed from client. The
+		// reason is that for UDP, there is no connection, so all packets come
+		// on same CPU, so it isn't clear if there are any benefits to running
+		// more threads than NumCPU(). TODO: Evaluate this in future.
+		//
+		for i := 0; i < runtime.NumCPU(); i++ {
+			go runUDPBandwidthHandler(test, l)
+		}
+		<-test.done
+	}(l)
+	return nil
+}
+
+func runUDPBandwidthHandler(test *ethrTest, conn *net.UDPConn) {
+	buffer := make([]byte, test.testParam.BufferSize)
+	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+	for err == nil {
+		n, remoteAddr, err = conn.ReadFromUDP(buffer)
+		if err != nil {
+			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
+			continue
+		}
+		ethrUnused(n)
+		server, port, _ := net.SplitHostPort(remoteAddr.String())
+		test := getTest(server, UDP, Bandwidth)
+		if test != nil {
+			atomic.AddUint64(&test.testResult.data, uint64(n))
+		} else {
+			ui.printDbg("Received unsolicited UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
+		}
 	}
 }
 
