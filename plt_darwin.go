@@ -8,14 +8,12 @@ package main
 import (
 	"bytes"
 	"encoding/binary"
-	"fmt"
 	"net"
 	"os/exec"
 	"regexp"
 	"strconv"
-	"strings"
 
-	"github.com/nsf/termbox-go"
+	tm "github.com/nsf/termbox-go"
 	"golang.org/x/sys/unix"
 )
 
