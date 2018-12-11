@@ -13,77 +13,143 @@ import (
 	"sync"
 )
 
+// EthrTestType represents the test type.
 type EthrTestType uint32
 
 const (
+	// Bandwidth represents the bandwidth test.
 	Bandwidth EthrTestType = iota
+
+	// Cps represents connections/s test.
 	Cps
+
+	// Pps represents packets/s test.
 	Pps
+
+	// Latency represents the latency test.
 	Latency
 )
 
+// EthrProtocol represents the network protocol.
 type EthrProtocol uint32
 
 const (
-	Tcp EthrProtocol = iota
-	Udp
-	Http
-	Https
-	Icmp
+	// TCP represents the tcp protocol.
+	TCP EthrProtocol = iota
+
+	// UDP represents the udp protocol.
+	UDP
+
+	// HTTP represents using http protocol.
+	HTTP
+
+	// HTTPS represents using https protocol.
+	HTTPS
+
+	// ICMP represents the icmp protocol.
+	ICMP
 )
 
-type EthrTestId struct {
+// EthrTestID represents the test id.
+type EthrTestID struct {
+	// Protocol represents the protocol this test uses.
 	Protocol EthrProtocol
-	Type     EthrTestType
+
+	// Type represents the test type this test uses.
+	Type EthrTestType
 }
 
+// EthrMsgType represents the message type.
 type EthrMsgType uint32
 
 const (
+	// EthrInv represents the Inv message.
 	EthrInv EthrMsgType = iota
+
+	// EthrSyn represents the Syn message.
 	EthrSyn
+
+	// EthrAck represents the Ack message.
 	EthrAck
+
+	// EthrFin represents the Fin message.
 	EthrFin
+
+	// EthrBgn represents the Bgn message.
 	EthrBgn
+
+	// EthrEnd represents the End message.
 	EthrEnd
 )
 
+// EthrMsgVer represents the message version.
 type EthrMsgVer uint32
 
+// EthrMsg represents the message entity.
 type EthrMsg struct {
+	// Version represents the message version.
 	Version EthrMsgVer
-	Type    EthrMsgType
-	Syn     *EthrMsgSyn
-	Ack     *EthrMsgAck
-	Fin     *EthrMsgFin
-	Bgn     *EthrMsgBgn
-	End     *EthrMsgEnd
+
+	// Type represents the message type.
+	Type EthrMsgType
+
+	// Syn represents the Syn value.
+	Syn *EthrMsgSyn
+
+	// Ack represents the Ack value.
+	Ack *EthrMsgAck
+
+	// Fin represents the Fin value.
+	Fin *EthrMsgFin
+
+	// Bgn represents the Bgn value.
+	Bgn *EthrMsgBgn
+
+	// End represents the End value.
+	End *EthrMsgEnd
 }
 
+// EthrMsgSyn represents the Syn entity.
 type EthrMsgSyn struct {
+	// TestParam represents the test parameters.
 	TestParam EthrTestParam
 }
 
+// EthrMsgAck represents the Ack entity.
 type EthrMsgAck struct {
 }
 
+// EthrMsgFin represents the Fin entity.
 type EthrMsgFin struct {
+	// Message represents the message body.
 	Message string
 }
 
+// EthrMsgBgn represents the Bgn entity.
 type EthrMsgBgn struct {
-	UdpPort string
+	// UDPPort represents the udp port.
+	UDPPort string
 }
 
+// EthrMsgEnd represents the End entity.
 type EthrMsgEnd struct {
+	// Message represents the message body.
 	Message string
 }
 
+// EthrTestParam represents the parameters used for the test.
 type EthrTestParam struct {
-	TestId     EthrTestId
+	// TestID represents the test id of this test.
+	TestID EthrTestID
+
+	// NumThreads represents how many threads are used for the test.
 	NumThreads uint32
+
+	// BufferSize represents the buffer size.
 	BufferSize uint32
-	RttCount   uint32
+
+	// RttCount represents the rtt count.
+	RttCount uint32
 }
 
 type ethrTestResult struct {
@@ -115,7 +181,7 @@ type ethrConn struct {
 type ethrSession struct {
 	remoteAddr string
 	testCount  uint32
-	tests      map[EthrTestId]*ethrTest
+	tests      map[EthrTestID]*ethrTest
 }
 
 var gSessions = make(map[string]*ethrSession)
@@ -141,12 +207,12 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 	if !found {
 		session = &ethrSession{}
 		session.remoteAddr = remoteAddr
-		session.tests = make(map[EthrTestId]*ethrTest)
+		session.tests = make(map[EthrTestID]*ethrTest)
 		gSessions[remoteAddr] = session
 		gSessionKeys = append(gSessionKeys, remoteAddr)
 	}
 
-	test, found := session.tests[testParam.TestId]
+	test, found := session.tests[testParam.TestID]
 	if found {
 		return nil, os.ErrExist
 	}
@@ -160,7 +226,7 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 	test.testParam = testParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
-	session.tests[testParam.TestId] = test
+	session.tests[testParam.TestID] = test
 
 	return test, nil
 }
@@ -169,7 +235,7 @@ func deleteTest(test *ethrTest) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
 	session := test.session
-	testId := test.testParam.TestId
+	testID := test.testParam.TestID
 	//
 	// TODO fix this, we need to decide where to close this, inside this
 	// function or by the caller. The reason we may need it to be done by
@@ -185,7 +251,7 @@ func deleteTest(test *ethrTest) {
 	// test.session = nil
 	// test.connList = test.connList.Init()
 	//
-	delete(session.tests, testId)
+	delete(session.tests, testID)
 	session.testCount--
 
 	if session.testCount == 0 {
@@ -202,7 +268,7 @@ func getTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test
 	if !found {
 		return
 	}
-	test, found = session.tests[EthrTestId{proto, testType}]
+	test, found = session.tests[EthrTestID{proto, testType}]
 	return
 }
 
@@ -290,6 +356,6 @@ func createSynMsg(testParam EthrTestParam) (ethrMsg *EthrMsg) {
 func createBgnMsg(port string) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrBgn}
 	ethrMsg.Bgn = &EthrMsgBgn{}
-	ethrMsg.Bgn.UdpPort = port
+	ethrMsg.Bgn.UDPPort = port
 	return
 }
