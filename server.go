@@ -142,7 +142,7 @@ func runTcpBandwidthServer() {
 	l, err := net.Listen(protoTCP, hostAddr+":"+tcpBandwidthPort)
 	if err != nil {
 		finiServer()
-		fmt.Printf("Fatal error listening on "+tcpLatencyPort+" for TCP bandwidth tests: %v", err)
+		fmt.Printf("Fatal error listening on "+tcpBandwidthPort+" for TCP bandwidth tests: %v", err)
 		os.Exit(1)
 	}
 	ui.printMsg("Listening on " + tcpBandwidthPort + " for TCP bandwidth tests")
@@ -198,7 +198,7 @@ func runTcpCpsServer() {
 	l, err := net.Listen(protoTCP, hostAddr+":"+tcpCpsPort)
 	if err != nil {
 		finiServer()
-		fmt.Printf("Fatal error listening on "+tcpLatencyPort+" for TCP conn/s tests: %v", err)
+		fmt.Printf("Fatal error listening on "+tcpCpsPort+" for TCP conn/s tests: %v", err)
 		os.Exit(1)
 	}
 	ui.printMsg("Listening on " + tcpCpsPort + " for TCP conn/s tests")
