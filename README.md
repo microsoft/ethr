@@ -3,7 +3,7 @@
 Ethr is a cross platform network performance measurement tool written in golang. Goal of this project is to provide a native tool for network performance measurements of bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS, and across multiple platforms such as Windows, Linux and other Unix systems.
 
 <p align="center">
-  <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49360895-629cce80-f68f-11e8-967a-ed1f4c0ae6b6.png">
+  <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49815752-506f0000-fd21-11e8-954e-d587e79c5d85.png">
 </p>
 
 Ethr takes insipiration from existing open source network performance tools and builds upon those ideas. It is very similar to iPerf3 for bandwidth measurements for TCP. iPerf3 has many more options for doing bandwidth measurements such as throttled testing, richer feature set, while Ethr has support for multiple threads, ability to scale to 1024 or even higher connections, multiple clients to single server etc. It is similar to latte on Windows or sockperf on Linux for doing latency measurements.
