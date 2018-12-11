@@ -26,13 +26,13 @@ var gAggregateTestResults = make(map[EthrProtocol]*ethrTestResultAggregate)
 //
 // Initialization functions.
 //
-func initServerUi(showUi bool) {
-	gAggregateTestResults[Tcp] = &ethrTestResultAggregate{}
-	gAggregateTestResults[Udp] = &ethrTestResultAggregate{}
-	gAggregateTestResults[Http] = &ethrTestResultAggregate{}
-	gAggregateTestResults[Https] = &ethrTestResultAggregate{}
-	gAggregateTestResults[Icmp] = &ethrTestResultAggregate{}
-	if !showUi || !initServerTui() {
+func initServerUI(showUI bool) {
+	gAggregateTestResults[TCP] = &ethrTestResultAggregate{}
+	gAggregateTestResults[UDP] = &ethrTestResultAggregate{}
+	gAggregateTestResults[HTTP] = &ethrTestResultAggregate{}
+	gAggregateTestResults[HTTPS] = &ethrTestResultAggregate{}
+	gAggregateTestResults[ICMP] = &ethrTestResultAggregate{}
+	if !showUI || !initServerTui() {
 		initServerCli()
 	}
 }
@@ -164,15 +164,15 @@ func (u *serverTui) printErr(format string, a ...interface{}) {
 }
 
 func (u *serverTui) printDbg(format string, a ...interface{}) {
-    if logDebug {
-        s := fmt.Sprintf(format, a...)
-        logDbg(s)
-        ss := splitString(s, u.errW)
-        u.ringLock.Lock()
-        u.errRing = u.errRing[len(ss):]
-        u.errRing = append(u.errRing, ss...)
-        u.ringLock.Unlock()
-    }
+	if logDebug {
+		s := fmt.Sprintf(format, a...)
+		logDbg(s)
+		ss := splitString(s, u.errW)
+		u.ringLock.Lock()
+		u.errRing = u.errRing[len(ss):]
+		u.errRing = append(u.errRing, ss...)
+		u.ringLock.Unlock()
+	}
 }
 
 func (u *serverTui) emitTestResultBegin() {
@@ -308,11 +308,11 @@ func (u *serverCli) printMsg(format string, a ...interface{}) {
 }
 
 func (u *serverCli) printDbg(format string, a ...interface{}) {
-    if logDebug {
-        s := fmt.Sprintf(format, a...)
-        fmt.Println(s)
-        logDbg(s)
-    }
+	if logDebug {
+		s := fmt.Sprintf(format, a...)
+		fmt.Println(s)
+		logDbg(s)
+	}
 }
 
 func (u *serverCli) printErr(format string, a ...interface{}) {
@@ -367,7 +367,7 @@ func (u *serverCli) printTestResults(s []string) {
 }
 
 func emitAggregateResults() {
-	var protoList = []EthrProtocol{Tcp, Udp, Http, Https, Icmp}
+	var protoList = []EthrProtocol{TCP, UDP, HTTP, HTTPS, ICMP}
 	for _, proto := range protoList {
 		emitAggregate(proto)
 	}
@@ -398,28 +398,28 @@ func getTestResults(s *ethrSession, proto EthrProtocol) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
-	test, found := s.tests[EthrTestId{proto, Bandwidth}]
+	test, found := s.tests[EthrTestID{proto, Bandwidth}]
 	if found && test.isActive {
 		bwTestOn = true
 		bw = atomic.SwapUint64(&test.testResult.data, 0)
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
 	}
-	test, found = s.tests[EthrTestId{proto, Cps}]
+	test, found = s.tests[EthrTestID{proto, Cps}]
 	if found && test.isActive {
 		cpsTestOn = true
 		cps = atomic.SwapUint64(&test.testResult.data, 0)
 		aggTestResult.cps += cps
 		aggTestResult.ccps++
 	}
-	test, found = s.tests[EthrTestId{proto, Pps}]
+	test, found = s.tests[EthrTestID{proto, Pps}]
 	if found && test.isActive {
 		ppsTestOn = true
 		pps = atomic.SwapUint64(&test.testResult.data, 0)
 		aggTestResult.pps += pps
 		aggTestResult.cpps++
 	}
-	test, found = s.tests[EthrTestId{proto, Latency}]
+	test, found = s.tests[EthrTestID{proto, Latency}]
 	if found && test.isActive {
 		latTestOn = true
 		latency = atomic.LoadUint64(&test.testResult.data)

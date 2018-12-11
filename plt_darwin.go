@@ -42,7 +42,7 @@ func getNetDevStats(stats *ethrNetStat) {
 	}
 }
 
-func getTcpStats(stats *ethrNetStat) {
+func getTCPStats(stats *ethrNetStat) {
 }
 
 func hideCursor() {
@@ -63,18 +63,18 @@ func getIfaceData(index int) (*ifMsghdr2, error) {
 }
 
 type ifMsghdr2 struct {
-	Msglen     uint16
-	Version    uint8
-	Type       uint8
-	Addrs      int32
-	Flags      int32
-	Index      uint16
-	_          [2]byte
-	Snd_len    int32
-	Snd_maxlen int32
-	Snd_drops  int32
-	Timer      int32
-	Data       ifData64
+	Msglen    uint16
+	Version   uint8
+	Type      uint8
+	Addrs     int32
+	Flags     int32
+	Index     uint16
+	_         [2]byte
+	SndLen    int32
+	SndMaxlen int32
+	SndDrops  int32
+	Timer     int32
+	Data      ifData64
 }
 
 type ifData64 struct {

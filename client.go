@@ -22,7 +22,7 @@ import (
 
 func runClient(testParam EthrTestParam, server string, d time.Duration) {
 	initClient()
-	err, test := establishSession(testParam, server)
+	test, err := establishSession(testParam, server)
 	if err != nil {
 		ui.printErr("%v", err)
 		return
@@ -31,10 +31,10 @@ func runClient(testParam EthrTestParam, server string, d time.Duration) {
 }
 
 func initClient() {
-	initClientUi()
+	initClientUI()
 }
 
-func establishSession(testParam EthrTestParam, server string) (err error, test *ethrTest) {
+func establishSession(testParam EthrTestParam, server string) (test *ethrTest, err error) {
 	conn, err := net.Dial(protoTCP, server+":"+ctrlPort)
 	if err != nil {
 		return
@@ -120,21 +120,21 @@ func clientWatchControlChannel(test *ethrTest, toStop chan int) {
 
 func runTest(test *ethrTest, d time.Duration) {
 	startStatsTimer()
-	if test.testParam.TestId.Protocol == Tcp {
-		if test.testParam.TestId.Type == Bandwidth {
+	if test.testParam.TestID.Protocol == TCP {
+		if test.testParam.TestID.Type == Bandwidth {
 			go runBandwidthTest(test)
-		} else if test.testParam.TestId.Type == Cps {
+		} else if test.testParam.TestID.Type == Cps {
 			go runCpsTest(test)
-		} else if test.testParam.TestId.Type == Latency {
+		} else if test.testParam.TestID.Type == Latency {
 			ui.emitLatencyHdr()
 			go runLatencyTest(test)
 		}
-	} else if test.testParam.TestId.Protocol == Udp {
-		if test.testParam.TestId.Type == Pps {
+	} else if test.testParam.TestID.Protocol == UDP {
+		if test.testParam.TestID.Type == Pps {
 			go runPpsTest(test)
 		}
-	} else if test.testParam.TestId.Protocol == Http {
-		go runHttpTest(test)
+	} else if test.testParam.TestID.Protocol == HTTP {
+		go runHTTPTest(test)
 	}
 	test.isActive = true
 	toStop := make(chan int, 1)
@@ -347,13 +347,13 @@ ExitForLoop:
 			p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
 			ui.emitLatencyResults(
 				test.session.remoteAddr,
-				protoToString(test.testParam.TestId.Protocol),
+				protoToString(test.testParam.TestID.Protocol),
 				avg, min, max, p50, p90, p95, p99, p999, p9999)
 		}
 	}
 }
 
-func runHttpTest(test *ethrTest) {
+func runHTTPTest(test *ethrTest) {
 	uri := test.session.remoteAddr
 	uri = "http://" + uri + ":" + httpBandwidthPort
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {

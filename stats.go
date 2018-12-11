@@ -12,7 +12,7 @@ import (
 
 type ethrNetStat struct {
 	netDevStats []ethrNetDevStat
-	tcpStats    ethrTcpStat
+	tcpStats    ethrTCPStat
 }
 
 type ethrNetDevStat struct {
@@ -23,7 +23,7 @@ type ethrNetDevStat struct {
 	txPkts        uint64
 }
 
-type ethrTcpStat struct {
+type ethrTCPStat struct {
 	segRetrans uint64
 }
 
@@ -34,7 +34,7 @@ func getNetworkStats() ethrNetStat {
 	sort.SliceStable(stats.netDevStats, func(i, j int) bool {
 		return stats.netDevStats[i].interfaceName < stats.netDevStats[j].interfaceName
 	})
-	getTcpStats(stats)
+	getTCPStats(stats)
 
 	return *stats
 }
@@ -168,10 +168,10 @@ func emitTestResults() {
 	defer gSessionLock.RUnlock()
 	for _, k := range gSessionKeys {
 		v := gSessions[k]
-		ui.emitTestResult(v, Tcp)
-		ui.emitTestResult(v, Udp)
-		ui.emitTestResult(v, Http)
-		ui.emitTestResult(v, Https)
-		ui.emitTestResult(v, Icmp)
+		ui.emitTestResult(v, TCP)
+		ui.emitTestResult(v, UDP)
+		ui.emitTestResult(v, HTTP)
+		ui.emitTestResult(v, HTTPS)
+		ui.emitTestResult(v, ICMP)
 	}
 }

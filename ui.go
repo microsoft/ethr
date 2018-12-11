@@ -95,21 +95,21 @@ func (t *table) addTblRow(row []string) {
 	t.cr--
 
 	o := 1
-	align_offset := 0
+	alignOffset := 0
 	for i := 0; i < t.ccount; i++ {
 		w := t.cwidth[i]
 		var s string
 		if t.justify == justifyLeft {
 			s = fmt.Sprintf("%-*s", w, row[i])
 			if i == 0 && t.border == noBorder {
-				align_offset = -1
+				alignOffset = -1
 			}
 		} else {
 			s = fmt.Sprintf("%*s", w, row[i])
 		}
-		printText(t.x+o+align_offset, t.y+t.cr, w, s, tm.ColorDefault, tm.ColorDefault)
+		printText(t.x+o+alignOffset, t.y+t.cr, w, s, tm.ColorDefault, tm.ColorDefault)
 		o += w + 1
-		align_offset = 0
+		alignOffset = 0
 	}
 
 	t.cr++
@@ -209,7 +209,7 @@ func printDivider2() {
 	ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
 }
 
-type ethrUi interface {
+type ethrUI interface {
 	fini()
 	printMsg(format string, a ...interface{})
 	printErr(format string, a ...interface{})
@@ -225,4 +225,4 @@ type ethrUi interface {
 	emitStats(ethrNetStat)
 }
 
-var ui ethrUi
+var ui ethrUI

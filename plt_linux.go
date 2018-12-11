@@ -108,7 +108,7 @@ func toInt(str string) uint64 {
 	return res
 }
 
-func getTcpStats(stats *ethrNetStat) {
+func getTCPStats(stats *ethrNetStat) {
 	snmpStatsFile, err := os.Open("/proc/net/snmp")
 	if err != nil {
 		ui.printErr("%v", err)

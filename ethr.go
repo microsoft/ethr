@@ -41,7 +41,7 @@ func main() {
 	durationStr := flag.String("d", "10s",
 		"Duration for the test (format: <num>[s | m | h] \n"+
 			"0: Run forever")
-	showUi := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
+	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
 		"Number of round trip iterations for calculating latency.")
 	ethrUnused(noOutput)
@@ -91,18 +91,18 @@ func main() {
 	}
 
 	p := strings.ToUpper(*protocol)
-	proto := Tcp
+	proto := TCP
 	switch p {
 	case "TCP":
-		proto = Tcp
+		proto = TCP
 	case "UDP":
-		proto = Udp
+		proto = UDP
 	case "HTTP":
-		proto = Http
+		proto = HTTP
 	case "HTTPS":
-		proto = Https
+		proto = HTTPS
 	case "ICMP":
-		proto = Icmp
+		proto = ICMP
 	default:
 		fmt.Printf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
 			"Valid parameters and values are:\n", *protocol)
@@ -126,7 +126,7 @@ func main() {
 		bufLen = 1
 	}
 
-	testParam := EthrTestParam{EthrTestId{EthrProtocol(proto), test},
+	testParam := EthrTestParam{EthrTestID{EthrProtocol(proto), test},
 		uint32(*thCount),
 		uint32(bufLen),
 		uint32(*rttCount)}
@@ -142,7 +142,7 @@ func main() {
 			}
 			logInit(logFileName, *debug)
 		}
-		runServer(testParam, *showUi)
+		runServer(testParam, *showUI)
 	} else {
 		if !*noOutput {
 			if logFileName == defaultLogFileName {
@@ -156,24 +156,24 @@ func main() {
 
 func emitUnsupportedTest(test EthrTestParam) {
 	fmt.Printf("Error: \"%s\" test for \"%s\" is not supported.\n",
-		testToString(test.TestId.Type), protoToString(test.TestId.Protocol))
+		testToString(test.TestID.Type), protoToString(test.TestID.Protocol))
 }
 
 func validateTestParam(test EthrTestParam) bool {
-	testType := test.TestId.Type
-	protocol := test.TestId.Protocol
+	testType := test.TestID.Type
+	protocol := test.TestID.Protocol
 	switch protocol {
-	case Tcp:
+	case TCP:
 		if testType != Bandwidth && testType != Cps && testType != Latency {
 			emitUnsupportedTest(test)
 			return false
 		}
-	case Udp:
+	case UDP:
 		if testType != Pps {
 			emitUnsupportedTest(test)
 			return false
 		}
-	case Http:
+	case HTTP:
 		if testType != Bandwidth {
 			emitUnsupportedTest(test)
 			return false

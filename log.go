@@ -81,8 +81,8 @@ func _log(prefix, msg string) {
 		logData := logMessage{}
 		logData.Type = prefix
 		logData.Message = msg
-		logJson, _ := json.Marshal(logData)
-		logChan <- string(logJson)
+		logJSON, _ := json.Marshal(logData)
+		logChan <- string(logJSON)
 	}
 }
 
@@ -110,8 +110,8 @@ func logResults(s []string) {
 		logData.ConnectionsPerSecond = s[3]
 		logData.PacketsPerSecond = s[4]
 		logData.AverageLatency = s[5]
-		logJson, _ := json.Marshal(logData)
-		logChan <- string(logJson)
+		logJSON, _ := json.Marshal(logData)
+		logChan <- string(logJSON)
 	}
 }
 
@@ -131,7 +131,7 @@ func logLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9
 		logData.P999 = durationToString(p999)
 		logData.P9999 = durationToString(p9999)
 		logData.Max = durationToString(max)
-		logJson, _ := json.Marshal(logData)
-		logChan <- string(logJson)
+		logJSON, _ := json.Marshal(logData)
+		logChan <- string(logJSON)
 	}
 }
