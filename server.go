@@ -20,6 +20,7 @@ import (
 )
 
 func runServer(testParam EthrTestParam, showUI bool) {
+	defer stopStatsTimer()
 	initServer(showUI)
 	l := runControlChannel()
 	defer l.Close()
@@ -36,7 +37,6 @@ func runServer(testParam EthrTestParam, showUI bool) {
 		}
 		go handleRequest(conn)
 	}
-	stopStatsTimer()
 }
 
 func initServer(showUI bool) {
