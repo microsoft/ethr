@@ -6,10 +6,14 @@ go:
 
 before_install:
   - go get -t -v ./...
-  - go get -v golang.org/x/lint/golint
+  - go get -u golang.org/x/tools/cmd/goimports
+  - go get -u golang.org/x/lint/golint
   - go get github.com/golang/dep/...
 
 install:
   - $GOPATH/bin/dep ensure -v
 script:
   - go test -v -race ./...
+  - go vet ./...
+  - diff <(goimports -d .) <(printf "")
+  - diff <(golint ./...) <(printf "")
