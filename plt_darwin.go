@@ -48,7 +48,7 @@ func getNetDevStats(stats *ethrNetStat) {
 	}
 }
 
-func getTcpStats(stats *ethrNetStat) {
+func getTCPStats(stats *ethrNetStat) {
 	var data C.struct_tcpstat
 	rawData, err := unix.SysctlRaw("net.inet.tcp.stats")
 	if err != nil {
