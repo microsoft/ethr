@@ -30,11 +30,11 @@ func (u *clientUi) printErr(format string, a ...interface{}) {
 }
 
 func (u *clientUi) printDbg(format string, a ...interface{}) {
-	if logDebug {
-		s := fmt.Sprintf(format, a...)
-		logDbg(s)
-		fmt.Println(s)
-	}
+    if logDebug {
+        s := fmt.Sprintf(format, a...)
+        logDbg(s)
+        fmt.Println(s)
+    }
 }
 
 func (u *clientUi) paint() {
