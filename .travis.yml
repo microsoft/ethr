@@ -5,9 +5,11 @@ go:
   - master
 
 before_install:
-  - dep ensure -v
   - go get -t -v ./...
   - go get -v golang.org/x/lint/golint
+  - go get github.com/golang/dep/...
 
+install:
+  - $GOPATH/bin/dep ensure -v
 script:
   - go test -v -race ./...
