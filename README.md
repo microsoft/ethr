@@ -6,7 +6,7 @@ Ethr is a cross platform network performance measurement tool written in golang.
   <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49815752-506f0000-fd21-11e8-954e-d587e79c5d85.png">
 </p>
 
-Ethr takes insipiration from existing open source network performance tools and builds upon those ideas. It is very similar to iPerf3 for bandwidth measurements for TCP. iPerf3 has many more options for doing bandwidth measurements such as throttled testing, richer feature set, while Ethr has support for multiple threads, ability to scale to 1024 or even higher connections, multiple clients to single server etc. It is similar to latte on Windows or sockperf on Linux for doing latency measurements.
+Ethr takes inspiration from existing open source network performance tools and builds upon those ideas. It is very similar to iPerf3 for bandwidth measurements for TCP. iPerf3 has many more options for doing bandwidth measurements such as throttled testing, richer feature set, while Ethr has support for multiple threads, ability to scale to 1024 or even higher connections, multiple clients to single server etc. It is similar to latte on Windows or sockperf on Linux for doing latency measurements.
 
 Ethr is natively cross platform, thanks to golang, as compared to compiling via abstraction layer like cygwin that may limit functionality. It hopes to unify performance measurement by combining functionality of tools like iPerf3, ntttcp, psping, sockperf, latte, and many other available today on different platforms and offer a single tool across multiple platforms.
 
@@ -87,7 +87,7 @@ ethr -c localhost -t c -n 64
 ```
 -h                        Help
 -no                       Disable logging to a file
--o <filename>             Log to the file specified by filename. 
+-o <filename>             Log to the file specified by filename.
                           By default Ethr logs to ./ethrs.log for server & ./ethrc.log for client mode
 -debug                    Log debug output
 ```
