@@ -46,10 +46,19 @@ const (
 var gDone = false
 
 const (
-	UNO  = 1
+	// UNO represents 1 unit.
+	UNO = 1
+
+	// KILO represents k.
 	KILO = 1000
+
+	// MEGA represents m.
 	MEGA = 1000 * 1000
+
+	// GIGA represents g.
 	GIGA = 1000 * 1000 * 1000
+
+	// TERA represents t.
 	TERA = 1000 * 1000 * 1000 * 1000
 )
 
@@ -175,15 +184,15 @@ func testToString(testType EthrTestType) string {
 
 func protoToString(proto EthrProtocol) string {
 	switch proto {
-	case Tcp:
+	case TCP:
 		return "TCP"
-	case Udp:
+	case UDP:
 		return "UDP"
-	case Http:
+	case HTTP:
 		return "HTTP"
-	case Https:
+	case HTTPS:
 		return "HTTPS"
-	case Icmp:
+	case ICMP:
 		return "ICMP"
 	}
 	return ""
@@ -240,6 +249,11 @@ func getFd(conn net.Conn) uintptr {
 	var err error
 	switch ct := conn.(type) {
 	case *net.TCPConn:
+		rc, err = ct.SyscallConn()
+		if err != nil {
+			return 0
+		}
+	case *net.UDPConn:
 		rc, err = ct.SyscallConn()
 		if err != nil {
 			return 0

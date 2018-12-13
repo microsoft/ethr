@@ -19,14 +19,15 @@ import (
 	"time"
 )
 
-func runServer(testParam EthrTestParam, showUi bool) {
-	initServer(showUi)
+func runServer(testParam EthrTestParam, showUI bool) {
+	defer stopStatsTimer()
+	initServer(showUI)
 	l := runControlChannel()
 	defer l.Close()
-	runTcpBandwidthServer()
-	runTcpCpsServer()
-	runTcpLatencyServer()
-	go runHttpBandwidthServer()
+	runTCPBandwidthServer()
+	runTCPCpsServer()
+	runTCPLatencyServer()
+	go runHTTPBandwidthServer()
 	startStatsTimer()
 	for {
 		conn, err := l.Accept()
@@ -36,11 +37,10 @@ func runServer(testParam EthrTestParam, showUi bool) {
 		}
 		go handleRequest(conn)
 	}
-	stopStatsTimer()
 }
 
-func initServer(showUi bool) {
-	initServerUi(showUi)
+func initServer(showUI bool) {
+	initServerUI(showUI)
 }
 
 func finiServer() {
@@ -81,12 +81,12 @@ func handleRequest(conn net.Conn) {
 	}
 	ethrUnused(lserver, lport)
 	ui.printMsg("New control connection from " + server + ", port " + port)
-	ui.printMsg("Starting " + protoToString(testParam.TestId.Protocol) + " " +
-		testToString(testParam.TestId.Type) + " test from " + server)
+	ui.printMsg("Starting " + protoToString(testParam.TestID.Protocol) + " " +
+		testToString(testParam.TestID.Type) + " test from " + server)
 	test, err := newTest(server, conn, testParam, enc, dec)
 	if err != nil {
-		msg := "Rejected duplicate " + protoToString(testParam.TestId.Protocol) + " " +
-			testToString(testParam.TestId.Type) + " test from " + server
+		msg := "Rejected duplicate " + protoToString(testParam.TestID.Protocol) + " " +
+			testToString(testParam.TestID.Type) + " test from " + server
 		ui.printMsg(msg)
 		ethrMsg = createFinMsg(msg)
 		sendSessionMsg(enc, ethrMsg)
@@ -98,10 +98,15 @@ func handleRequest(conn net.Conn) {
 		deleteTest(test)
 	}
 	ui.emitTestHdr()
-	if test.testParam.TestId.Type == Pps {
-		err = runUdpPpsServer(test)
+	if test.testParam.TestID.Protocol == UDP {
+		if test.testParam.TestID.Type == Bandwidth {
+			err = runUDPBandwidthServer(test)
+		} else if test.testParam.TestID.Type == Pps {
+			err = runUDPPpsServer(test)
+		}
 		if err != nil {
-			ui.printDbg("Error encounterd in running Pkt/s test: %v", err)
+			ui.printDbg("Error encounterd in running UDP test (%s): %v",
+				testToString(testParam.TestID.Type), err)
 			cleanupFunc()
 			return
 		}
@@ -126,7 +131,7 @@ func handleRequest(conn net.Conn) {
 	waitForChannelStop := make(chan bool, 1)
 	serverWatchControlChannel(test, waitForChannelStop)
 	<-waitForChannelStop
-	ui.printMsg("Ending " + testToString(testParam.TestId.Type) + " test from " + server)
+	ui.printMsg("Ending " + testToString(testParam.TestID.Type) + " test from " + server)
 	test.isActive = false
 	cleanupFunc()
 	if len(gSessionKeys) > 0 {
@@ -138,11 +143,11 @@ func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
 	watchControlChannel(test, waitForChannelStop)
 }
 
-func runTcpBandwidthServer() {
+func runTCPBandwidthServer() {
 	l, err := net.Listen(protoTCP, hostAddr+":"+tcpBandwidthPort)
 	if err != nil {
 		finiServer()
-		fmt.Printf("Fatal error listening on "+tcpLatencyPort+" for TCP bandwidth tests: %v", err)
+		fmt.Printf("Fatal error listening on "+tcpBandwidthPort+" for TCP bandwidth tests: %v", err)
 		os.Exit(1)
 	}
 	ui.printMsg("Listening on " + tcpBandwidthPort + " for TCP bandwidth tests")
@@ -155,13 +160,13 @@ func runTcpBandwidthServer() {
 				continue
 			}
 			server, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			test := getTest(server, Tcp, Bandwidth)
+			test := getTest(server, TCP, Bandwidth)
 			if test == nil {
 				ui.printDbg("Received unsolicited TCP connection on port %s from %s port %s", tcpBandwidthPort, server, port)
 				conn.Close()
 				continue
 			}
-			go runTcpBandwidthHandler(conn, test)
+			go runTCPBandwidthHandler(conn, test)
 		}
 	}(l)
 }
@@ -174,7 +179,7 @@ func closeConn(conn net.Conn) {
 	}
 }
 
-func runTcpBandwidthHandler(conn net.Conn, test *ethrTest) {
+func runTCPBandwidthHandler(conn net.Conn, test *ethrTest) {
 	defer closeConn(conn)
 	size := test.testParam.BufferSize
 	bytes := make([]byte, size)
@@ -194,11 +199,11 @@ ExitForLoop:
 	}
 }
 
-func runTcpCpsServer() {
+func runTCPCpsServer() {
 	l, err := net.Listen(protoTCP, hostAddr+":"+tcpCpsPort)
 	if err != nil {
 		finiServer()
-		fmt.Printf("Fatal error listening on "+tcpLatencyPort+" for TCP conn/s tests: %v", err)
+		fmt.Printf("Fatal error listening on "+tcpCpsPort+" for TCP conn/s tests: %v", err)
 		os.Exit(1)
 	}
 	ui.printMsg("Listening on " + tcpCpsPort + " for TCP conn/s tests")
@@ -212,21 +217,21 @@ func runTcpCpsServer() {
 				ui.printDbg("Error accepting new conn/s connection: %v", err)
 				continue
 			}
-			go runTcpCpsHandler(conn)
+			go runTCPCpsHandler(conn)
 		}
 	}(l)
 }
 
-func runTcpCpsHandler(conn net.Conn) {
+func runTCPCpsHandler(conn net.Conn) {
 	defer conn.Close()
 	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-	test := getTest(server, Tcp, Cps)
+	test := getTest(server, TCP, Cps)
 	if test != nil {
 		atomic.AddUint64(&test.testResult.data, 1)
 	}
 }
 
-func runTcpLatencyServer() {
+func runTCPLatencyServer() {
 	l, err := net.Listen(protoTCP, hostAddr+":"+tcpLatencyPort)
 	if err != nil {
 		finiServer()
@@ -243,18 +248,18 @@ func runTcpLatencyServer() {
 				continue
 			}
 			server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			test := getTest(server, Tcp, Latency)
+			test := getTest(server, TCP, Latency)
 			if test == nil {
 				conn.Close()
 				continue
 			}
 			ui.emitLatencyHdr()
-			go runTcpLatencyHandler(conn, test)
+			go runTCPLatencyHandler(conn, test)
 		}
 	}(l)
 }
 
-func runTcpLatencyHandler(conn net.Conn, test *ethrTest) {
+func runTCPLatencyHandler(conn net.Conn, test *ethrTest) {
 	defer conn.Close()
 	bytes := make([]byte, test.testParam.BufferSize)
 	// TODO Override buffer size to 1 for now. Evaluate if we need to allow
@@ -312,12 +317,59 @@ func runTcpLatencyHandler(conn net.Conn, test *ethrTest) {
 		p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
 		ui.emitLatencyResults(
 			test.session.remoteAddr,
-			protoToString(test.testParam.TestId.Protocol),
+			protoToString(test.testParam.TestID.Protocol),
 			avg, min, max, p50, p90, p95, p99, p999, p9999)
 	}
 }
 
-func runUdpPpsServer(test *ethrTest) error {
+func runUDPBandwidthServer(test *ethrTest) error {
+	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpBandwidthPort)
+	if err != nil {
+		ui.printDbg("Unable to resolve UDP address: %v", err)
+		return err
+	}
+	l, err := net.ListenUDP(protoUDP, udpAddr)
+	if err != nil {
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
+		return err
+	}
+	go func(l *net.UDPConn) {
+		defer l.Close()
+		//
+		// We use NumCPU here instead of NumThreads passed from client. The
+		// reason is that for UDP, there is no connection, so all packets come
+		// on same CPU, so it isn't clear if there are any benefits to running
+		// more threads than NumCPU(). TODO: Evaluate this in future.
+		//
+		for i := 0; i < runtime.NumCPU(); i++ {
+			go runUDPBandwidthHandler(test, l)
+		}
+		<-test.done
+	}(l)
+	return nil
+}
+
+func runUDPBandwidthHandler(test *ethrTest, conn *net.UDPConn) {
+	buffer := make([]byte, test.testParam.BufferSize)
+	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+	for err == nil {
+		n, remoteAddr, err = conn.ReadFromUDP(buffer)
+		if err != nil {
+			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
+			continue
+		}
+		ethrUnused(n)
+		server, port, _ := net.SplitHostPort(remoteAddr.String())
+		test := getTest(server, UDP, Bandwidth)
+		if test != nil {
+			atomic.AddUint64(&test.testResult.data, uint64(n))
+		} else {
+			ui.printDbg("Received unsolicited UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
+		}
+	}
+}
+
+func runUDPPpsServer(test *ethrTest) error {
 	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpPpsPort)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
@@ -337,14 +389,14 @@ func runUdpPpsServer(test *ethrTest) error {
 		// more threads than NumCPU(). TODO: Evaluate this in future.
 		//
 		for i := 0; i < runtime.NumCPU(); i++ {
-			go runUdpPpsHandler(test, l)
+			go runUDPPpsHandler(test, l)
 		}
 		<-test.done
 	}(l)
 	return nil
 }
 
-func runUdpPpsHandler(test *ethrTest, conn *net.UDPConn) {
+func runUDPPpsHandler(test *ethrTest, conn *net.UDPConn) {
 	buffer := make([]byte, test.testParam.BufferSize)
 	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
 	for err == nil {
@@ -355,7 +407,7 @@ func runUdpPpsHandler(test *ethrTest, conn *net.UDPConn) {
 		}
 		ethrUnused(n)
 		server, port, _ := net.SplitHostPort(remoteAddr.String())
-		test := getTest(server, Udp, Pps)
+		test := getTest(server, UDP, Pps)
 		if test != nil {
 			atomic.AddUint64(&test.testResult.data, 1)
 		} else {
@@ -364,15 +416,15 @@ func runUdpPpsHandler(test *ethrTest, conn *net.UDPConn) {
 	}
 }
 
-func runHttpBandwidthServer() {
-	http.HandleFunc("/", runHttpBandwidthHandler)
+func runHTTPBandwidthServer() {
+	http.HandleFunc("/", runHTTPBandwidthHandler)
 	err := http.ListenAndServe(":"+httpBandwidthPort, nil)
 	if err != nil {
 		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
 	}
 }
 
-func runHttpBandwidthHandler(w http.ResponseWriter, r *http.Request) {
+func runHTTPBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 	_, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		ui.printDbg("Error reading HTTP body: %v", err)
@@ -391,7 +443,7 @@ func runHttpBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
-	test := getTest(server, Http, Bandwidth)
+	test := getTest(server, HTTP, Bandwidth)
 	if test == nil {
 		http.Error(w, "Unauthorized request.", http.StatusUnauthorized)
 		return

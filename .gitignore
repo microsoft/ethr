@@ -20,7 +20,7 @@
 
 # Files without extension (Linux binary, for example)
 *
-!/**/
-!*.*
+!Makefile
+
 # Golang vendor directory
 vendor/

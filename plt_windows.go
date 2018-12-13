@@ -96,7 +96,7 @@ const (
 	AF_INET6 = 23
 )
 
-func getTcpStats(stats *ethrNetStat) (errcode error) {
+func getTCPStats(stats *ethrNetStat) (errcode error) {
 	tcpStats := &mib_tcpstats{}
 	r0, _, _ := syscall.Syscall(proc_get_tcp_statistics_ex.Addr(), 2,
 		uintptr(unsafe.Pointer(tcpStats)),

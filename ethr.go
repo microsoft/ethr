@@ -20,7 +20,7 @@ func main() {
 	isServer := flag.Bool("s", false, "Run as server")
 	clientServerIP := flag.String("c", "",
 		"Run as client and connect to server specified by String")
-	testType := flag.String("t", "b",
+	testTypePtr := flag.String("t", "b",
 		"Test to run (\"b\", \"c\", \"p\" or \"l\")\n"+
 			"b: Bandwidth\n"+
 			"c: Connections/s or Requests/s\n"+
@@ -41,7 +41,7 @@ func main() {
 	durationStr := flag.String("d", "10s",
 		"Duration for the test (format: <num>[s | m | h] \n"+
 			"0: Run forever")
-	showUi := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
+	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
 		"Number of round trip iterations for calculating latency.")
 	ethrUnused(noOutput)
@@ -73,36 +73,36 @@ func main() {
 		os.Exit(1)
 	}
 
-	var test EthrTestType
-	switch *testType {
+	var testType EthrTestType
+	switch *testTypePtr {
 	case "b":
-		test = Bandwidth
+		testType = Bandwidth
 	case "c":
-		test = Cps
+		testType = Cps
 	case "p":
-		test = Pps
+		testType = Pps
 	case "l":
-		test = Latency
+		testType = Latency
 	default:
 		fmt.Printf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
-			"Valid parameters and values are:\n", *testType)
+			"Valid parameters and values are:\n", *testTypePtr)
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
 
 	p := strings.ToUpper(*protocol)
-	proto := Tcp
+	proto := TCP
 	switch p {
 	case "TCP":
-		proto = Tcp
+		proto = TCP
 	case "UDP":
-		proto = Udp
+		proto = UDP
 	case "HTTP":
-		proto = Http
+		proto = HTTP
 	case "HTTPS":
-		proto = Https
+		proto = HTTPS
 	case "ICMP":
-		proto = Icmp
+		proto = ICMP
 	default:
 		fmt.Printf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
 			"Valid parameters and values are:\n", *protocol)
@@ -113,7 +113,7 @@ func main() {
 	duration, err := time.ParseDuration(*durationStr)
 	if err != nil {
 		fmt.Printf("Invalid value \"%s\" specified for parameter \"-d\".\n",
-			durationStr)
+			*durationStr)
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -122,11 +122,16 @@ func main() {
 		*thCount = runtime.NumCPU()
 	}
 
-	if test == Pps {
+	//
+	// For Pkt/s, we always override the buffer size to be just 1 byte.
+	// TODO: Evaluate in future, if we need to support > 1 byte packets for
+	//       Pkt/s testing.
+	//
+	if testType == Pps {
 		bufLen = 1
 	}
 
-	testParam := EthrTestParam{EthrTestId{EthrProtocol(proto), test},
+	testParam := EthrTestParam{EthrTestID{EthrProtocol(proto), testType},
 		uint32(*thCount),
 		uint32(bufLen),
 		uint32(*rttCount)}
@@ -142,7 +147,7 @@ func main() {
 			}
 			logInit(logFileName, *debug)
 		}
-		runServer(testParam, *showUi)
+		runServer(testParam, *showUI)
 	} else {
 		if !*noOutput {
 			if logFileName == defaultLogFileName {
@@ -154,32 +159,38 @@ func main() {
 	}
 }
 
-func emitUnsupportedTest(test EthrTestParam) {
+func emitUnsupportedTest(testParam EthrTestParam) {
 	fmt.Printf("Error: \"%s\" test for \"%s\" is not supported.\n",
-		testToString(test.TestId.Type), protoToString(test.TestId.Protocol))
+		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol))
 }
 
-func validateTestParam(test EthrTestParam) bool {
-	testType := test.TestId.Type
-	protocol := test.TestId.Protocol
+func validateTestParam(testParam EthrTestParam) bool {
+	testType := testParam.TestID.Type
+	protocol := testParam.TestID.Protocol
 	switch protocol {
-	case Tcp:
+	case TCP:
 		if testType != Bandwidth && testType != Cps && testType != Latency {
-			emitUnsupportedTest(test)
+			emitUnsupportedTest(testParam)
 			return false
 		}
-	case Udp:
-		if testType != Pps {
-			emitUnsupportedTest(test)
+	case UDP:
+		if testType != Bandwidth && testType != Pps {
+			emitUnsupportedTest(testParam)
 			return false
 		}
-	case Http:
+		if testType == Bandwidth {
+			if testParam.BufferSize > (64 * 1024) {
+				fmt.Printf("Error: Maximum supported buffer size for UDP is 64K\n")
+				return false
+			}
+		}
+	case HTTP:
 		if testType != Bandwidth {
-			emitUnsupportedTest(test)
+			emitUnsupportedTest(testParam)
 			return false
 		}
 	default:
-		emitUnsupportedTest(test)
+		emitUnsupportedTest(testParam)
 		return false
 	}
 	return true
