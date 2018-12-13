@@ -9,15 +9,16 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
-	"os/exec"
-	"regexp"
-	"strconv"
 
 	tm "github.com/nsf/termbox-go"
 	"golang.org/x/sys/unix"
 )
 
-var netstatPath = "/usr/sbin/netstat"
+/*#include <sys/socket.h>
+#include <sys/socketvar.h>
+#include <netinet/in.h>
+#include<netinet/tcp_var.h>*/
+import "C"
 
 func getNetDevStats(stats *ethrNetStat) {
 	ifs, err := net.Interfaces()
@@ -48,23 +49,37 @@ func getNetDevStats(stats *ethrNetStat) {
 }
 
 func getTcpStats(stats *ethrNetStat) {
-	// use netstat to get the interface stats
-	args := []string{"-s", "-p", "tcp"}
-	output, err := exec.Command(netstatPath, args...).Output()
+	var data C.struct_tcpstat
+	rawData, err := unix.SysctlRaw("net.inet.tcp.stats")
 	if err != nil {
-		ui.printErr("%v", err)
 		return
 	}
-	match := regexp.MustCompile("(?m)^\\s*(\\d+) data packets \\((\\d+) bytes\\) retransmitted").FindStringSubmatch(string(output))
-	stats.tcpStats.segRetrans = toInt(match[1])
-}
+	buf := bytes.NewReader(rawData)
+	// This is ugly. Cannot read the full structure since the
+	// C struct has unexported fields, which reflect does not like
+	binary.Read(buf, binary.LittleEndian, &data.tcps_connattempt)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_accepts)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_connects)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_drops)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_conndrops)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_closed)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_segstimed)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_rttupdated)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_delack)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_timeoutdrop)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_rexmttimeo)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_persisttimeo)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_keeptimeo)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_keepprobe)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_keepdrops)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_sndtotal)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_sndpack)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_sndbyte)
+	binary.Read(buf, binary.LittleEndian, &data.tcps_sndrexmitpack)
 
-func toInt(str string) uint64 {
-	res, err := strconv.ParseUint(str, 10, 64)
-	if err != nil {
-		panic(err)
-	}
-	return res
+	// return the TCP Retransmits
+	stats.tcpStats.segRetrans = uint64(data.tcps_sndrexmitpack)
+	return
 }
 
 func hideCursor() {

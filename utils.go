@@ -7,10 +7,9 @@ package main
 
 import (
 	"net"
-	"reflect"
-	"runtime"
 	"strconv"
 	"strings"
+	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
@@ -236,21 +235,21 @@ func roundUpToZero(n int64) int64 {
 }
 
 func getFd(conn net.Conn) uintptr {
-	switch conn.(type) {
-	case *net.TCPConn, *net.UDPConn, *net.IPConn:
-		v := reflect.ValueOf(conn)
-		switch e := v.Elem(); e.Kind() {
-		case reflect.Struct:
-			fd := e.FieldByName("conn").FieldByName("fd")
-			switch e := fd.Elem(); e.Kind() {
-			case reflect.Struct:
-				sysfd := e.FieldByName("sysfd")
-				if runtime.GOOS == "windows" {
-					return uintptr(sysfd.Uint())
-				}
-				return uintptr(sysfd.Int())
-			}
+	var fd uintptr
+	var rc syscall.RawConn
+	var err error
+	switch ct := conn.(type) {
+	case *net.TCPConn:
+		rc, err = ct.SyscallConn()
+		if err != nil {
+			return 0
 		}
+	default:
+		return 0
 	}
-	return 0
+	fn := func(s uintptr) {
+		fd = s
+	}
+	rc.Control(fn)
+	return fd
 }
