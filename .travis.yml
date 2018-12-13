@@ -1,0 +1,13 @@
+language: go
+
+go:
+  - "1.11"
+  - master
+
+before_install:
+  - dep ensure -v
+  - go get -t -v ./...
+  - go get -v golang.org/x/lint/golint
+
+script:
+  - go test -v -race ./...
