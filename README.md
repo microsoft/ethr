@@ -1,4 +1,4 @@
-# Ethr
+# Ethr [![Build Status](https://travis-ci.org/Microsoft/ethr.svg?branch=master)](https://travis-ci.org/Microsoft/ethr)
 
 Ethr is a cross platform network performance measurement tool written in golang. The goal of this project is to provide a native tool for network performance measurements of bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS, and across multiple platforms such as Windows, Linux and other Unix systems.
 
