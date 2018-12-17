@@ -4,6 +4,11 @@ go:
   - "1.11"
   - master
 
+os:
+  - linux
+  - windows
+  - osx
+
 before_install:
   - go get -t -v ./...
   - go get -u golang.org/x/tools/cmd/goimports

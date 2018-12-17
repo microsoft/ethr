@@ -77,14 +77,14 @@ func buildNetDevStat(line string) ethrNetDevStat {
 
 func toNetDevInfo(fields []string) ethrNetDevInfo {
 	return ethrNetDevInfo{
-		bytes:      toInt(fields[0]),
-		packets:    toInt(fields[1]),
-		errs:       toInt(fields[2]),
-		drop:       toInt(fields[3]),
-		fifo:       toInt(fields[4]),
-		frame:      toInt(fields[5]),
-		compressed: toInt(fields[6]),
-		multicast:  toInt(fields[7]),
+		bytes:      toUInt64(fields[0]),
+		packets:    toUInt64(fields[1]),
+		errs:       toUInt64(fields[2]),
+		drop:       toUInt64(fields[3]),
+		fifo:       toUInt64(fields[4]),
+		frame:      toUInt64(fields[5]),
+		compressed: toUInt64(fields[6]),
+		multicast:  toUInt64(fields[7]),
 	}
 }
 
@@ -100,10 +100,11 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 	return false
 }
 
-func toInt(str string) uint64 {
+func toUInt64(str string) uint64 {
 	res, err := strconv.ParseUint(str, 10, 64)
 	if err != nil {
-		panic(err)
+        ui.printDbg("Error in string conversion: %v", err)
+		return 0
 	}
 	return res
 }
@@ -132,7 +133,7 @@ func getTCPStats(stats *ethrNetStat) {
 			break
 		}
 		fields := strings.Fields(line)
-		stats.tcpStats.segRetrans = toInt(fields[12])
+		stats.tcpStats.segRetrans = toUInt64(fields[12])
 	}
 }
 
