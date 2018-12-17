@@ -13,7 +13,15 @@ import (
 	"time"
 	"unicode"
 	"unicode/utf8"
+    "fmt"
+    "regexp"
 )
+
+
+//
+// Regular expression to parse input for custom ports.
+//
+var customPortRegex = regexp.MustCompile("(\\w+)=([0-9]+)")
 
 //
 // TODO: Use a better way to define ports. The core logic is:
@@ -22,28 +30,65 @@ import (
 //
 const (
 	hostAddr           = ""
-	ctrlPort           = "8888"
-	tcpBandwidthPort   = "9999"
-	tcpCpsPort         = "9998"
-	tcpPpsPort         = "9997"
-	tcpLatencyPort     = "9996"
-	udpBandwidthPort   = "9999"
-	udpCpsPort         = "9998"
-	udpPpsPort         = "9997"
-	udpLatencyPort     = "9996"
-	httpBandwidthPort  = "9899"
-	httpCpsPort        = "9898"
-	httpPpsPort        = "9897"
-	httpLatencyPort    = "9896"
-	httpsBandwidthPort = "9799"
-	httpsCpsPort       = "9798"
-	httpsPpsPort       = "9797"
-	httpsLatencyPort   = "9796"
 	protoTCP           = "tcp"
 	protoUDP           = "udp"
 )
 
-var gDone = false
+var ctrlPort string
+var tcpBandwidthPort, tcpCpsPort, tcpPpsPort, tcpLatencyPort string
+var udpBandwidthPort, udpCpsPort, udpPpsPort, udpLatencyPort string
+var httpBandwidthPort, httpCpsPort, httpPpsPort, httpLatencyPort string
+var httpsBandwidthPort, httpsCpsPort, httpsPpsPort, httpsLatencyPort string
+
+var ctrlBasePort = 8888
+var tcpBasePort = 9999
+var udpBasePort = 9999
+var httpBasePort = 9899
+var httpsBasePort = 9799
+
+func generatePortNumbers(customPortString string) {
+	portsStr := strings.ToUpper(customPortString)
+    data := customPortRegex.FindAllStringSubmatch(portsStr, -1)
+	for _, kv := range data {
+		k := kv[1]
+		v := kv[2]
+        p := toInt(v)
+        if p == 0 {
+            continue
+        }
+        switch k {
+        case "TCP":
+            tcpBasePort = p
+        case "UDP":
+            udpBasePort = p
+        case "HTTP":
+            httpBasePort = p
+        case "HTTPS":
+            httpsBasePort = p
+        case "CONTROL":
+            ctrlBasePort = p
+        default:
+            ui.printErr("Ignoring unexpected key in custom ports: %s", k)
+        }
+    }
+    ctrlPort = toString(ctrlBasePort)
+    tcpBandwidthPort = toString(tcpBasePort)
+    tcpCpsPort = toString(tcpBasePort - 1)
+    tcpPpsPort = toString(tcpBasePort - 2)
+    tcpLatencyPort = toString(tcpBasePort - 3)
+    udpBandwidthPort = toString(udpBasePort)
+    udpCpsPort = toString(udpBasePort - 1)
+    udpPpsPort = toString(udpBasePort - 2)
+    udpLatencyPort = toString(udpBasePort - 3)
+    httpBandwidthPort = toString(httpBasePort)
+    httpCpsPort = toString(httpBasePort - 1)
+    httpPpsPort = toString(httpBasePort - 2)
+    httpLatencyPort = toString(httpBasePort - 3)
+    httpsBandwidthPort = toString(httpsBasePort)
+    httpsCpsPort = toString(httpsBasePort - 1)
+    httpsPpsPort = toString(httpsBasePort - 2)
+    httpsLatencyPort = toString(httpsBasePort - 3)
+}
 
 const (
 	// UNO represents 1 unit.
@@ -223,6 +268,19 @@ func max(x, y uint64) uint64 {
 		return y
 	}
 	return x
+}
+
+func toString(n int) string {
+    return fmt.Sprintf("%d", n)
+}
+
+func toInt(s string) int {
+	res, err := strconv.Atoi(s)
+	if err != nil {
+        ui.printDbg("Error in string conversion: %v", err)
+		return 0
+	}
+	return res
 }
 
 func truncateString(str string, num int) string {

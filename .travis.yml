@@ -4,6 +4,17 @@ go:
   - "1.11"
   - master
 
+os:
+  - linux
+  - windows
+  - osx
+
+matrix:
+  allow_failures:
+    - os: windows
+      go: master
+  fast_finish: true
+
 before_install:
   - go get -t -v ./...
   - go get -u golang.org/x/tools/cmd/goimports
@@ -12,6 +23,7 @@ before_install:
 
 install:
   - $GOPATH/bin/dep ensure -v
+
 script:
   - go test -v -race ./...
   - go vet ./...

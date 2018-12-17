@@ -44,6 +44,14 @@ func main() {
 	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
 		"Number of round trip iterations for calculating latency.")
+    portStr := flag.String("ports", "",
+        "Ports to use for server and client\n"+
+        "Format: \"key1=value1, key2=value2\"\n"+
+        "Example: \"control=8888, tcp=9999, http=8099\"\n"+
+        "For protocols, only base port is specified, so tcp=9999 means:\n"+
+        "9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
+        "Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
+    ethrUnused(portStr)
 	ethrUnused(noOutput)
 
 	flag.Parse()
@@ -138,6 +146,10 @@ func main() {
 	if !validateTestParam(testParam) {
 		os.Exit(1)
 	}
+
+    if *portStr != "" {
+        generatePortNumbers(*portStr)
+    }
 
 	logFileName := *outputFile
 	if *isServer {
