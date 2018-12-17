@@ -12,7 +12,7 @@ os:
 matrix:
   allow_failures:
     - os: windows
-    - go: master
+      go: master
   fast_finish: true
 
 before_install:
