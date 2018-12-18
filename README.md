@@ -33,6 +33,26 @@ dep ensure -v
 go build
 ```
 
+## Docker
+
+Build image using command: 
+```
+docker build -t microsoft/ethr .
+```
+
+Make binary:
+
+**Linux**
+```
+docker run -e GOOS=linux -v $(pwd):/out microsoft/ethr make build-docker
+```
+
+**Windows**
+
+```
+docker run -e BINARY_NAME=ethr.exe -e GOOS=windows -v $(pwd):/out microsoft/ethr make build-docker
+```
+
 ## Using go get
 
 ```

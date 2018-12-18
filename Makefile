@@ -17,6 +17,10 @@ fmt:
 	        do $(GO_FMT) -w -s "$$file"; \
 	    done
 
+.PHONY: build-docker
+build-docker: 
+	$(GO_BIN) build -o /out/$(BINARY_NAME)
+
 .PHONY: build
 build:
 	$(GO_BIN) build -o $(BINARY_NAME) .
