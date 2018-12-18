@@ -8,7 +8,7 @@
 GO_BIN ?= go
 GO_LINT ?= golint
 GO_FMT ?= gofmt
-BINARY_NAME ?= Ethr
+BINARY_NAME ?= ethr
 
 .PHONY: fmt
 fmt:
