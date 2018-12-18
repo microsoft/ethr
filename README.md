@@ -151,6 +151,9 @@ Tested: Ubuntu Linux 18.04.1 LTS, OpenSuse Leap 15
 
 Untested: Other Linux versions
 
+**OSX**
+OSX is supported
+
 **Other**
 
 No other platforms are tested at this time
