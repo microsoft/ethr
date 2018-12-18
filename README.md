@@ -50,7 +50,7 @@ docker run -e GOOS=linux -v $(pwd):/out microsoft/ethr make build-docker
 **Windows**
 
 ```
-docker run -e GOOS=windows -v $(pwd):/out microsoft/ethr make build-docker
+docker run -e BINARY_NAME=ethr.exe -e GOOS=windows -v $(pwd):/out microsoft/ethr make build-docker
 ```
 
 ## Using go get
