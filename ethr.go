@@ -147,9 +147,7 @@ func main() {
 		os.Exit(1)
 	}
 
-    if *portStr != "" {
-        generatePortNumbers(*portStr)
-    }
+    generatePortNumbers(*portStr)
 
 	logFileName := *outputFile
 	if *isServer {
