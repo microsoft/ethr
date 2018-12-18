@@ -21,6 +21,6 @@
 # Files without extension (Linux binary, for example)
 *
 !Makefile
-
+!Dockerfile
 # Golang vendor directory
 vendor/
