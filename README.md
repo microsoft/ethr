@@ -53,6 +53,11 @@ docker run -e GOOS=linux -v $(pwd):/out microsoft/ethr make build-docker
 docker run -e BINARY_NAME=ethr.exe -e GOOS=windows -v $(pwd):/out microsoft/ethr make build-docker
 ```
 
+**OS X**
+```
+docker run -e BINARY_NAME=ethr -e GOOS=darwin -v $(pwd):/out microsoft/ethr make build-docker
+```
+
 ## Using go get
 
 ```
