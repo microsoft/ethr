@@ -1,3 +1,11 @@
+# Files without extension (Linux binary, for example)
+*
+!/**/
+!*.*
+!Makefile
+!LICENSE
+!Dockerfile
+
 # Binaries for programs and plugins
 *.exe
 *.exe~
@@ -18,9 +26,5 @@
 # Log files
 *.log
 
-# Files without extension (Linux binary, for example)
-*
-!Makefile
-!Dockerfile
 # Golang vendor directory
 vendor/
