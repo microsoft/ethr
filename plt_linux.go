@@ -103,7 +103,7 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 func toUInt64(str string) uint64 {
 	res, err := strconv.ParseUint(str, 10, 64)
 	if err != nil {
-        ui.printDbg("Error in string conversion: %v", err)
+		ui.printDbg("Error in string conversion: %v", err)
 		return 0
 	}
 	return res
@@ -112,7 +112,7 @@ func toUInt64(str string) uint64 {
 func getTCPStats(stats *ethrNetStat) {
 	snmpStatsFile, err := os.Open("/proc/net/snmp")
 	if err != nil {
-		ui.printErr("%v", err)
+		ui.printDbg("%v", err)
 		return
 	}
 	defer snmpStatsFile.Close()
