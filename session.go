@@ -17,8 +17,11 @@ import (
 type EthrTestType uint32
 
 const (
+	// All represents all tests - For now only applicable for servers
+	All EthrTestType = iota
+
 	// Bandwidth represents the bandwidth test.
-	Bandwidth EthrTestType = iota
+	Bandwidth
 
 	// Cps represents connections/s test.
 	Cps
@@ -28,6 +31,9 @@ const (
 
 	// Latency represents the latency test.
 	Latency
+
+	// ConnLatency represents connection setup latency.
+	ConnLatency
 )
 
 // EthrProtocol represents the network protocol.
@@ -168,6 +174,15 @@ type ethrTest struct {
 	done       chan struct{}
 	connList   *list.List
 }
+
+type ethrMode uint32
+
+const (
+	ethrModeInv ethrMode = iota
+	ethrModeServer
+	ethrModeClient
+	ethrModeExtClient
+)
 
 type ethrConn struct {
 	test    *ethrTest
