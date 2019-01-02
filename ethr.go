@@ -18,14 +18,16 @@ const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
 
 func main() {
 	isServer := flag.Bool("s", false, "Run as server")
-	clientServerIP := flag.String("c", "",
+	clientDest := flag.String("c", "",
 		"Run as client and connect to server specified by String")
-	testTypePtr := flag.String("t", "b",
-		"Test to run (\"b\", \"c\", \"p\" or \"l\")\n"+
+	testTypePtr := flag.String("t", "",
+		"Test to run (\"b\", \"c\", \"p\", \"l\" or \"cl\")\n"+
 			"b: Bandwidth\n"+
 			"c: Connections/s or Requests/s\n"+
 			"p: Packets/s\n"+
-			"l: Latency, Loss & Jitter")
+			"l: Latency, Loss & Jitter\n"+
+			"cl: Connection setup latency\n"+
+			"Default: b - Regular mode, cl - External mode")
 	thCount := flag.Int("n", 1,
 		"Number of Threads\n"+
 			"0: Equal to number of CPUs")
@@ -43,15 +45,20 @@ func main() {
 			"0: Run forever")
 	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
-		"Number of round trip iterations for calculating latency.")
-    portStr := flag.String("ports", "",
-        "Ports to use for server and client\n"+
-        "Format: \"key1=value1, key2=value2\"\n"+
-        "Example: \"control=8888, tcp=9999, http=8099\"\n"+
-        "For protocols, only base port is specified, so tcp=9999 means:\n"+
-        "9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
-        "Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
-    ethrUnused(portStr)
+		"Number of round trip iterations for latency test.")
+	portStr := flag.String("ports", "",
+		"Ports to use for server and client\n"+
+			"Format: \"key1=value1, key2=value2\"\n"+
+			"Example: \"control=8888, tcp=9999, http=8099\"\n"+
+			"For protocols, only base port is specified, so tcp=9999 means:\n"+
+			"9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
+			"Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
+	xclientDest := flag.String("x", "",
+		"External mode.\n"+
+			"Run as client and connect to non-ethr server\n"+
+			"Server can be specified using IP address, name or URI\n"+
+			"Please refer to documentation for testing in this mode.")
+	ethrUnused(portStr)
 	ethrUnused(noOutput)
 
 	flag.Parse()
@@ -61,9 +68,25 @@ func main() {
 	// fmt.Println("Number of incorrect arguments: " + strconv.Itoa(flag.NArg()))
 	//
 
-	if (*isServer && *clientServerIP != "") ||
-		(!*isServer && *clientServerIP == "") {
-		fmt.Println("Please specify either server mode (-s) or client mode (-c).")
+	mode := ethrModeInv
+	if *isServer {
+		mode = ethrModeServer
+		if *clientDest != "" || *xclientDest != "" {
+			fmt.Println("Error: Client parameters are passed in server mode.")
+			flag.PrintDefaults()
+			os.Exit(1)
+		}
+	} else if *clientDest != "" {
+		mode = ethrModeClient
+		if *xclientDest != "" {
+			fmt.Println("Error: External client parameters are passed in client mode.")
+			flag.PrintDefaults()
+			os.Exit(1)
+		}
+	} else if *xclientDest != "" {
+		mode = ethrModeExtClient
+	} else {
+		fmt.Println("Error: Invalid arguments, please specify \"-s\", \"-c\" or \"-x\"")
 		flag.PrintDefaults()
 		os.Exit(1)
 	}
@@ -83,6 +106,15 @@ func main() {
 
 	var testType EthrTestType
 	switch *testTypePtr {
+	case "":
+		switch mode {
+		case ethrModeServer:
+			testType = All
+		case ethrModeClient:
+			testType = Bandwidth
+		case ethrModeExtClient:
+			testType = ConnLatency
+		}
 	case "b":
 		testType = Bandwidth
 	case "c":
@@ -143,29 +175,34 @@ func main() {
 		uint32(*thCount),
 		uint32(bufLen),
 		uint32(*rttCount)}
-	if !validateTestParam(testParam) {
+	if !validateTestParam(mode, testParam) {
 		os.Exit(1)
 	}
 
-    generatePortNumbers(*portStr)
+	generatePortNumbers(*portStr)
 
 	logFileName := *outputFile
-	if *isServer {
-		if !*noOutput {
-			if logFileName == defaultLogFileName {
+	if !*noOutput {
+		if logFileName == defaultLogFileName {
+			switch mode {
+			case ethrModeServer:
 				logFileName = "ethrs.log"
-			}
-			logInit(logFileName, *debug)
-		}
-		runServer(testParam, *showUI)
-	} else {
-		if !*noOutput {
-			if logFileName == defaultLogFileName {
+			case ethrModeClient:
 				logFileName = "ethrc.log"
+			case ethrModeExtClient:
+				logFileName = "ethrxc.log"
 			}
-			logInit(logFileName, *debug)
 		}
-		runClient(testParam, *clientServerIP, duration)
+		logInit(logFileName, *debug)
+	}
+
+	switch mode {
+	case ethrModeServer:
+		runServer(testParam, *showUI)
+	case ethrModeClient:
+		runClient(testParam, *clientDest, duration)
+	case ethrModeExtClient:
+		runXClient(testParam, *xclientDest, duration)
 	}
 }
 
@@ -174,34 +211,46 @@ func emitUnsupportedTest(testParam EthrTestParam) {
 		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol))
 }
 
-func validateTestParam(testParam EthrTestParam) bool {
+func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 	testType := testParam.TestID.Type
 	protocol := testParam.TestID.Protocol
-	switch protocol {
-	case TCP:
-		if testType != Bandwidth && testType != Cps && testType != Latency {
+	if mode == ethrModeServer {
+		if testType != All || protocol != TCP {
 			emitUnsupportedTest(testParam)
 			return false
 		}
-	case UDP:
-		if testType != Bandwidth && testType != Pps {
-			emitUnsupportedTest(testParam)
-			return false
-		}
-		if testType == Bandwidth {
-			if testParam.BufferSize > (64 * 1024) {
-				fmt.Printf("Error: Maximum supported buffer size for UDP is 64K\n")
+	} else if mode == ethrModeClient {
+		switch protocol {
+		case TCP:
+			if testType != Bandwidth && testType != Cps && testType != Latency {
+				emitUnsupportedTest(testParam)
 				return false
 			}
-		}
-	case HTTP:
-		if testType != Bandwidth {
+		case UDP:
+			if testType != Bandwidth && testType != Pps {
+				emitUnsupportedTest(testParam)
+				return false
+			}
+			if testType == Bandwidth {
+				if testParam.BufferSize > (64 * 1024) {
+					fmt.Printf("Error: Maximum supported buffer size for UDP is 64K\n")
+					return false
+				}
+			}
+		case HTTP:
+			if testType != Bandwidth {
+				emitUnsupportedTest(testParam)
+				return false
+			}
+		default:
 			emitUnsupportedTest(testParam)
 			return false
 		}
-	default:
-		emitUnsupportedTest(testParam)
-		return false
+	} else if mode == ethrModeExtClient {
+		if testType != ConnLatency || protocol != TCP {
+			emitUnsupportedTest(testParam)
+			return false
+		}
 	}
 	return true
 }

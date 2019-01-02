@@ -43,12 +43,6 @@ func (u *clientUI) paint() {
 func (u *clientUI) emitTestResultBegin() {
 }
 
-/*
-func (u *clientUI) emitTestResult(s []string) {
-	fmt.Printf("%-15s %-5s %7s %7s %7s\n", s[0], s[1], s[2], s[3], s[4])
-}
-*/
-
 func (u *clientUI) emitTestHdr() {
 	s := []string{"ServerAddress", "Proto", "Bits/s", "Conn/s", "Pkt/s"}
 	fmt.Println("-----------------------------------------------------------")
