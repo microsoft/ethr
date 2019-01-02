@@ -57,13 +57,9 @@ func xclientTCPLatencyTest(test *ethrTest) {
 			var min, max, avg time.Duration
 			var sum, sent, rcvd, lost int64
 			min = time.Hour
-			max = 0
-			avg = 0
-			sum = 0
 			sent = -1
-			rcvd = 0
-			lost = 0
 			warmup := true
+			warmupText := "[warmup] "
 		ExitForLoop:
 			for {
 				select {
@@ -83,11 +79,11 @@ func xclientTCPLatencyTest(test *ethrTest) {
 						continue
 					}
 					t1 := time.Since(t0)
+					rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+					lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+					ui.printMsg("[tcp] %sConnection from [%s]:%s to [%s]:%s: %s",
+						warmupText, lserver, lport, rserver, rport, durationToString(t1))
 					if !warmup {
-						rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-						lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-						ui.printMsg("[tcp] Connection from [%s]:%s to [%s]:%s: %s",
-							lserver, lport, rserver, rport, durationToString(t1))
 						rcvd++
 						sum += t1.Nanoseconds()
 						avg = time.Duration(sum / rcvd)
@@ -99,10 +95,7 @@ func xclientTCPLatencyTest(test *ethrTest) {
 						}
 					} else {
 						warmup = false
-						rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-						lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-						ui.printMsg("[tcp] [warmup] Connection from [%s]:%s to [%s]:%s: %s",
-							lserver, lport, rserver, rport, durationToString(t1))
+						warmupText = ""
 						server = fmt.Sprintf("[%s]:%s", rserver, rport)
 					}
 					/*
