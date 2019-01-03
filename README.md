@@ -112,9 +112,17 @@ ethr -c localhost -t c -n 64
 ```
 -h                        Help
 -no                       Disable logging to a file
--o <filename>             Log to the file specified by filename.
-                          By default Ethr logs to ./ethrs.log for server & ./ethrc.log for client mode
+-o <filename>             Log to the file specified by filename
+                          Default: ethrs.log for server, ethrc.log for client, ethrxc.log for external client mode
 -debug                    Log debug output
+-ports <string>           Use custom port numbers instead of default ones
+                          Format: "Key1=Value, Key2=value, ..."
+                          Default: "control=8888, tcp=9999, udp=9999, http=9899, https=9799"
+                          Control is used for control channel communication for ethr.
+                          For protocols, base port is specified by value and other ports are calculated.
+                          Example: tcp=9999 means port for Bandwidth: 9999, CPS: 9998, PPS: 9997, Latency: 9996
+                          Note: Same ports must be used on client and server
+                          Note: This option is not valid for external client mode
 ```
 ### Server Parameters
 ```
@@ -130,6 +138,13 @@ ethr -c localhost -t c -n 64
 -n <number>                   Number of sessions/threads to use
 -l <number>                   Buffer size to use for each request
 -i <number>                   Number of iterations for latency test
+-d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
+```
+### External Client Mode
+```
+-x <destination>              External client mode, connect to destination specified by host:port
+                              Example: -x www.microsoft.com:443 or -x 10.1.0.4:22 etc.
+-d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
 ```
 
 # Status
