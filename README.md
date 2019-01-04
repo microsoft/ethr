@@ -1,16 +1,16 @@
 # Ethr [![Build Status](https://travis-ci.org/Microsoft/ethr.svg?branch=master)](https://travis-ci.org/Microsoft/ethr)
 
-Ethr is a cross platform network performance measurement tool written in golang. The goal of this project is to provide a native tool for network performance measurements of bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS, and across multiple platforms such as Windows, Linux and other Unix systems.
+Ethr is a cross platform network performance measurement tool written in golang. The goal of this project is to provide a native tool for comprehensive network performance measurements of bandwidth, connections/s, packets/s, latency, loss & jitter, across multiple protocols such as TCP, UDP, HTTP, HTTPS, and across multiple platforms such as Windows, Linux and other Unix systems.
 
 <p align="center">
   <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49815752-506f0000-fd21-11e8-954e-d587e79c5d85.png">
 </p>
 
-Ethr takes inspiration from existing open source network performance tools and builds upon those ideas. It is very similar to iPerf3 for bandwidth measurements for TCP. iPerf3 has many more options for doing bandwidth measurements such as throttled testing, richer feature set, while Ethr has support for multiple threads, the ability to scale to 1024 or even higher connections, multiple clients to a single server etc. It is similar to latte on Windows or sockperf on Linux for doing latency measurements.
+Ethr takes inspiration from existing open source network performance tools and builds upon those ideas. For Bandwidth measurement for TCP & UDP, it is very similar to iPerf3. iPerf3 has many more options for doing such as throttled testing, richer feature set, while Ethr has support for multiple threads, that allows it to scale to 1024 or even higher connections, multiple clients to a single server etc. For latency measurements, it is similar to latte on Windows or sockperf on Linux.
 
-Ethr is natively cross platform, thanks to golang, as compared to compiling via an abstraction layer like cygwin that may limit functionality. It hopes to unify performance measurement by combining the functionality of tools like iPerf3, ntttcp, psping, sockperf, and latte and offering a single tool across multiple platforms.
+Ethr provides more test measurements as compared to other tools, e.g. it provides measurements for bandwidth, connections/s, packets/s, latency, and TCP connection setup latency, all in a single tool. In the future, there are plans to add more features (hoping for others to contribute) as well as more protocol support to make it a comprehensive tool for network performance measurements.
 
-Ethr provides more test measurements as compared to other tools, e.g. it provides measurements for connections/s, packets/s and latency, all in a single tool. In the future, there are plans to add more features (hoping for others to contribute) as well as more protocol support to make it a comprehensive tool for network performance measurements.
+Ethr is natively cross platform, thanks to golang, as compared to compiling via an abstraction layer like cygwin that may limit functionality. It hopes to unify performance measurement by combining the functionality of tools like iPerf3, ntttcp, psping, sockperf, and latte and offering a single tool across multiple platforms and multiple protocols.
 
 # Download
 
@@ -123,6 +123,8 @@ ethr -c localhost -t c -n 64
                           Example: tcp=9999 means port for Bandwidth: 9999, CPS: 9998, PPS: 9997, Latency: 9996
                           Note: Same ports must be used on client and server
                           Note: This option is not valid for external client mode
+-4                        Use only IP v4 version
+-6                        Use only IP v6 version
 ```
 ### Server Parameters
 ```
