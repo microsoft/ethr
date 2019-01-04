@@ -133,6 +133,8 @@ func runTest(test *ethrTest, d time.Duration) {
 			go runUDPBandwidthTest(test)
 		} else if test.testParam.TestID.Type == Pps {
 			go runUDPPpsTest(test)
+		} else if test.testParam.TestID.Type == Latency {
+			go runUDPLatencyTest(test)
 		}
 	} else if test.testParam.TestID.Protocol == HTTP {
 		if test.testParam.TestID.Type == Bandwidth {
@@ -394,6 +396,9 @@ func runUDPPpsTest(test *ethrTest) {
 			}
 		}()
 	}
+}
+
+func runUDPLatencyTest(test *ethrTest) {
 }
 
 func runHTTPBandwidthTest(test *ethrTest) {
