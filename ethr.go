@@ -236,7 +236,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 				return false
 			}
 		case UDP:
-			if testType != Bandwidth && testType != Pps {
+			if testType != Bandwidth && testType != Pps && testType != Latency {
 				emitUnsupportedTest(testParam)
 				return false
 			}

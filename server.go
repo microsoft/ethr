@@ -419,14 +419,14 @@ func runUDPPpsHandler(test *ethrTest, conn *net.UDPConn) {
 }
 
 func runUDPLatencyServer(test *ethrTest) error {
-	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+udpBandwidthPort)
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+udpLatencyPort)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
 	}
 	l, err := net.ListenUDP(udp(ipVer), udpAddr)
 	if err != nil {
-		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpLatencyPort, err)
 		return err
 	}
 	go func(l *net.UDPConn) {
@@ -446,6 +446,66 @@ func runUDPLatencyServer(test *ethrTest) error {
 }
 
 func runUDPLatencyHandler(test *ethrTest, conn *net.UDPConn) {
+	defer conn.Close()
+	bytes := make([]byte, test.testParam.BufferSize)
+	// TODO Override buffer size to 1 for now. Evaluate if we need to allow
+	// client to specify the buffer size in future.
+	bytes = make([]byte, 1)
+	rttCount := test.testParam.RttCount
+	latencyNumbers := make([]time.Duration, rttCount)
+	for {
+		_, udpaddr, err := conn.ReadFromUDP(bytes)
+		if err != nil {
+			ui.printDbg("Error receiving data for latency test: %v", err)
+			return
+		}
+		for i := uint32(0); i < rttCount; i++ {
+			s1 := time.Now()
+			_, err = conn.WriteToUDP(bytes, udpaddr)
+			if err != nil {
+				ui.printDbg("Error sending data for latency test: %v", err)
+				return
+			}
+			_, udpaddr, err = conn.ReadFromUDP(bytes)
+			if err != nil {
+				ui.printDbg("Error receiving data for latency test: %v", err)
+				return
+			}
+			e2 := time.Since(s1)
+			latencyNumbers[i] = e2
+		}
+		sum := int64(0)
+		for _, d := range latencyNumbers {
+			sum += d.Nanoseconds()
+		}
+		elapsed := time.Duration(sum / int64(rttCount))
+		sort.SliceStable(latencyNumbers, func(i, j int) bool {
+			return latencyNumbers[i] < latencyNumbers[j]
+		})
+		//
+		// Special handling for rttCount == 1. This prevents negative index
+		// in the latencyNumber index. The other option is to use
+		// roundUpToZero() but that is more expensive.
+		//
+		rttCountFixed := rttCount
+		if rttCountFixed == 1 {
+			rttCountFixed = 2
+		}
+		atomic.SwapUint64(&test.testResult.data, uint64(elapsed.Nanoseconds()))
+		avg := elapsed
+		min := latencyNumbers[0]
+		max := latencyNumbers[rttCount-1]
+		p50 := latencyNumbers[((rttCountFixed*50)/100)-1]
+		p90 := latencyNumbers[((rttCountFixed*90)/100)-1]
+		p95 := latencyNumbers[((rttCountFixed*95)/100)-1]
+		p99 := latencyNumbers[((rttCountFixed*99)/100)-1]
+		p999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.9)/100)-1)]
+		p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
+		ui.emitLatencyResults(
+			test.session.remoteAddr,
+			protoToString(test.testParam.TestID.Protocol),
+			avg, min, max, p50, p90, p95, p99, p999, p9999)
+	}
 }
 
 func runHTTPBandwidthServer() {

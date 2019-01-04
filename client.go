@@ -399,6 +399,90 @@ func runUDPPpsTest(test *ethrTest) {
 }
 
 func runUDPLatencyTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	conn, err := net.Dial(udp(ipVer), server+":"+udpLatencyPort)
+	if err != nil {
+		ui.printErr("Error dialing the latency connection: %v", err)
+		os.Exit(1)
+		return
+	}
+	defer conn.Close()
+	buffSize := test.testParam.BufferSize
+	// TODO Override buffer size to 1 for now. Evaluate if we need to allow
+	// client to specify the buffer size in future.
+	buffSize = 1
+	buff := make([]byte, buffSize)
+	for i := uint32(0); i < buffSize; i++ {
+		buff[i] = byte(i)
+	}
+	blen := len(buff)
+	rttCount := test.testParam.RttCount
+	latencyNumbers := make([]time.Duration, rttCount)
+ExitForLoop:
+	for {
+	ExitSelect:
+		select {
+		case <-test.done:
+			break ExitForLoop
+		default:
+			for i := uint32(0); i < rttCount; i++ {
+				s1 := time.Now()
+				n, err := conn.Write(buff)
+				if err != nil {
+					ui.printMsg("%v", err)
+					// return
+					break ExitSelect
+				}
+				if n < blen {
+					//ui.printErr("Partial write: " + strconv.(n))
+					// return
+					break ExitSelect
+				}
+				// _, err = io.ReadFull(conn, buff)
+				_, err = conn.Read(buff)
+				if err != nil {
+					ui.printMsg("%v", err)
+					// return
+					break ExitSelect
+				}
+				e2 := time.Since(s1)
+				latencyNumbers[i] = e2
+			}
+			// TODO temp code, fix it better, this is to allow server to do
+			// server side latency measurements as well.
+			_, _ = conn.Write(buff)
+			sum := int64(0)
+			for _, d := range latencyNumbers {
+				sum += d.Nanoseconds()
+			}
+			elapsed := time.Duration(sum / int64(rttCount))
+			sort.SliceStable(latencyNumbers, func(i, j int) bool {
+				return latencyNumbers[i] < latencyNumbers[j]
+			})
+			//
+			// Special handling for rttCount == 1. This prevents negative index
+			// in the latencyNumber index. The other option is to use
+			// roundUpToZero() but that is more expensive.
+			//
+			rttCountFixed := rttCount
+			if rttCountFixed == 1 {
+				rttCountFixed = 2
+			}
+			avg := elapsed
+			min := latencyNumbers[0]
+			max := latencyNumbers[rttCount-1]
+			p50 := latencyNumbers[((rttCountFixed*50)/100)-1]
+			p90 := latencyNumbers[((rttCountFixed*90)/100)-1]
+			p95 := latencyNumbers[((rttCountFixed*95)/100)-1]
+			p99 := latencyNumbers[((rttCountFixed*99)/100)-1]
+			p999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.9)/100)-1)]
+			p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
+			ui.emitLatencyResults(
+				test.session.remoteAddr,
+				protoToString(test.testParam.TestID.Protocol),
+				avg, min, max, p50, p90, p95, p99, p999, p9999)
+		}
+	}
 }
 
 func runHTTPBandwidthTest(test *ethrTest) {
