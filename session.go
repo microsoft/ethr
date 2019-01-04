@@ -204,11 +204,11 @@ type ethrServerParam struct {
 var ipVer ethrIPVer = ethrIPAny
 
 type ethrConn struct {
+	data    uint64
 	test    *ethrTest
 	conn    net.Conn
 	elem    *list.Element
 	fd      uintptr
-	data    uint64
 	retrans uint64
 }
 
