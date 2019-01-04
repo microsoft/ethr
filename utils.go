@@ -6,17 +6,16 @@
 package main
 
 import (
+	"fmt"
 	"net"
+	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
 	"time"
 	"unicode"
 	"unicode/utf8"
-    "fmt"
-    "regexp"
 )
-
 
 //
 // Regular expression to parse input for custom ports.
@@ -29,9 +28,7 @@ var customPortRegex = regexp.MustCompile("(\\w+)=([0-9]+)")
 // Cps is base - 1, Pps is base - 2 and Latency is base - 3
 //
 const (
-	hostAddr           = ""
-	protoTCP           = "tcp"
-	protoUDP           = "udp"
+	hostAddr = ""
 )
 
 var ctrlPort string
@@ -48,46 +45,46 @@ var httpsBasePort = 9799
 
 func generatePortNumbers(customPortString string) {
 	portsStr := strings.ToUpper(customPortString)
-    data := customPortRegex.FindAllStringSubmatch(portsStr, -1)
+	data := customPortRegex.FindAllStringSubmatch(portsStr, -1)
 	for _, kv := range data {
 		k := kv[1]
 		v := kv[2]
-        p := toInt(v)
-        if p == 0 {
-            continue
-        }
-        switch k {
-        case "TCP":
-            tcpBasePort = p
-        case "UDP":
-            udpBasePort = p
-        case "HTTP":
-            httpBasePort = p
-        case "HTTPS":
-            httpsBasePort = p
-        case "CONTROL":
-            ctrlBasePort = p
-        default:
-            ui.printErr("Ignoring unexpected key in custom ports: %s", k)
-        }
-    }
-    ctrlPort = toString(ctrlBasePort)
-    tcpBandwidthPort = toString(tcpBasePort)
-    tcpCpsPort = toString(tcpBasePort - 1)
-    tcpPpsPort = toString(tcpBasePort - 2)
-    tcpLatencyPort = toString(tcpBasePort - 3)
-    udpBandwidthPort = toString(udpBasePort)
-    udpCpsPort = toString(udpBasePort - 1)
-    udpPpsPort = toString(udpBasePort - 2)
-    udpLatencyPort = toString(udpBasePort - 3)
-    httpBandwidthPort = toString(httpBasePort)
-    httpCpsPort = toString(httpBasePort - 1)
-    httpPpsPort = toString(httpBasePort - 2)
-    httpLatencyPort = toString(httpBasePort - 3)
-    httpsBandwidthPort = toString(httpsBasePort)
-    httpsCpsPort = toString(httpsBasePort - 1)
-    httpsPpsPort = toString(httpsBasePort - 2)
-    httpsLatencyPort = toString(httpsBasePort - 3)
+		p := toInt(v)
+		if p == 0 {
+			continue
+		}
+		switch k {
+		case "TCP":
+			tcpBasePort = p
+		case "UDP":
+			udpBasePort = p
+		case "HTTP":
+			httpBasePort = p
+		case "HTTPS":
+			httpsBasePort = p
+		case "CONTROL":
+			ctrlBasePort = p
+		default:
+			ui.printErr("Ignoring unexpected key in custom ports: %s", k)
+		}
+	}
+	ctrlPort = toString(ctrlBasePort)
+	tcpBandwidthPort = toString(tcpBasePort)
+	tcpCpsPort = toString(tcpBasePort - 1)
+	tcpPpsPort = toString(tcpBasePort - 2)
+	tcpLatencyPort = toString(tcpBasePort - 3)
+	udpBandwidthPort = toString(udpBasePort)
+	udpCpsPort = toString(udpBasePort - 1)
+	udpPpsPort = toString(udpBasePort - 2)
+	udpLatencyPort = toString(udpBasePort - 3)
+	httpBandwidthPort = toString(httpBasePort)
+	httpCpsPort = toString(httpBasePort - 1)
+	httpPpsPort = toString(httpBasePort - 2)
+	httpLatencyPort = toString(httpBasePort - 3)
+	httpsBandwidthPort = toString(httpsBasePort)
+	httpsCpsPort = toString(httpsBasePort - 1)
+	httpsPpsPort = toString(httpsBasePort - 2)
+	httpsLatencyPort = toString(httpsBasePort - 3)
 }
 
 const (
@@ -243,6 +240,26 @@ func protoToString(proto EthrProtocol) string {
 	return ""
 }
 
+func tcp(ipVer ethrIPVer) string {
+	switch ipVer {
+	case ethrIPv4:
+		return "tcp4"
+	case ethrIPv6:
+		return "tcp6"
+	}
+	return "tcp"
+}
+
+func udp(ipVer ethrIPVer) string {
+	switch ipVer {
+	case ethrIPv4:
+		return "udp4"
+	case ethrIPv6:
+		return "udp6"
+	}
+	return "udp"
+}
+
 func ethrUnused(vals ...interface{}) {
 	for _, val := range vals {
 		_ = val
@@ -271,13 +288,13 @@ func max(x, y uint64) uint64 {
 }
 
 func toString(n int) string {
-    return fmt.Sprintf("%d", n)
+	return fmt.Sprintf("%d", n)
 }
 
 func toInt(s string) int {
 	res, err := strconv.Atoi(s)
 	if err != nil {
-        ui.printDbg("Error in string conversion: %v", err)
+		ui.printDbg("Error in string conversion: %v", err)
 		return 0
 	}
 	return res

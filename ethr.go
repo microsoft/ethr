@@ -58,8 +58,8 @@ func main() {
 			"Run as client and connect to non-ethr server\n"+
 			"Server can be specified using IP address, name or URI\n"+
 			"Please refer to documentation for testing in this mode.")
-	ethrUnused(portStr)
-	ethrUnused(noOutput)
+	use4 := flag.Bool("4", false, "Use IPv4 only")
+	use6 := flag.Bool("6", false, "Use IPv6 only")
 
 	flag.Parse()
 
@@ -89,6 +89,12 @@ func main() {
 		fmt.Println("Error: Invalid arguments, please specify \"-s\", \"-c\" or \"-x\"")
 		flag.PrintDefaults()
 		os.Exit(1)
+	}
+
+	if *use4 && !*use6 {
+		ipVer = ethrIPv4
+	} else if *use6 && !*use4 {
+		ipVer = ethrIPv6
 	}
 
 	bufLen := unitToNumber(*bufLenStr)
@@ -196,13 +202,16 @@ func main() {
 		logInit(logFileName, *debug)
 	}
 
+	clientParam := ethrClientParam{duration}
+	serverParam := ethrServerParam{*showUI}
+
 	switch mode {
 	case ethrModeServer:
-		runServer(testParam, *showUI)
+		runServer(testParam, serverParam)
 	case ethrModeClient:
-		runClient(testParam, *clientDest, duration)
+		runClient(testParam, clientParam, *clientDest)
 	case ethrModeExtClient:
-		runXClient(testParam, *xclientDest, duration)
+		runXClient(testParam, clientParam, *xclientDest)
 	}
 }
 

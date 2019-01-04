@@ -19,14 +19,14 @@ import (
 	"time"
 )
 
-func runClient(testParam EthrTestParam, server string, d time.Duration) {
+func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
 	test, err := establishSession(testParam, server)
 	if err != nil {
 		ui.printErr("%v", err)
 		return
 	}
-	runTest(test, d)
+	runTest(test, clientParam.duration)
 }
 
 func initClient() {
@@ -34,7 +34,7 @@ func initClient() {
 }
 
 func establishSession(testParam EthrTestParam, server string) (test *ethrTest, err error) {
-	conn, err := net.Dial(protoTCP, server+":"+ctrlPort)
+	conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
 	if err != nil {
 		return
 	}
@@ -167,7 +167,7 @@ func runTCPBandwidthTest(test *ethrTest) {
 			buff[i] = byte(i)
 		}
 		go func() {
-			conn, err := net.Dial(protoTCP, server+":"+tcpBandwidthPort)
+			conn, err := net.Dial(tcp(ipVer), server+":"+tcpBandwidthPort)
 			if err != nil {
 				ui.printErr("%v", err)
 				os.Exit(1)
@@ -217,7 +217,7 @@ func runTCPCpsTest(test *ethrTest) {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					conn, err := net.Dial(protoTCP, server+":"+tcpCpsPort)
+					conn, err := net.Dial(tcp(ipVer), server+":"+tcpCpsPort)
 					if err == nil {
 						atomic.AddUint64(&test.testResult.data, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
@@ -234,7 +234,7 @@ func runTCPCpsTest(test *ethrTest) {
 
 func runTCPLatencyTest(test *ethrTest) {
 	server := test.session.remoteAddr
-	conn, err := net.Dial(protoTCP, server+":"+tcpLatencyPort)
+	conn, err := net.Dial(tcp(ipVer), server+":"+tcpLatencyPort)
 	if err != nil {
 		ui.printErr("Error dialing the latency connection: %v", err)
 		os.Exit(1)
@@ -323,7 +323,7 @@ func runUDPBandwidthTest(test *ethrTest) {
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
 			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(protoUDP, server+":"+udpBandwidthPort)
+			conn, err := net.Dial(udp(ipVer), server+":"+udpBandwidthPort)
 			if err != nil {
 				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
@@ -363,7 +363,7 @@ func runUDPPpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
 			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(protoUDP, server+":"+udpPpsPort)
+			conn, err := net.Dial(udp(ipVer), server+":"+udpPpsPort)
 			if err != nil {
 				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
