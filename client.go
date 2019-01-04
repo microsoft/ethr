@@ -429,7 +429,7 @@ ExitForLoop:
 				s1 := time.Now()
 				n, err := conn.Write(buff)
 				if err != nil {
-					ui.printMsg("%v", err)
+					//ui.printMsg("%v", err)
 					// return
 					break ExitSelect
 				}
@@ -438,10 +438,9 @@ ExitForLoop:
 					// return
 					break ExitSelect
 				}
-				// _, err = io.ReadFull(conn, buff)
 				_, err = conn.Read(buff)
 				if err != nil {
-					ui.printMsg("%v", err)
+					//ui.printMsg("%v", err)
 					// return
 					break ExitSelect
 				}

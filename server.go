@@ -426,7 +426,7 @@ func runUDPLatencyServer(test *ethrTest) error {
 	}
 	l, err := net.ListenUDP(udp(ipVer), udpAddr)
 	if err != nil {
-		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpLatencyPort, err)
+		ui.printDbg("Error listening on %s for UDP Latency tests: %v", udpLatencyPort, err)
 		return err
 	}
 	go func(l *net.UDPConn) {
