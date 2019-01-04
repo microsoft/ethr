@@ -11,14 +11,14 @@ import (
 	"time"
 )
 
-func runXClient(testParam EthrTestParam, server string, d time.Duration) {
+func runXClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
 	test, err := newTest(server, nil, testParam, nil, nil)
 	if err != nil {
 		ui.printErr("Failed to create the new test.")
 		return
 	}
-	xclientTest(test, d)
+	xclientTest(test, clientParam.duration)
 }
 
 func initXClient() {
@@ -72,7 +72,7 @@ func xclientTCPLatencyTest(test *ethrTest) {
 				default:
 					sent++
 					t0 := time.Now()
-					conn, err := net.Dial(protoTCP, server)
+					conn, err := net.Dial(tcp(ipVer), server)
 					if err != nil {
 						lost++
 						ui.printErr("Unable to dial TCP connection to [%s], error: %v", server, err)

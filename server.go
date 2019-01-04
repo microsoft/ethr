@@ -19,9 +19,9 @@ import (
 	"time"
 )
 
-func runServer(testParam EthrTestParam, showUI bool) {
+func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
-	initServer(showUI)
+	initServer(serverParam.showUI)
 	l := runControlChannel()
 	defer l.Close()
 	runTCPBandwidthServer()
@@ -49,7 +49,7 @@ func finiServer() {
 }
 
 func runControlChannel() net.Listener {
-	l, err := net.Listen(protoTCP, hostAddr+":"+ctrlPort)
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+ctrlPort)
 	if err != nil {
 		finiServer()
 		fmt.Printf("Fatal error listening for control connections: %v", err)
@@ -144,7 +144,7 @@ func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
 }
 
 func runTCPBandwidthServer() {
-	l, err := net.Listen(protoTCP, hostAddr+":"+tcpBandwidthPort)
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpBandwidthPort)
 	if err != nil {
 		finiServer()
 		fmt.Printf("Fatal error listening on "+tcpBandwidthPort+" for TCP bandwidth tests: %v", err)
@@ -200,7 +200,7 @@ ExitForLoop:
 }
 
 func runTCPCpsServer() {
-	l, err := net.Listen(protoTCP, hostAddr+":"+tcpCpsPort)
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpCpsPort)
 	if err != nil {
 		finiServer()
 		fmt.Printf("Fatal error listening on "+tcpCpsPort+" for TCP conn/s tests: %v", err)
@@ -232,7 +232,7 @@ func runTCPCpsHandler(conn net.Conn) {
 }
 
 func runTCPLatencyServer() {
-	l, err := net.Listen(protoTCP, hostAddr+":"+tcpLatencyPort)
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpLatencyPort)
 	if err != nil {
 		finiServer()
 		fmt.Printf("Fatal error listening on "+tcpLatencyPort+" for TCP latency tests: %v", err)
@@ -323,12 +323,12 @@ func runTCPLatencyHandler(conn net.Conn, test *ethrTest) {
 }
 
 func runUDPBandwidthServer(test *ethrTest) error {
-	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpBandwidthPort)
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+udpBandwidthPort)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
 	}
-	l, err := net.ListenUDP(protoUDP, udpAddr)
+	l, err := net.ListenUDP(udp(ipVer), udpAddr)
 	if err != nil {
 		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
 		return err
@@ -370,12 +370,12 @@ func runUDPBandwidthHandler(test *ethrTest, conn *net.UDPConn) {
 }
 
 func runUDPPpsServer(test *ethrTest) error {
-	udpAddr, err := net.ResolveUDPAddr(protoUDP, hostAddr+":"+udpPpsPort)
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+udpPpsPort)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
 	}
-	l, err := net.ListenUDP(protoUDP, udpAddr)
+	l, err := net.ListenUDP(udp(ipVer), udpAddr)
 	if err != nil {
 		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
 		return err
@@ -417,8 +417,14 @@ func runUDPPpsHandler(test *ethrTest, conn *net.UDPConn) {
 }
 
 func runHTTPBandwidthServer() {
-	http.HandleFunc("/", runHTTPBandwidthHandler)
-	err := http.ListenAndServe(":"+httpBandwidthPort, nil)
+	sm := http.NewServeMux()
+	sm.HandleFunc("/", runHTTPBandwidthHandler)
+	l, err := net.Listen(tcp(ipVer), ":"+httpBandwidthPort)
+	if err != nil {
+		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
+		return
+	}
+	err = http.Serve(l, sm)
 	if err != nil {
 		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
 	}

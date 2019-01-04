@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"time"
 )
 
 // EthrTestType represents the test type.
@@ -183,6 +184,24 @@ const (
 	ethrModeClient
 	ethrModeExtClient
 )
+
+type ethrIPVer uint32
+
+const (
+	ethrIPAny ethrIPVer = iota
+	ethrIPv4
+	ethrIPv6
+)
+
+type ethrClientParam struct {
+	duration time.Duration
+}
+
+type ethrServerParam struct {
+	showUI bool
+}
+
+var ipVer ethrIPVer = ethrIPAny
 
 type ethrConn struct {
 	test    *ethrTest
