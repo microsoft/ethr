@@ -2,36 +2,26 @@
 
 
 [[projects]]
-  digest = "1:cdb899c199f907ac9fb50495ec71212c95cb5b0e0a8ee0800da0238036091033"
   name = "github.com/mattn/go-runewidth"
   packages = ["."]
-  pruneopts = "UT"
   revision = "ce7b0b5c7b45a81508558cd1dba6bb1e4ddb51bb"
   version = "v0.0.3"
 
 [[projects]]
   branch = "master"
-  digest = "1:01d9e47830ef6077fb6f91033b0e83f324ad5966d11ed3daa4a5822ace876dab"
   name = "github.com/nsf/termbox-go"
   packages = ["."]
-  pruneopts = "UT"
   revision = "60ab7e3d12ed91bc1b2486559c4b3a6b62297577"
 
 [[projects]]
   branch = "master"
-  digest = "1:9399de11945e643d7131cf070736122b76800d92d57a80494bd9a4e73e6979f3"
   name = "golang.org/x/sys"
   packages = ["unix"]
-  pruneopts = "UT"
   revision = "70b957f3b65e069b4930ea94e2721eefa0f8f695"
 
 [solve-meta]
   analyzer-name = "dep"
   analyzer-version = 1
-  input-imports = [
-    "github.com/mattn/go-runewidth",
-    "github.com/nsf/termbox-go",
-    "golang.org/x/sys/unix",
-  ]
+  inputs-digest = "efb229bce3de8a7bf1614335a4747d5ef2ec729b5b229fef1002fd3262791d44"
   solver-name = "gps-cdcl"
   solver-version = 1

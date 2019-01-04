@@ -103,6 +103,8 @@ func handleRequest(conn net.Conn) {
 			err = runUDPBandwidthServer(test)
 		} else if test.testParam.TestID.Type == Pps {
 			err = runUDPPpsServer(test)
+		} else if test.testParam.TestID.Type == Latency {
+			err = runUDPLatencyServer(test)
 		}
 		if err != nil {
 			ui.printDbg("Error encounterd in running UDP test (%s): %v",
@@ -414,6 +416,36 @@ func runUDPPpsHandler(test *ethrTest, conn *net.UDPConn) {
 			ui.printDbg("Received unsolicited UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
 		}
 	}
+}
+
+func runUDPLatencyServer(test *ethrTest) error {
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+udpBandwidthPort)
+	if err != nil {
+		ui.printDbg("Unable to resolve UDP address: %v", err)
+		return err
+	}
+	l, err := net.ListenUDP(udp(ipVer), udpAddr)
+	if err != nil {
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", udpPpsPort, err)
+		return err
+	}
+	go func(l *net.UDPConn) {
+		defer l.Close()
+		//
+		// We use NumCPU here instead of NumThreads passed from client. The
+		// reason is that for UDP, there is no connection, so all packets come
+		// on same CPU, so it isn't clear if there are any benefits to running
+		// more threads than NumCPU(). TODO: Evaluate this in future.
+		//
+		for i := 0; i < runtime.NumCPU(); i++ {
+			go runUDPLatencyHandler(test, l)
+		}
+		<-test.done
+	}(l)
+	return nil
+}
+
+func runUDPLatencyHandler(test *ethrTest, conn *net.UDPConn) {
 }
 
 func runHTTPBandwidthServer() {
