@@ -6,10 +6,16 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/tls"
+	"crypto/x509"
+	"crypto/x509/pkix"
 	"encoding/gob"
 	"fmt"
 	"io"
 	"io/ioutil"
+	"math/big"
 	"net"
 	"net/http"
 	"os"
@@ -19,15 +25,18 @@ import (
 	"time"
 )
 
+var gCert []byte
+
 func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
-	l := runControlChannel()
-	defer l.Close()
 	runTCPBandwidthServer()
 	runTCPCpsServer()
 	runTCPLatencyServer()
-	go runHTTPBandwidthServer()
+	runHTTPBandwidthServer()
+	runHTTPSBandwidthServer()
+	l := runControlChannel()
+	defer l.Close()
 	startStatsTimer()
 	for {
 		conn, err := l.Accept()
@@ -111,16 +120,16 @@ func handleRequest(conn net.Conn) {
 			return
 		}
 	}
+	ethrMsg = createAckMsg(gCert)
+	err = sendSessionMsg(enc, ethrMsg)
+	if err != nil {
+		ui.printErr("send session message: %v", err)
+		cleanupFunc()
+		return
+	}
 	// TODO: Enable this in future, right now there is not much value coming
 	// from this.
 	/**
-		ethrMsg = createAckMsg()
-		err = sendSessionMsg(enc, ethrMsg)
-		if err != nil {
-			ui.printErr("send session message: %v",err)
-			cleanupFunc()
-			return
-		}
 		ethrMsg = recvSessionMsg(dec)
 		if ethrMsg.Type != EthrAck {
 			cleanupFunc()
@@ -421,37 +430,145 @@ func runHTTPBandwidthServer() {
 	sm.HandleFunc("/", runHTTPBandwidthHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpBandwidthPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
+		ui.printErr("Unable to start HTTP server. Error in listening on socket: %v", err)
 		return
 	}
-	err = http.Serve(l, sm)
-	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
-	}
+	ui.printMsg("Listening on " + httpBandwidthPort + " for HTTP bandwidth tests")
+	go runHTTPServer(tcpKeepAliveListener{l.(*net.TCPListener)}, sm)
 }
 
 func runHTTPBandwidthHandler(w http.ResponseWriter, r *http.Request) {
+	runHTTPandHTTPSBandwidthHandler(w, r, HTTP)
+}
+
+func runHTTPSBandwidthServer() {
+	cert, err := genX509KeyPair()
+	if err != nil {
+		ui.printErr("Unable to start HTTPS server. Error in X509 certificate: %v", err)
+		return
+	}
+	config := &tls.Config{}
+	config.NextProtos = []string{"http/1.1"}
+	config.Certificates = make([]tls.Certificate, 1)
+	config.Certificates[0] = cert
+	sm := http.NewServeMux()
+	sm.HandleFunc("/", runHTTPSBandwidthHandler)
+	l, err := net.Listen(tcp(ipVer), ":"+httpsBandwidthPort)
+	if err != nil {
+		ui.printErr("Unable to start HTTPS server. Error in listening on socket: %v", err)
+		return
+	}
+	ui.printMsg("Listening on " + httpsBandwidthPort + " for HTTPS bandwidth tests")
+	tl := tls.NewListener(tcpKeepAliveListener{l.(*net.TCPListener)}, config)
+	go runHTTPServer(tl, sm)
+}
+
+func runHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request) {
+	runHTTPandHTTPSBandwidthHandler(w, r, HTTPS)
+}
+
+func runHTTPServer(l net.Listener, handler http.Handler) error {
+	err := http.Serve(l, handler)
+	if err != nil {
+		ui.printErr("Unable to start HTTP server, error: %v", err)
+	}
+	return err
+}
+
+func genX509KeyPair() (tls.Certificate, error) {
+	now, _ := time.Parse(time.RFC3339, "2019-01-01T00:00:00Z")
+	template := &x509.Certificate{
+		SerialNumber: big.NewInt(now.Unix()),
+		Subject: pkix.Name{
+			CommonName:         "localhost",
+			Country:            []string{"USA"},
+			Organization:       []string{"localhost"},
+			OrganizationalUnit: []string{"127.0.0.1"},
+		},
+		NotBefore:    now,
+		NotAfter:     now.AddDate(100, 0, 0), // Valid for 100 years
+		SubjectKeyId: []byte{113, 117, 105, 99, 107, 115, 101, 114, 118, 101},
+		// IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
+		IPAddresses:           allLocalIPs(),
+		DNSNames:              []string{"localhost", "*"},
+		BasicConstraintsValid: true,
+		IsCA:                  true,
+		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},
+		KeyUsage: x509.KeyUsageKeyEncipherment |
+			x509.KeyUsageDigitalSignature | x509.KeyUsageCertSign,
+	}
+
+	priv, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+
+	cert, err := x509.CreateCertificate(rand.Reader, template, template,
+		priv.Public(), priv)
+	if err != nil {
+		return tls.Certificate{}, err
+	}
+	gCert = cert
+
+	var outCert tls.Certificate
+	outCert.Certificate = append(outCert.Certificate, cert)
+	outCert.PrivateKey = priv
+
+	return outCert, nil
+}
+
+func allLocalIPs() (ipList []net.IP) {
+	ifaces, err := net.Interfaces()
+	if err != nil {
+		return
+	}
+	for _, iface := range ifaces {
+		if iface.Flags&net.FlagUp == 0 {
+			continue
+		}
+		addrs, err := iface.Addrs()
+		if err != nil {
+			continue
+		}
+		for _, addr := range addrs {
+			var ip net.IP
+			switch v := addr.(type) {
+			case *net.IPNet:
+				ip = v.IP
+			case *net.IPAddr:
+				ip = v.IP
+			}
+			if ip == nil {
+				continue
+			}
+			ipList = append(ipList, ip)
+		}
+	}
+	return
+}
+
+func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol) {
 	_, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		ui.printDbg("Error reading HTTP body: %v", err)
 		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
-	switch r.Method {
-	case "GET":
-		w.Write([]byte("ok"))
-	case "PUT":
-		w.Write([]byte("ok"))
-	case "POST":
-		w.Write([]byte("ok"))
-	default:
-		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
-		return
-	}
 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
-	test := getTest(server, HTTP, Bandwidth)
+	test := getTest(server, p, Bandwidth)
 	if test == nil {
 		http.Error(w, "Unauthorized request.", http.StatusUnauthorized)
+		return
+	}
+	switch r.Method {
+	case "GET":
+		w.Write([]byte("OK."))
+	case "PUT":
+		w.Write([]byte("OK."))
+	case "POST":
+		w.Write([]byte("OK."))
+	default:
+		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
 		return
 	}
 	if r.ContentLength > 0 {

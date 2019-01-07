@@ -251,6 +251,11 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 				emitUnsupportedTest(testParam)
 				return false
 			}
+		case HTTPS:
+			if testType != Bandwidth {
+				emitUnsupportedTest(testParam)
+				return false
+			}
 		default:
 			emitUnsupportedTest(testParam)
 			return false

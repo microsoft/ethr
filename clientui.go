@@ -126,7 +126,8 @@ func printTestResult(test *ethrTest, value uint64) {
 			gInterval, gInterval+1, ppsToString(value))
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			"", "", ppsToString(value), ""})
-	} else if test.testParam.TestID.Type == Bandwidth && test.testParam.TestID.Protocol == HTTP {
+	} else if test.testParam.TestID.Type == Bandwidth &&
+		(test.testParam.TestID.Protocol == HTTP || test.testParam.TestID.Protocol == HTTPS) {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
 			ui.printMsg("Protocol    Interval      Bits/s")
