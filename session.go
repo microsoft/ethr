@@ -124,6 +124,7 @@ type EthrMsgSyn struct {
 
 // EthrMsgAck represents the Ack entity.
 type EthrMsgAck struct {
+	Cert []byte
 }
 
 // EthrMsgFin represents the Fin entity.
@@ -368,8 +369,10 @@ func sendSessionMsg(enc *gob.Encoder, ethrMsg *EthrMsg) error {
 	return err
 }
 
-func createAckMsg() (ethrMsg *EthrMsg) {
+func createAckMsg(cert []byte) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
+	ethrMsg.Ack = &EthrMsgAck{}
+	ethrMsg.Ack.Cert = cert
 	return
 }
 

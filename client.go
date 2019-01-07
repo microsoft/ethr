@@ -6,8 +6,11 @@
 package main
 
 import (
-	"bytes"
+	// "bytes"
+	"crypto/tls"
+	"crypto/x509"
 	"encoding/gob"
+	"fmt"
 	"io"
 	"io/ioutil"
 	"net"
@@ -56,18 +59,19 @@ func establishSession(testParam EthrTestParam, server string) (test *ethrTest, e
 		sendSessionMsg(enc, ethrMsg)
 		return
 	}
+	ethrMsg = recvSessionMsg(test.dec)
+	if ethrMsg.Type != EthrAck {
+		if ethrMsg.Type == EthrFin {
+			err = fmt.Errorf("%s", ethrMsg.Fin.Message)
+		} else {
+			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
+		}
+		deleteTest(test)
+	}
+	gCert = ethrMsg.Ack.Cert
 	// TODO: Enable this in future, right now there is not much value coming
 	// from this.
 	/**
-		ethrMsg = recvSessionMsg(test.dec)
-		if ethrMsg.Type != EthrAck {
-			if ethrMsg.Type == EthrFin {
-				err = fmt.Errorf("%s", ethrMsg.Fin.Message)
-			} else {
-				err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
-			}
-			deleteTest(test)
-		}
 		ethrMsg = createAckMsg()
 		err = sendSessionMsg(test.enc, ethrMsg)
 		if err != nil {
@@ -137,6 +141,10 @@ func runTest(test *ethrTest, d time.Duration) {
 	} else if test.testParam.TestID.Protocol == HTTP {
 		if test.testParam.TestID.Type == Bandwidth {
 			go runHTTPBandwidthTest(test)
+		}
+	} else if test.testParam.TestID.Protocol == HTTPS {
+		if test.testParam.TestID.Type == Bandwidth {
+			go runHTTPSBandwidthTest(test)
 		}
 	}
 	test.isActive = true
@@ -406,34 +414,78 @@ func runHTTPBandwidthTest(test *ethrTest) {
 		}
 		tr := &http.Transport{DisableCompression: true}
 		client := &http.Client{Transport: tr}
-		go func() {
-		ExitForLoop:
-			for {
-				select {
-				case <-test.done:
-					break ExitForLoop
-				default:
-					// response, err := http.Get(uri)
-					response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
-					if err != nil {
-						// ui.printErr("%v", err)
-						continue
-					} else {
-						if response.StatusCode != http.StatusOK {
-							continue
-						}
-						contents, err := ioutil.ReadAll(response.Body)
-						// _, err = ioutil.ReadAll(response.Body)
-						response.Body.Close()
-						if err != nil {
-							ui.printDbg("Error in receving HTTP response: %v", err)
-							continue
-						}
-						ui.printDbg("%s", string(contents))
-					}
-					atomic.AddUint64(&test.testResult.data, uint64(test.testParam.BufferSize))
+		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
+	}
+}
+
+func runHTTPSBandwidthTest(test *ethrTest) {
+	uri := test.session.remoteAddr
+	uri = "https://" + uri + ":" + httpsBandwidthPort
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		buff := make([]byte, test.testParam.BufferSize)
+		for i := uint32(0); i < test.testParam.BufferSize; i++ {
+			buff[i] = 'x'
+		}
+		/*
+		   cert, err := GenX509KeyPair()
+		   if err != nil {
+		       ui.printErr("Failed to generate X509 certificate. Error: %v", err)
+		       return
+		   }
+		*/
+		c, err := x509.ParseCertificate(gCert)
+		if err != nil {
+			ui.printErr("Failed to parse certificate: %v", err)
+		}
+		clientCertPool := x509.NewCertPool()
+		clientCertPool.AddCert(c)
+		/*
+		   if ok := clientCertPool.AppendCertsFromPEM(cert.Certificate[0]); !ok {
+		       ui.printErr("No certs appended, using system certs only")
+		       // return
+		   }
+		*/
+
+		tlsConfig := &tls.Config{
+			InsecureSkipVerify: false,
+			// Certificates: []tls.Certificate{cert},
+			RootCAs: clientCertPool,
+		}
+		//tlsConfig.BuildNameToCertificate()
+		tr := &http.Transport{DisableCompression: true, TLSClientConfig: tlsConfig}
+		client := &http.Client{Transport: tr}
+		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
+	}
+}
+
+func runHTTPandHTTPSBandwidthTest(test *ethrTest, client *http.Client, uri string, buff []byte) {
+ExitForLoop:
+	for {
+		select {
+		case <-test.done:
+			break ExitForLoop
+		default:
+			response, err := http.Get(uri)
+			// response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
+			if err != nil {
+				ui.printDbg("Error in Post: %v, %v", err, response)
+				continue
+			} else {
+				ui.printDbg("%v", response.StatusCode)
+				if response.StatusCode != http.StatusOK {
+					ui.printDbg("Error in request, received status: %v", response.StatusCode)
+					continue
 				}
+				contents, err := ioutil.ReadAll(response.Body)
+				response.Body.Close()
+				if err != nil {
+					ui.printDbg("Error in receving HTTP response: %v", err)
+					continue
+				}
+				ethrUnused(contents)
+				// ui.printDbg("%s", string(contents))
 			}
-		}()
+			atomic.AddUint64(&test.testResult.data, uint64(test.testParam.BufferSize))
+		}
 	}
 }
