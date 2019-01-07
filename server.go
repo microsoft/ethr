@@ -433,6 +433,7 @@ func runHTTPBandwidthServer() {
 		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
 		return
 	}
+	ui.printMsg("Listening on " + httpBandwidthPort + " for HTTP bandwidth tests")
 	err = http.Serve(tcpKeepAliveListener{l.(*net.TCPListener)}, sm)
 	if err != nil {
 		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
@@ -474,6 +475,7 @@ func runHTTPSBandwidthServer() {
 		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
 		return
 	}
+	ui.printMsg("Listening on " + httpsBandwidthPort + " for HTTPS bandwidth tests")
 	tl := tls.NewListener(tcpKeepAliveListener{l.(*net.TCPListener)}, config)
 	err = http.Serve(tl, sm)
 	if err != nil {
@@ -558,11 +560,9 @@ func allLocalIPs() (ipList []net.IP) {
 
 func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol) {
 	_, err := ioutil.ReadAll(r.Body)
-	if err == nil {
+	if err != nil {
 		ui.printDbg("Error reading HTTP body: %v", err)
-		// http.Error(w, err.Error(), http.StatusBadRequest)
-		http.Error(w, err.Error(), http.StatusMethodNotAllowed)
-		// http.Error(w, "Unauthorized request.", http.StatusUnauthorized)
+		http.Error(w, err.Error(), http.StatusBadRequest)
 		return
 	}
 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
@@ -579,7 +579,6 @@ func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p E
 	case "POST":
 		w.Write([]byte("OK."))
 	default:
-		w.Write([]byte("Fail."))
 		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
 		return
 	}

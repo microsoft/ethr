@@ -6,7 +6,7 @@
 package main
 
 import (
-	// "bytes"
+	"bytes"
 	"crypto/tls"
 	"crypto/x509"
 	"encoding/gob"
@@ -426,25 +426,12 @@ func runHTTPSBandwidthTest(test *ethrTest) {
 		for i := uint32(0); i < test.testParam.BufferSize; i++ {
 			buff[i] = 'x'
 		}
-		/*
-		   cert, err := GenX509KeyPair()
-		   if err != nil {
-		       ui.printErr("Failed to generate X509 certificate. Error: %v", err)
-		       return
-		   }
-		*/
 		c, err := x509.ParseCertificate(gCert)
 		if err != nil {
 			ui.printErr("Failed to parse certificate: %v", err)
 		}
 		clientCertPool := x509.NewCertPool()
 		clientCertPool.AddCert(c)
-		/*
-		   if ok := clientCertPool.AppendCertsFromPEM(cert.Certificate[0]); !ok {
-		       ui.printErr("No certs appended, using system certs only")
-		       // return
-		   }
-		*/
 
 		tlsConfig := &tls.Config{
 			InsecureSkipVerify: false,
@@ -465,15 +452,15 @@ ExitForLoop:
 		case <-test.done:
 			break ExitForLoop
 		default:
-			response, err := http.Get(uri)
-			// response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
+			// response, err := http.Get(uri)
+			response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
 			if err != nil {
-				ui.printDbg("Error in Post: %v, %v", err, response)
+				ui.printDbg("Error in HTTP request: %v", err)
 				continue
 			} else {
-				ui.printDbg("%v", response.StatusCode)
+				ui.printDbg("Status received: %v", response.StatusCode)
 				if response.StatusCode != http.StatusOK {
-					ui.printDbg("Error in request, received status: %v", response.StatusCode)
+					ui.printDbg("Error in HTTP request, received status: %v", response.StatusCode)
 					continue
 				}
 				contents, err := ioutil.ReadAll(response.Body)
