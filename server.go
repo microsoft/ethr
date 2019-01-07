@@ -30,13 +30,13 @@ var gCert []byte
 func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
-	l := runControlChannel()
-	defer l.Close()
 	runTCPBandwidthServer()
 	runTCPCpsServer()
 	runTCPLatencyServer()
-	go runHTTPBandwidthServer()
-	go runHTTPSBandwidthServer()
+	runHTTPBandwidthServer()
+	runHTTPSBandwidthServer()
+	l := runControlChannel()
+	defer l.Close()
 	startStatsTimer()
 	for {
 		conn, err := l.Accept()
@@ -430,38 +430,21 @@ func runHTTPBandwidthServer() {
 	sm.HandleFunc("/", runHTTPBandwidthHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpBandwidthPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
+		ui.printErr("Unable to start HTTP server. Error in listening on socket: %v", err)
 		return
 	}
 	ui.printMsg("Listening on " + httpBandwidthPort + " for HTTP bandwidth tests")
-	err = http.Serve(tcpKeepAliveListener{l.(*net.TCPListener)}, sm)
-	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
-	}
+	go runHTTPServer(tcpKeepAliveListener{l.(*net.TCPListener)}, sm)
 }
 
 func runHTTPBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 	runHTTPandHTTPSBandwidthHandler(w, r, HTTP)
 }
 
-type tcpKeepAliveListener struct {
-	*net.TCPListener
-}
-
-func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
-	tc, err := ln.AcceptTCP()
-	if err != nil {
-		return
-	}
-	tc.SetKeepAlive(true)
-	tc.SetKeepAlivePeriod(3 * time.Minute)
-	return tc, nil
-}
-
 func runHTTPSBandwidthServer() {
 	cert, err := genX509KeyPair()
 	if err != nil {
-		ui.printErr("Failed to generate X509 certificate. Error: %v", err)
+		ui.printErr("Unable to start HTTPS server. Error in X509 certificate: %v", err)
 		return
 	}
 	config := &tls.Config{}
@@ -472,20 +455,26 @@ func runHTTPSBandwidthServer() {
 	sm.HandleFunc("/", runHTTPSBandwidthHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpsBandwidthPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
+		ui.printErr("Unable to start HTTPS server. Error in listening on socket: %v", err)
 		return
 	}
 	ui.printMsg("Listening on " + httpsBandwidthPort + " for HTTPS bandwidth tests")
 	tl := tls.NewListener(tcpKeepAliveListener{l.(*net.TCPListener)}, config)
-	err = http.Serve(tl, sm)
-	if err != nil {
-		ui.printErr("Unable to start HTTP server, so HTTP tests cannot be run: %v", err)
-	}
+	go runHTTPServer(tl, sm)
 }
 
 func runHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 	runHTTPandHTTPSBandwidthHandler(w, r, HTTPS)
 }
+
+func runHTTPServer(l net.Listener, handler http.Handler) error {
+	err := http.Serve(l, handler)
+	if err != nil {
+		ui.printErr("Unable to start HTTP server, error: %v", err)
+	}
+	return err
+}
+
 func genX509KeyPair() (tls.Certificate, error) {
 	now, _ := time.Parse(time.RFC3339, "2019-01-01T00:00:00Z")
 	template := &x509.Certificate{
@@ -501,7 +490,7 @@ func genX509KeyPair() (tls.Certificate, error) {
 		SubjectKeyId: []byte{113, 117, 105, 99, 107, 115, 101, 114, 118, 101},
 		// IPAddresses: []net.IP{net.ParseIP("127.0.0.1")},
 		IPAddresses:           allLocalIPs(),
-		DNSNames:              []string{"docalhost", "*"},
+		DNSNames:              []string{"localhost", "*"},
 		BasicConstraintsValid: true,
 		IsCA:                  true,
 		ExtKeyUsage:           []x509.ExtKeyUsage{x509.ExtKeyUsageServerAuth},

@@ -24,6 +24,7 @@ import (
 
 func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
+	server = "[" + server + "]"
 	test, err := establishSession(testParam, server)
 	if err != nil {
 		ui.printErr("%v", err)
@@ -53,6 +54,8 @@ func establishSession(testParam EthrTestParam, server string) (test *ethrTest, e
 	if err != nil {
 		return
 	}
+	rserver, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	server = "[" + rserver + "]"
 	test, err = newTest(server, conn, testParam, enc, dec)
 	if err != nil {
 		ethrMsg = createFinMsg(err.Error())
@@ -406,6 +409,7 @@ func runUDPPpsTest(test *ethrTest) {
 
 func runHTTPBandwidthTest(test *ethrTest) {
 	uri := test.session.remoteAddr
+	ui.printMsg("uri=%s", uri)
 	uri = "http://" + uri + ":" + httpBandwidthPort
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		buff := make([]byte, test.testParam.BufferSize)
