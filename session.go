@@ -182,6 +182,7 @@ type ethrMode uint32
 const (
 	ethrModeInv ethrMode = iota
 	ethrModeServer
+	ethrModeExtServer
 	ethrModeClient
 	ethrModeExtClient
 )

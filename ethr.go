@@ -19,7 +19,9 @@ const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
 func main() {
 	isServer := flag.Bool("s", false, "Run as server")
 	clientDest := flag.String("c", "",
-		"Run as client and connect to server specified by String")
+		"Run as client and connect to server specified by String\n"+
+			"Ethr mode (default): specifies host name or IP address for Ethr server\n"+
+			"External mode: specifies IP:port or name:port or URI:port for external server")
 	testTypePtr := flag.String("t", "",
 		"Test to run (\"b\", \"c\", \"p\", \"l\" or \"cl\")\n"+
 			"b: Bandwidth\n"+
@@ -53,11 +55,11 @@ func main() {
 			"For protocols, only base port is specified, so tcp=9999 means:\n"+
 			"9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
 			"Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
-	xclientDest := flag.String("x", "",
-		"External mode.\n"+
-			"Run as client and connect to non-ethr server\n"+
-			"Server can be specified using IP address, name or URI\n"+
-			"Please refer to documentation for testing in this mode.")
+	modeStr := flag.String("m", "",
+		"Execution mode for Ethr (\"\" or \"x\")\n"+
+			"Default: Ethr mode\n"+
+			"x: External mode\n"+
+			"In external mode, ethr client connects to non-ethr server")
 	use4 := flag.Bool("4", false, "Use IPv4 only")
 	use6 := flag.Bool("6", false, "Use IPv6 only")
 
@@ -68,27 +70,34 @@ func main() {
 	// fmt.Println("Number of incorrect arguments: " + strconv.Itoa(flag.NArg()))
 	//
 
+	xMode := false
+	switch *modeStr {
+	case "":
+	case "x":
+		xMode = true
+	default:
+		printUsageError("Invalid value for execution mode (-m).")
+	}
 	mode := ethrModeInv
+
 	if *isServer {
-		mode = ethrModeServer
-		if *clientDest != "" || *xclientDest != "" {
-			fmt.Println("Error: Client parameters are passed in server mode.")
-			flag.PrintDefaults()
-			os.Exit(1)
+		if *clientDest != "" {
+			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
+		}
+		if xMode {
+			printUsageError("External mode is not supported for server (yet).")
+			mode = ethrModeExtServer
+		} else {
+			mode = ethrModeServer
 		}
 	} else if *clientDest != "" {
-		mode = ethrModeClient
-		if *xclientDest != "" {
-			fmt.Println("Error: External client parameters are passed in client mode.")
-			flag.PrintDefaults()
-			os.Exit(1)
+		if xMode {
+			mode = ethrModeExtClient
+		} else {
+			mode = ethrModeClient
 		}
-	} else if *xclientDest != "" {
-		mode = ethrModeExtClient
 	} else {
-		fmt.Println("Error: Invalid arguments, please specify \"-s\", \"-c\" or \"-x\"")
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
 	}
 
 	if *use4 && !*use6 {
@@ -130,10 +139,8 @@ func main() {
 	case "l":
 		testType = Latency
 	default:
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
-			"Valid parameters and values are:\n", *testTypePtr)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
+			"Valid parameters and values are:\n", *testTypePtr))
 	}
 
 	p := strings.ToUpper(*protocol)
@@ -150,18 +157,13 @@ func main() {
 	case "ICMP":
 		proto = ICMP
 	default:
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
-			"Valid parameters and values are:\n", *protocol)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
+			"Valid parameters and values are:\n", *protocol))
 	}
 
 	duration, err := time.ParseDuration(*durationStr)
 	if err != nil {
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-d\".\n",
-			*durationStr)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-d\".\n", *durationStr))
 	}
 
 	if *thCount <= 0 {
@@ -211,7 +213,7 @@ func main() {
 	case ethrModeClient:
 		runClient(testParam, clientParam, *clientDest)
 	case ethrModeExtClient:
-		runXClient(testParam, clientParam, *xclientDest)
+		runXClient(testParam, clientParam, *clientDest)
 	}
 }
 
@@ -267,4 +269,10 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 		}
 	}
 	return true
+}
+
+func printUsageError(s string) {
+	fmt.Printf("Error: %s\n", s)
+	flag.PrintDefaults()
+	os.Exit(1)
 }
