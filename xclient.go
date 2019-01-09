@@ -98,17 +98,15 @@ func xclientTCPLatencyTest(test *ethrTest) {
 						warmupText = ""
 						server = fmt.Sprintf("[%s]:%s", rserver, rport)
 					}
-					/*
-						tcpconn, ok := conn.(*net.TCPConn)
-						if ok {
-							tcpconn.SetLinger(0)
-						}
-					*/
+					tcpconn, ok := conn.(*net.TCPConn)
+					if ok {
+						tcpconn.SetLinger(0)
+					}
 					conn.Close()
 
 					t1 = time.Since(t0)
 					if t1 < time.Second {
-						time.Sleep(time.Second - t1)
+						// time.Sleep(time.Second - t1)
 					}
 				}
 			}

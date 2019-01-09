@@ -85,7 +85,6 @@ func main() {
 			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
 		}
 		if xMode {
-			printUsageError("External mode is not supported for server (yet).")
 			mode = ethrModeExtServer
 		} else {
 			mode = ethrModeServer
@@ -195,6 +194,8 @@ func main() {
 			switch mode {
 			case ethrModeServer:
 				logFileName = "ethrs.log"
+			case ethrModeExtServer:
+				logFileName = "ethrxs.log"
 			case ethrModeClient:
 				logFileName = "ethrc.log"
 			case ethrModeExtClient:
@@ -210,6 +211,8 @@ func main() {
 	switch mode {
 	case ethrModeServer:
 		runServer(testParam, serverParam)
+	case ethrModeExtServer:
+		runXServer(testParam, serverParam)
 	case ethrModeClient:
 		runClient(testParam, clientParam, *clientDest)
 	case ethrModeExtClient:

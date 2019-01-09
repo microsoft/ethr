@@ -250,7 +250,7 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 
 	test, found := session.tests[testParam.TestID]
 	if found {
-		return nil, os.ErrExist
+		return test, os.ErrExist
 	}
 	session.testCount++
 	test = &ethrTest{}
@@ -304,7 +304,17 @@ func getTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test
 	if !found {
 		return
 	}
-	test, found = session.tests[EthrTestID{proto, testType}]
+	test, _ = session.tests[EthrTestID{proto, testType}]
+	return
+}
+
+func createOrGetTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
+	test = getTest(remoteAddr, proto, testType)
+	if test == nil {
+		testParam := EthrTestParam{TestID: EthrTestID{proto, testType}}
+		test, _ = newTest(remoteAddr, nil, testParam, nil, nil)
+		test.isActive = true
+	}
 	return
 }
 
