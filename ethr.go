@@ -266,7 +266,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 			return false
 		}
 	} else if mode == ethrModeExtClient {
-		if testType != ConnLatency || protocol != TCP {
+		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth) {
 			emitUnsupportedTest(testParam)
 			return false
 		}

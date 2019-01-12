@@ -37,7 +37,7 @@ import (
 func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initXServer(serverParam.showUI)
-	xserverTCPServer()
+	xsRunTCPServer()
 	// runHTTPBandwidthServer()
 	// runHTTPSBandwidthServer()
 	startStatsTimer()
@@ -56,7 +56,7 @@ func finiXServer() {
 	logFini()
 }
 
-func xserverTCPServer() {
+func xsRunTCPServer() {
 	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpBandwidthPort)
 	if err != nil {
 		finiXServer()
@@ -79,6 +79,7 @@ func xserverTCPServer() {
 
 func xserverTCPHandler(conn net.Conn) {
 	defer closeConn(conn)
+	ui.emitTestHdr()
 	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 	test := createOrGetTest(server, TCP, Cps)
 	if test != nil {

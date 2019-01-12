@@ -8,6 +8,8 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,17 +20,20 @@ func runXClient(testParam EthrTestParam, clientParam ethrClientParam, server str
 		ui.printErr("Failed to create the new test.")
 		return
 	}
-	xclientTest(test, clientParam.duration)
+	xcRunTest(test, clientParam.duration)
 }
 
 func initXClient() {
 	initClientUI()
 }
 
-func xclientTest(test *ethrTest, d time.Duration) {
+func xcRunTest(test *ethrTest, d time.Duration) {
+	startStatsTimer()
 	if test.testParam.TestID.Protocol == TCP {
 		if test.testParam.TestID.Type == ConnLatency {
-			go xclientTCPLatencyTest(test)
+			go xcRunTCPConnLatencyTest(test)
+		} else if test.testParam.TestID.Type == Bandwidth {
+			go xcRunTCPBandwidthTest(test)
 		}
 	}
 	test.isActive = true
@@ -44,10 +49,11 @@ func xclientTest(test *ethrTest, d time.Duration) {
 	}
 	ui.printMsg("")
 	close(test.done)
+	stopStatsTimer()
 	time.Sleep(time.Second)
 }
 
-func xclientTCPLatencyTest(test *ethrTest) {
+func xcRunTCPConnLatencyTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	// TODO: Override NumThreads for now, fix it later to support parallel
 	// threads.
@@ -106,8 +112,57 @@ func xclientTCPLatencyTest(test *ethrTest) {
 
 					t1 = time.Since(t0)
 					if t1 < time.Second {
-						// time.Sleep(time.Second - t1)
+						time.Sleep(time.Second - t1)
 					}
+				}
+			}
+		}()
+	}
+}
+
+func xcRunTCPBandwidthTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	ui.printMsg("Connecting to host %s, port %s", server, tcpBandwidthPort)
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		buff := make([]byte, test.testParam.BufferSize)
+		for i := uint32(0); i < test.testParam.BufferSize; i++ {
+			buff[i] = byte(i)
+		}
+		go func() {
+			conn, err := net.Dial(tcp(ipVer), server)
+			if err != nil {
+				ui.printErr("%v", err)
+				os.Exit(1)
+				return
+			}
+			defer conn.Close()
+			ec := test.newConn(conn)
+			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
+				ec.fd, lserver, lport, rserver, rport)
+			blen := len(buff)
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					n, err := conn.Write(buff)
+					if err != nil {
+						// ui.printErr(err)
+						// test.ctrlConn.Close()
+						// return
+						continue
+					}
+					if n < blen {
+						// ui.printErr("Partial write: " + strconv.Itoa(n))
+						// test.ctrlConn.Close()
+						// return
+						continue
+					}
+					atomic.AddUint64(&ec.data, uint64(blen))
+					atomic.AddUint64(&test.testResult.data, uint64(blen))
 				}
 			}
 		}()
