@@ -8,6 +8,8 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
+	"sync/atomic"
 	"time"
 )
 
@@ -18,17 +20,20 @@ func runXClient(testParam EthrTestParam, clientParam ethrClientParam, server str
 		ui.printErr("Failed to create the new test.")
 		return
 	}
-	xclientTest(test, clientParam.duration)
+	xcRunTest(test, clientParam.duration, clientParam.gap)
 }
 
 func initXClient() {
 	initClientUI()
 }
 
-func xclientTest(test *ethrTest, d time.Duration) {
+func xcRunTest(test *ethrTest, d, g time.Duration) {
+	startStatsTimer()
 	if test.testParam.TestID.Protocol == TCP {
 		if test.testParam.TestID.Type == ConnLatency {
-			go xclientTCPLatencyTest(test)
+			go xcRunTCPConnLatencyTest(test, g)
+		} else if test.testParam.TestID.Type == Bandwidth {
+			go xcRunTCPBandwidthTest(test)
 		}
 	}
 	test.isActive = true
@@ -36,18 +41,17 @@ func xclientTest(test *ethrTest, d time.Duration) {
 	runDurationTimer(d, toStop)
 	handleCtrlC(toStop)
 	reason := <-toStop
+	close(test.done)
+	stopStatsTimer()
 	switch reason {
 	case timeout:
 		ui.printMsg("Ethr done, duration: " + d.String() + ".")
 	case interrupt:
 		ui.printMsg("Ethr done, received interrupt signal.")
 	}
-	ui.printMsg("")
-	close(test.done)
-	time.Sleep(time.Second)
 }
 
-func xclientTCPLatencyTest(test *ethrTest) {
+func xcRunTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 	server := test.session.remoteAddr
 	// TODO: Override NumThreads for now, fix it later to support parallel
 	// threads.
@@ -75,7 +79,8 @@ func xclientTCPLatencyTest(test *ethrTest) {
 					conn, err := net.Dial(tcp(ipVer), server)
 					if err != nil {
 						lost++
-						ui.printErr("Unable to dial TCP connection to [%s], error: %v", server, err)
+						ui.printDbg("Unable to dial TCP connection to [%s], error: %v", server, err)
+						ui.printMsg("[tcp] %sConnection %s: Timed out", warmupText, server)
 						continue
 					}
 					t1 := time.Since(t0)
@@ -98,18 +103,81 @@ func xclientTCPLatencyTest(test *ethrTest) {
 						warmupText = ""
 						server = fmt.Sprintf("[%s]:%s", rserver, rport)
 					}
-					/*
-						tcpconn, ok := conn.(*net.TCPConn)
-						if ok {
-							tcpconn.SetLinger(0)
-						}
-					*/
-					conn.Close()
-
-					t1 = time.Since(t0)
-					if t1 < time.Second {
-						time.Sleep(time.Second - t1)
+					tcpconn, ok := conn.(*net.TCPConn)
+					if ok {
+						tcpconn.SetLinger(0)
 					}
+					conn.Close()
+					t1 = time.Since(t0)
+					if t1 < g {
+						time.Sleep(g - t1)
+					}
+				}
+			}
+		}()
+	}
+}
+
+func xcCloseConn(conn net.Conn, test *ethrTest) {
+	test.delConn(conn)
+	err := conn.Close()
+	if err != nil {
+		ui.printDbg("Failed to close TCP connection, error: %v", err)
+	}
+	xcDeleteTest(test)
+}
+
+func xcDeleteTest(test *ethrTest) {
+	if test != nil {
+		if safeDeleteTest(test) {
+			ui.printMsg("Ethr done, server terminated the session.")
+			os.Exit(0)
+		}
+	}
+}
+
+func xcRunTCPBandwidthTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	ui.printMsg("Connecting to host %s, port %s", server, tcpBandwidthPort)
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		buff := make([]byte, test.testParam.BufferSize)
+		for i := uint32(0); i < test.testParam.BufferSize; i++ {
+			buff[i] = byte(i)
+		}
+		go func() {
+			conn, err := net.Dial(tcp(ipVer), server)
+			if err != nil {
+				ui.printErr("Error in dialing TCP connection: %v", err)
+				os.Exit(1)
+				return
+			}
+			ec := test.newConn(conn)
+			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
+				ec.fd, lserver, lport, rserver, rport)
+			blen := len(buff)
+			addRef(test)
+			defer xcCloseConn(conn, test)
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					n, err := conn.Write(buff)
+					if err != nil {
+						// ui.printErr(err)
+						// test.ctrlConn.Close()
+						return
+					}
+					if n < blen {
+						// ui.printErr("Partial write: " + strconv.Itoa(n))
+						// test.ctrlConn.Close()
+						return
+					}
+					atomic.AddUint64(&ec.data, uint64(blen))
+					atomic.AddUint64(&test.testResult.data, uint64(blen))
 				}
 			}
 		}()

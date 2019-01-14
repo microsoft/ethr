@@ -19,7 +19,9 @@ const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
 func main() {
 	isServer := flag.Bool("s", false, "Run as server")
 	clientDest := flag.String("c", "",
-		"Run as client and connect to server specified by String")
+		"Run as client and connect to server specified by String\n"+
+			"Ethr mode (default): specifies host name or IP address for Ethr server\n"+
+			"External mode: specifies IP:port or name:port or URI:port for external server")
 	testTypePtr := flag.String("t", "",
 		"Test to run (\"b\", \"c\", \"p\", \"l\" or \"cl\")\n"+
 			"b: Bandwidth\n"+
@@ -27,7 +29,7 @@ func main() {
 			"p: Packets/s\n"+
 			"l: Latency, Loss & Jitter\n"+
 			"cl: Connection setup latency\n"+
-			"Default: b - Regular mode, cl - External mode")
+			"Default: b - Bandwidth measurement.")
 	thCount := flag.Int("n", 1,
 		"Number of Threads\n"+
 			"0: Equal to number of CPUs")
@@ -45,7 +47,7 @@ func main() {
 			"0: Run forever")
 	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
-		"Number of round trip iterations for latency test.")
+		"Number of round trip iterations for each latency test measurement.")
 	portStr := flag.String("ports", "",
 		"Ports to use for server and client\n"+
 			"Format: \"key1=value1, key2=value2\"\n"+
@@ -53,13 +55,16 @@ func main() {
 			"For protocols, only base port is specified, so tcp=9999 means:\n"+
 			"9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
 			"Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
-	xclientDest := flag.String("x", "",
-		"External mode.\n"+
-			"Run as client and connect to non-ethr server\n"+
-			"Server can be specified using IP address, name or URI\n"+
-			"Please refer to documentation for testing in this mode.")
+	modeStr := flag.String("m", "",
+		"Execution mode for Ethr (\"\" or \"x\")\n"+
+			"Default: Ethr mode\n"+
+			"x: External mode\n"+
+			"In external mode, ethr client connects to non-ethr server")
 	use4 := flag.Bool("4", false, "Use IPv4 only")
 	use6 := flag.Bool("6", false, "Use IPv6 only")
+	gapStr := flag.String("g", "0",
+		"Time Gap/Interval between  successive measurements (format: <num>[ms | s | m | h] \n"+
+			"0: No gap")
 
 	flag.Parse()
 
@@ -68,27 +73,33 @@ func main() {
 	// fmt.Println("Number of incorrect arguments: " + strconv.Itoa(flag.NArg()))
 	//
 
+	xMode := false
+	switch *modeStr {
+	case "":
+	case "x":
+		xMode = true
+	default:
+		printUsageError("Invalid value for execution mode (-m).")
+	}
 	mode := ethrModeInv
+
 	if *isServer {
-		mode = ethrModeServer
-		if *clientDest != "" || *xclientDest != "" {
-			fmt.Println("Error: Client parameters are passed in server mode.")
-			flag.PrintDefaults()
-			os.Exit(1)
+		if *clientDest != "" {
+			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
+		}
+		if xMode {
+			mode = ethrModeExtServer
+		} else {
+			mode = ethrModeServer
 		}
 	} else if *clientDest != "" {
-		mode = ethrModeClient
-		if *xclientDest != "" {
-			fmt.Println("Error: External client parameters are passed in client mode.")
-			flag.PrintDefaults()
-			os.Exit(1)
+		if xMode {
+			mode = ethrModeExtClient
+		} else {
+			mode = ethrModeClient
 		}
-	} else if *xclientDest != "" {
-		mode = ethrModeExtClient
 	} else {
-		fmt.Println("Error: Invalid arguments, please specify \"-s\", \"-c\" or \"-x\"")
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
 	}
 
 	if *use4 && !*use6 {
@@ -116,10 +127,12 @@ func main() {
 		switch mode {
 		case ethrModeServer:
 			testType = All
+		case ethrModeExtServer:
+			testType = All
 		case ethrModeClient:
 			testType = Bandwidth
 		case ethrModeExtClient:
-			testType = ConnLatency
+			testType = Bandwidth
 		}
 	case "b":
 		testType = Bandwidth
@@ -129,11 +142,11 @@ func main() {
 		testType = Pps
 	case "l":
 		testType = Latency
+	case "cl":
+		testType = ConnLatency
 	default:
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
-			"Valid parameters and values are:\n", *testTypePtr)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
+			"Valid parameters and values are:\n", *testTypePtr))
 	}
 
 	p := strings.ToUpper(*protocol)
@@ -150,18 +163,18 @@ func main() {
 	case "ICMP":
 		proto = ICMP
 	default:
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
-			"Valid parameters and values are:\n", *protocol)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
+			"Valid parameters and values are:\n", *protocol))
 	}
 
 	duration, err := time.ParseDuration(*durationStr)
 	if err != nil {
-		fmt.Printf("Invalid value \"%s\" specified for parameter \"-d\".\n",
-			*durationStr)
-		flag.PrintDefaults()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-d\".\n", *durationStr))
+	}
+
+	gap, err := time.ParseDuration(*gapStr)
+	if err != nil {
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-g\".\n", *gapStr))
 	}
 
 	if *thCount <= 0 {
@@ -193,6 +206,8 @@ func main() {
 			switch mode {
 			case ethrModeServer:
 				logFileName = "ethrs.log"
+			case ethrModeExtServer:
+				logFileName = "ethrxs.log"
 			case ethrModeClient:
 				logFileName = "ethrc.log"
 			case ethrModeExtClient:
@@ -202,16 +217,18 @@ func main() {
 		logInit(logFileName, *debug)
 	}
 
-	clientParam := ethrClientParam{duration}
+	clientParam := ethrClientParam{duration, gap}
 	serverParam := ethrServerParam{*showUI}
 
 	switch mode {
 	case ethrModeServer:
 		runServer(testParam, serverParam)
+	case ethrModeExtServer:
+		runXServer(testParam, serverParam)
 	case ethrModeClient:
 		runClient(testParam, clientParam, *clientDest)
 	case ethrModeExtClient:
-		runXClient(testParam, clientParam, *xclientDest)
+		runXClient(testParam, clientParam, *clientDest)
 	}
 }
 
@@ -261,10 +278,16 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 			return false
 		}
 	} else if mode == ethrModeExtClient {
-		if testType != ConnLatency || protocol != TCP {
+		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth) {
 			emitUnsupportedTest(testParam)
 			return false
 		}
 	}
 	return true
+}
+
+func printUsageError(s string) {
+	fmt.Printf("Error: %s\n", s)
+	flag.PrintDefaults()
+	os.Exit(1)
 }

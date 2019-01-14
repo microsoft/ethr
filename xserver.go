@@ -6,207 +6,116 @@
 package main
 
 import (
-	"crypto/rand"
-	"crypto/rsa"
-	"crypto/tls"
-	"crypto/x509"
-	"crypto/x509/pkix"
-	"encoding/gob"
+	/*
+		"crypto/rand"
+		"crypto/rsa"
+		"crypto/tls"
+		"crypto/x509"
+		"crypto/x509/pkix"
+		"encoding/gob"
+	*/
 	"fmt"
-	"io"
-	"io/ioutil"
-	"math/big"
+	/*
+		"io"
+		"io/ioutil"
+		"math/big"
+	*/
 	"net"
-	"net/http"
+	/*
+		"net/http"
+	*/
 	"os"
-	"runtime"
-	"sort"
+	/*
+		"runtime"
+		"sort"
+	*/
 	"sync/atomic"
 	"time"
 )
 
-var gCert []byte
-
-func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
+func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
-	initServer(serverParam.showUI)
-	runTCPBandwidthServer()
-	runTCPCpsServer()
-	runTCPLatencyServer()
-	runHTTPBandwidthServer()
-	runHTTPSBandwidthServer()
-	l := runControlChannel()
-	defer l.Close()
+	initXServer(serverParam.showUI)
+	xsRunTCPServer()
+	// runHTTPBandwidthServer()
+	// runHTTPSBandwidthServer()
 	startStatsTimer()
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			ui.printErr("Error accepting new control connection: %v", err)
-			continue
-		}
-		go handleRequest(conn)
-	}
+	toStop := make(chan int, 1)
+	handleCtrlC(toStop)
+	<-toStop
+	ui.printMsg("Ethr done, received interrupt signal.")
 }
 
-func initServer(showUI bool) {
+func initXServer(showUI bool) {
 	initServerUI(showUI)
 }
 
-func finiServer() {
+func finiXServer() {
 	ui.fini()
 	logFini()
 }
 
-func runControlChannel() net.Listener {
-	l, err := net.Listen(tcp(ipVer), hostAddr+":"+ctrlPort)
-	if err != nil {
-		finiServer()
-		fmt.Printf("Fatal error listening for control connections: %v", err)
-		os.Exit(1)
-	}
-	ui.printMsg("Listening on " + ctrlPort + " for control plane")
-	return l
-}
-
-func handleRequest(conn net.Conn) {
-	defer conn.Close()
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
-	ethrMsg := recvSessionMsg(dec)
-	if ethrMsg.Type != EthrSyn {
-		return
-	}
-	testParam := ethrMsg.Syn.TestParam
-	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
-	if err != nil {
-		ui.printDbg("RemoteAddr: Split host port failed: %v", err)
-		return
-	}
-	ethrUnused(port)
-	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
-	if err != nil {
-		ui.printDbg("LocalAddr: Split host port failed: %v", err)
-		return
-	}
-	ethrUnused(lserver, lport)
-	ui.printMsg("New control connection from " + server + ", port " + port)
-	ui.printMsg("Starting " + protoToString(testParam.TestID.Protocol) + " " +
-		testToString(testParam.TestID.Type) + " test from " + server)
-	test, err := newTest(server, conn, testParam, enc, dec)
-	if err != nil {
-		msg := "Rejected duplicate " + protoToString(testParam.TestID.Protocol) + " " +
-			testToString(testParam.TestID.Type) + " test from " + server
-		ui.printMsg(msg)
-		ethrMsg = createFinMsg(msg)
-		sendSessionMsg(enc, ethrMsg)
-		return
-	}
-	cleanupFunc := func() {
-		test.ctrlConn.Close()
-		close(test.done)
-		deleteTest(test)
-	}
-	ui.emitTestHdr()
-	if test.testParam.TestID.Protocol == UDP {
-		if test.testParam.TestID.Type == Bandwidth {
-			err = runUDPBandwidthServer(test)
-		} else if test.testParam.TestID.Type == Pps {
-			err = runUDPPpsServer(test)
-		}
-		if err != nil {
-			ui.printDbg("Error encounterd in running UDP test (%s): %v",
-				testToString(testParam.TestID.Type), err)
-			cleanupFunc()
-			return
-		}
-	}
-	ethrMsg = createAckMsg(gCert)
-	err = sendSessionMsg(enc, ethrMsg)
-	if err != nil {
-		ui.printErr("send session message: %v", err)
-		cleanupFunc()
-		return
-	}
-	// TODO: Enable this in future, right now there is not much value coming
-	// from this.
-	/**
-		ethrMsg = recvSessionMsg(dec)
-		if ethrMsg.Type != EthrAck {
-			cleanupFunc()
-			return
-		}
-	    **/
-	test.isActive = true
-	waitForChannelStop := make(chan bool, 1)
-	serverWatchControlChannel(test, waitForChannelStop)
-	<-waitForChannelStop
-	ui.printMsg("Ending " + testToString(testParam.TestID.Type) + " test from " + server)
-	test.isActive = false
-	cleanupFunc()
-	if len(gSessionKeys) > 0 {
-		ui.emitTestHdr()
-	}
-}
-
-func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
-	watchControlChannel(test, waitForChannelStop)
-}
-
-func runTCPBandwidthServer() {
+func xsRunTCPServer() {
 	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpBandwidthPort)
 	if err != nil {
-		finiServer()
-		fmt.Printf("Fatal error listening on "+tcpBandwidthPort+" for TCP bandwidth tests: %v", err)
+		finiXServer()
+		fmt.Printf("Fatal error listening on "+tcpBandwidthPort+" for TCP tests: %v", err)
 		os.Exit(1)
 	}
-	ui.printMsg("Listening on " + tcpBandwidthPort + " for TCP bandwidth tests")
+	ui.printMsg("Listening on " + tcpBandwidthPort + " for TCP tests")
 	go func(l net.Listener) {
 		defer l.Close()
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				ui.printErr("Error accepting new bandwidth connection: %v", err)
+				ui.printErr("Error accepting new TCP connection: %v", err)
 				continue
 			}
-			server, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			test := getTest(server, TCP, Bandwidth)
-			if test == nil {
-				ui.printDbg("Received unsolicited TCP connection on port %s from %s port %s", tcpBandwidthPort, server, port)
-				conn.Close()
-				continue
-			}
-			go runTCPBandwidthHandler(conn, test)
+			go xserverTCPHandler(conn)
 		}
 	}(l)
 }
 
-func closeConn(conn net.Conn) {
+func xsCloseConn(conn net.Conn, cpsTest, bwTest *ethrTest) {
 	err := conn.Close()
 	if err != nil {
 		ui.printDbg("Failed to close TCP connection, error: %v", err)
 	}
+	// Delay delete the test. This is to ensure that tests like CPS don't
+	// end up not printing stats
+	time.Sleep(2 * time.Second)
+	if cpsTest != nil {
+		safeDeleteTest(cpsTest)
+	}
+	if bwTest != nil {
+		safeDeleteTest(bwTest)
+	}
 }
 
-func runTCPBandwidthHandler(conn net.Conn, test *ethrTest) {
-	defer closeConn(conn)
-	size := test.testParam.BufferSize
-	bytes := make([]byte, size)
-ExitForLoop:
+func xserverTCPHandler(conn net.Conn) {
+	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	cpsTest, isNew := createOrGetTest(server, TCP, Cps)
+	if cpsTest != nil {
+		atomic.AddUint64(&cpsTest.testResult.data, 1)
+	}
+	if isNew {
+		ui.emitTestHdr()
+	}
+	bwTest, _ := createOrGetTest(server, TCP, Bandwidth)
+	defer xsCloseConn(conn, cpsTest, bwTest)
+	buff := make([]byte, 2048)
 	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			_, err := io.ReadFull(conn, bytes)
-			if err != nil {
-				ui.printDbg("Error receiving data on a connection for bandwidth test: %v", err)
-				continue
-			}
-			atomic.AddUint64(&test.testResult.data, uint64(size))
+		size, err := conn.Read(buff)
+		if err != nil {
+			return
+		}
+		if bwTest != nil {
+			atomic.AddUint64(&bwTest.testResult.data, uint64(size))
 		}
 	}
 }
 
+/*
 func runTCPCpsServer() {
 	l, err := net.Listen(tcp(ipVer), hostAddr+":"+tcpCpsPort)
 	if err != nil {
@@ -574,3 +483,4 @@ func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p E
 		atomic.AddUint64(&test.testResult.data, uint64(r.ContentLength))
 	}
 }
+*/
