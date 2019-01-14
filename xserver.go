@@ -30,9 +30,8 @@ import (
 		"sort"
 	*/
 	"sync/atomic"
-	/*
-		"time"
-	*/)
+	"time"
+)
 
 func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
@@ -77,23 +76,41 @@ func xsRunTCPServer() {
 	}(l)
 }
 
-func xserverTCPHandler(conn net.Conn) {
-	defer closeConn(conn)
-	ui.emitTestHdr()
-	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-	test := createOrGetTest(server, TCP, Cps)
-	if test != nil {
-		atomic.AddUint64(&test.testResult.data, 1)
+func xsCloseConn(conn net.Conn, cpsTest, bwTest *ethrTest) {
+	err := conn.Close()
+	if err != nil {
+		ui.printDbg("Failed to close TCP connection, error: %v", err)
 	}
-	test = createOrGetTest(server, TCP, Bandwidth)
+	// Delay delete the test. This is to ensure that tests like CPS don't
+	// end up not printing stats
+	time.Sleep(2 * time.Second)
+	if cpsTest != nil {
+		safeDeleteTest(cpsTest)
+	}
+	if bwTest != nil {
+		safeDeleteTest(bwTest)
+	}
+}
+
+func xserverTCPHandler(conn net.Conn) {
+	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	cpsTest, isNew := createOrGetTest(server, TCP, Cps)
+	if cpsTest != nil {
+		atomic.AddUint64(&cpsTest.testResult.data, 1)
+	}
+	if isNew {
+		ui.emitTestHdr()
+	}
+	bwTest, _ := createOrGetTest(server, TCP, Bandwidth)
+	defer xsCloseConn(conn, cpsTest, bwTest)
 	buff := make([]byte, 2048)
 	for {
 		size, err := conn.Read(buff)
 		if err != nil {
 			return
 		}
-		if test != nil {
-			atomic.AddUint64(&test.testResult.data, uint64(size))
+		if bwTest != nil {
+			atomic.AddUint64(&bwTest.testResult.data, uint64(size))
 		}
 	}
 }

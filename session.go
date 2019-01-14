@@ -11,6 +11,7 @@ import (
 	"net"
 	"os"
 	"sync"
+	"sync/atomic"
 	"time"
 )
 
@@ -168,6 +169,7 @@ type ethrTest struct {
 	isActive   bool
 	session    *ethrSession
 	ctrlConn   net.Conn
+	refCount   int32
 	enc        *gob.Encoder
 	dec        *gob.Decoder
 	rcvdMsgs   chan *EthrMsg
@@ -197,6 +199,7 @@ const (
 
 type ethrClientParam struct {
 	duration time.Duration
+	gap      time.Duration
 }
 
 type ethrServerParam struct {
@@ -238,6 +241,10 @@ func deleteKey(key string) {
 func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob.Encoder, dec *gob.Decoder) (*ethrTest, error) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
+	return newTestInternal(remoteAddr, conn, testParam, enc, dec)
+}
+
+func newTestInternal(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob.Encoder, dec *gob.Decoder) (*ethrTest, error) {
 	var session *ethrSession
 	session, found := gSessions[remoteAddr]
 	if !found {
@@ -256,6 +263,7 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 	test = &ethrTest{}
 	test.session = session
 	test.ctrlConn = conn
+	test.refCount = 0
 	test.enc = enc
 	test.dec = dec
 	test.rcvdMsgs = make(chan *EthrMsg)
@@ -270,6 +278,10 @@ func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob
 func deleteTest(test *ethrTest) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
+	deleteTestInternal(test)
+}
+
+func deleteTestInternal(test *ethrTest) {
 	session := test.session
 	testID := test.testParam.TestID
 	//
@@ -297,9 +309,13 @@ func deleteTest(test *ethrTest) {
 }
 
 func getTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
-	test = nil
 	gSessionLock.RLock()
 	defer gSessionLock.RUnlock()
+	return getTestInternal(remoteAddr, proto, testType)
+}
+
+func getTestInternal(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
+	test = nil
 	session, found := gSessions[remoteAddr]
 	if !found {
 		return
@@ -308,14 +324,36 @@ func getTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test
 	return
 }
 
-func createOrGetTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
-	test = getTest(remoteAddr, proto, testType)
+func createOrGetTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest, isNew bool) {
+	gSessionLock.Lock()
+	defer gSessionLock.Unlock()
+	isNew = false
+	test = getTestInternal(remoteAddr, proto, testType)
 	if test == nil {
+		isNew = true
 		testParam := EthrTestParam{TestID: EthrTestID{proto, testType}}
-		test, _ = newTest(remoteAddr, nil, testParam, nil, nil)
+		test, _ = newTestInternal(remoteAddr, nil, testParam, nil, nil)
 		test.isActive = true
 	}
+	atomic.AddInt32(&test.refCount, 1)
 	return
+}
+
+func safeDeleteTest(test *ethrTest) bool {
+	gSessionLock.Lock()
+	defer gSessionLock.Unlock()
+	if atomic.AddInt32(&test.refCount, -1) == 0 {
+		deleteTestInternal(test)
+		return true
+	}
+	return false
+}
+
+func addRef(test *ethrTest) {
+	gSessionLock.Lock()
+	defer gSessionLock.Unlock()
+	// TODO: Since we already take lock, atomic is not needed. Fix this later.
+	atomic.AddInt32(&test.refCount, 1)
 }
 
 func (test *ethrTest) newConn(conn net.Conn) (ec *ethrConn) {

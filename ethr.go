@@ -29,7 +29,7 @@ func main() {
 			"p: Packets/s\n"+
 			"l: Latency, Loss & Jitter\n"+
 			"cl: Connection setup latency\n"+
-			"Default: b - Regular mode, cl - External mode")
+			"Default: b - Bandwidth measurement.")
 	thCount := flag.Int("n", 1,
 		"Number of Threads\n"+
 			"0: Equal to number of CPUs")
@@ -47,7 +47,7 @@ func main() {
 			"0: Run forever")
 	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
 	rttCount := flag.Int("i", 1000,
-		"Number of round trip iterations for latency test.")
+		"Number of round trip iterations for each latency test measurement.")
 	portStr := flag.String("ports", "",
 		"Ports to use for server and client\n"+
 			"Format: \"key1=value1, key2=value2\"\n"+
@@ -62,6 +62,9 @@ func main() {
 			"In external mode, ethr client connects to non-ethr server")
 	use4 := flag.Bool("4", false, "Use IPv4 only")
 	use6 := flag.Bool("6", false, "Use IPv6 only")
+	gapStr := flag.String("g", "0",
+		"Time Gap/Interval between  successive measurements (format: <num>[ms | s | m | h] \n"+
+			"0: No gap")
 
 	flag.Parse()
 
@@ -124,10 +127,12 @@ func main() {
 		switch mode {
 		case ethrModeServer:
 			testType = All
+		case ethrModeExtServer:
+			testType = All
 		case ethrModeClient:
 			testType = Bandwidth
 		case ethrModeExtClient:
-			testType = ConnLatency
+			testType = Bandwidth
 		}
 	case "b":
 		testType = Bandwidth
@@ -137,6 +142,8 @@ func main() {
 		testType = Pps
 	case "l":
 		testType = Latency
+	case "cl":
+		testType = ConnLatency
 	default:
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
 			"Valid parameters and values are:\n", *testTypePtr))
@@ -163,6 +170,11 @@ func main() {
 	duration, err := time.ParseDuration(*durationStr)
 	if err != nil {
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-d\".\n", *durationStr))
+	}
+
+	gap, err := time.ParseDuration(*gapStr)
+	if err != nil {
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-g\".\n", *gapStr))
 	}
 
 	if *thCount <= 0 {
@@ -205,7 +217,7 @@ func main() {
 		logInit(logFileName, *debug)
 	}
 
-	clientParam := ethrClientParam{duration}
+	clientParam := ethrClientParam{duration, gap}
 	serverParam := ethrServerParam{*showUI}
 
 	switch mode {
