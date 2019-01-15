@@ -6,7 +6,7 @@ Ethr is a cross platform network performance measurement tool written in golang.
   <img alt="Ethr server in action" src="https://user-images.githubusercontent.com/44273634/49815752-506f0000-fd21-11e8-954e-d587e79c5d85.png">
 </p>
 
-Ethr takes inspiration from existing open source network performance tools and builds upon those ideas. For Bandwidth measurement for TCP & UDP, it is very similar to iPerf3. iPerf3 has many more options for doing such as throttled testing, richer feature set, while Ethr has support for multiple threads, that allows it to scale to 1024 or even higher connections, multiple clients to a single server etc. For latency measurements, it is similar to latte on Windows or sockperf on Linux.
+Ethr takes inspiration from existing open source network performance tools and builds upon those ideas. For Bandwidth measurement, it is similar to iPerf3, for TCP & UDP traffic. iPerf3 has many more options for doing such as throttled testing, richer feature set, while Ethr has support for multiple threads, that allows it to scale to 1024 or even higher number of connections, multiple clients communication to a single server etc. For latency measurements, it is similar to latte on Windows or sockperf on Linux.
 
 Ethr provides more test measurements as compared to other tools, e.g. it provides measurements for bandwidth, connections/s, packets/s, latency, and TCP connection setup latency, all in a single tool. In the future, there are plans to add more features (hoping for others to contribute) as well as more protocol support to make it a comprehensive tool for network performance measurements.
 
@@ -142,11 +142,23 @@ ethr -c localhost -t c -n 64
 -i <number>                   Number of iterations for latency test
 -d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
 ```
+### External Server Parameters
+```
+-m x                      External server mode - In this mode, Ethr only supports TCP, listening on 9999
+                          Any client can connect to Ethr in this mode. Ethr can also receive data in this mode
+                          This mode is useful for running Ethr server on multiple instances behind a load balancer,
+                          and traffic from clients getting distributed by load balancer to these instances
+-s                        Server mode
+-ui                       Display text UI
+```
 ### External Client Mode
 ```
--x <destination>              External client mode, connect to destination specified by host:port
+-m x                          Set mode to External client mode
+-c <destination>              External client mode, connect to destination specified by host:port
                               Example: -x www.microsoft.com:443 or -x 10.1.0.4:22 etc.
+-t <b|cl>                     Test to be done, b: bandwidth, cl: connection latency                              
 -d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
+-g <duration>                 Gap (or interval) between successive connection setup (for connection latency test)
 ```
 
 # Status
