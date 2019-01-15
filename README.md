@@ -168,7 +168,7 @@ Protocol  | Bandwidth | Connections/s | Packets/s | Latency
 TCP  | Yes | Yes | No | Yes
 UDP  | Yes | NA | Yes | No
 HTTP | Yes | No | No | No
-HTTPS | No | No | No | No
+HTTPS | Yes | No | No | No
 ICMP | No | NA | No | No
 
 # Platform Support
