@@ -220,8 +220,6 @@ func runTCPCpsServer() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				// This can happen a lot during load, hence don't log by
-				// default.
 				ui.printDbg("Error accepting new conn/s connection: %v", err)
 				continue
 			}
@@ -236,6 +234,8 @@ func runTCPCpsHandler(conn net.Conn) {
 	test := getTest(server, TCP, Cps)
 	if test != nil {
 		atomic.AddUint64(&test.testResult.data, 1)
+	} else {
+		ui.printDbg("Error: Unsolicited connection received.")
 	}
 }
 
