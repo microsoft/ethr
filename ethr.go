@@ -16,55 +16,184 @@ import (
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
 
+func printFlagUsage(flag, info string, helptext ...string) {
+	fmt.Printf("\t-%s %s\n", flag, info)
+	for _, help := range helptext {
+		fmt.Printf("\t\t%s\n", help)
+	}
+}
+
+func printServerUsage() {
+	printFlagUsage("s", "", "Run in server mode.")
+}
+
+func printClientUsage() {
+	printFlagUsage("c", "<server>", "Run in client mode and connect to <server>.",
+		"Server is specified using name, FQDN or IP address.")
+}
+
+func printExtClientUsage() {
+	printFlagUsage("c", "<destination>", "Run in external client mode and connect to <destination>.",
+		"<destination> is specified using host:port format.",
+		"Example: www.microsoft.com:443 or 10.1.0.4:22 etc.")
+}
+
+func printPortUsage() {
+	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
+		"A comma separated list of key=value pair is used.",
+		"Key specifies the protocol, and value specifies base port.",
+		"Ports used for various tests are calculated from base port.",
+		"Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996",
+		"Control is used for control channel communication for ethr.",
+		"Note: Same configuration must be used on both client & server.",
+		"Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'")
+}
+
+func printExtPortUsage() {
+	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
+		"A comma separated list of key=value pair is used.",
+		"Key specifies the protocol, and value specifies the port.",
+		"Default: 'tcp=9999,http=9899,https=9799'")
+}
+
+func printTestType() {
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", \"p\", or \"l\")",
+		"b: Bandwidth",
+		"c: Connections/s or Requests/s",
+		"p: Packets/s",
+		"l: Latency, Loss & Jitter",
+		"Default: b - Bandwidth measurement.")
+}
+
+func printExtTestType() {
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\")",
+		"b: Bandwidth",
+		"c: Connections/s or Requests/s",
+		"cl: TCP connection setup latency",
+		"Default: b - Bandwidth measurement.")
+}
+
+func printThreadUsage() {
+	printFlagUsage("n", "<number>", "Number of Threads",
+		"0: Equal to number of CPUs",
+		"Default: 1")
+}
+
+func printDurationUsage() {
+	printFlagUsage("d", "<duration>",
+		"Duration for the test (format: <num>[ms | s | m | h]",
+		"0: Run forever",
+		"Default: 10s")
+}
+
+func printGapUsage() {
+	printFlagUsage("g", "<gap>",
+		"Time interval between successive measurements (format: <num>[ms | s | m | h]",
+		"0: No gap",
+		"Default: 1s")
+}
+
+func printBufLenUsage() {
+	printFlagUsage("l", "<length>",
+		"Length of buffer to use (format: <num>[KB | MB | GB])",
+		"Only valid for Bandwidth tests. Max 1GB.",
+		"Default: 16KB")
+}
+
+func printProtocolUsage() {
+	printFlagUsage("p", "<protocol>",
+		"Protocol (\"tcp\", \"udp\", \"http\", \"https\", or \"icmp\")",
+		"Default: tcp")
+}
+
+func printExtProtocolUsage() {
+	printFlagUsage("p", "<protocol>",
+		"Protocol (\"tcp\", \"http\", \"https\", or \"icmp\")",
+		"Default: tcp")
+}
+
+func printIterationUsage() {
+	printFlagUsage("i", "<iterations>",
+		"Number of round trip iterations for each latency measurement.",
+		"Default: 1000")
+}
+
+func printModeUsage() {
+	printFlagUsage("m", "<mode>",
+		"'-m x' MUST be specified for external mode.")
+}
+
+func ethrUsage() {
+	fmt.Println("\nEthr - Tool for comprehensive network performance measurements.")
+	fmt.Println("It supports 4 modes, usage of each mode is described below:")
+
+	fmt.Println("\nCommon Parameters")
+	fmt.Println("================================================================================")
+	printFlagUsage("h", "", "Help")
+	printFlagUsage("no", "", "Disable logging to file. Logging to file is enabled by default.")
+	printFlagUsage("o", "<filename>", "Name of log file. By default, following file names are used:",
+		"Server mode: 'ethrs.log'",
+		"Client mode: 'ethrc.log'",
+		"External server mode: 'ethrxs.log'",
+		"External client mode: 'ethrxc.log'")
+	printFlagUsage("debug", "", "Enable debug information in logging output.")
+	printFlagUsage("4", "", "Use only IP v4 version")
+	printFlagUsage("6", "", "Use only IP v6 version")
+
+	fmt.Println("\nMode: Server")
+	fmt.Println("================================================================================")
+	printServerUsage()
+	printFlagUsage("ui", "", "Show output in text UI.")
+	printPortUsage()
+
+	fmt.Println("\nMode: Client")
+	fmt.Println("================================================================================")
+	printClientUsage()
+	printDurationUsage()
+	printThreadUsage()
+	printBufLenUsage()
+	printProtocolUsage()
+	printPortUsage()
+	printTestType()
+	printIterationUsage()
+
+	fmt.Println("\nMode: External Server")
+	fmt.Println("================================================================================")
+	printModeUsage()
+	printServerUsage()
+	printExtPortUsage()
+
+	fmt.Println("\nMode: External Client")
+	fmt.Println("================================================================================")
+	printModeUsage()
+	printExtClientUsage()
+	printDurationUsage()
+	printThreadUsage()
+	printBufLenUsage()
+	printExtProtocolUsage()
+	printExtTestType()
+	printGapUsage()
+}
+
 func main() {
-	isServer := flag.Bool("s", false, "Run as server")
-	clientDest := flag.String("c", "",
-		"Run as client and connect to server specified by String\n"+
-			"Ethr mode (default): specifies host name or IP address for Ethr server\n"+
-			"External mode: specifies IP:port or name:port or URI:port for external server")
-	testTypePtr := flag.String("t", "",
-		"Test to run (\"b\", \"c\", \"p\", \"l\" or \"cl\")\n"+
-			"b: Bandwidth\n"+
-			"c: Connections/s or Requests/s\n"+
-			"p: Packets/s\n"+
-			"l: Latency, Loss & Jitter\n"+
-			"cl: Connection setup latency\n"+
-			"Default: b - Bandwidth measurement.")
-	thCount := flag.Int("n", 1,
-		"Number of Threads\n"+
-			"0: Equal to number of CPUs")
-	bufLenStr := flag.String("l", "16KB",
-		"Length of buffer to use (format: <num>[KB | MB | GB])\n"+
-			"Only valid for Bandwidth tests. Max 1GB.")
-	protocol := flag.String("p", "tcp",
-		"Protocol (\"tcp\", \"udp\", \"http\", \"https\", or \"icmp\")")
-	outputFile := flag.String("o", defaultLogFileName,
-		"Name of the file for logging output.\n")
-	debug := flag.Bool("debug", false, "Log debug output. Only valid if \"-o\" is specified.")
-	noOutput := flag.Bool("no", false, "Disable logging output to file.")
-	durationStr := flag.String("d", "10s",
-		"Duration for the test (format: <num>[s | m | h] \n"+
-			"0: Run forever")
-	showUI := flag.Bool("ui", false, "Show output in text UI. Valid for server only.")
-	rttCount := flag.Int("i", 1000,
-		"Number of round trip iterations for each latency test measurement.")
-	portStr := flag.String("ports", "",
-		"Ports to use for server and client\n"+
-			"Format: \"key1=value1, key2=value2\"\n"+
-			"Example: \"control=8888, tcp=9999, http=8099\"\n"+
-			"For protocols, only base port is specified, so tcp=9999 means:\n"+
-			"9999 - Bandwidth, 9998 - CPS, 9997 - PPS, 9996 - Latency tests\n"+
-			"Default: control=8888, tcp=9999, udp=9999, http=9899, https=9799")
-	modeStr := flag.String("m", "",
-		"Execution mode for Ethr (\"\" or \"x\")\n"+
-			"Default: Ethr mode\n"+
-			"x: External mode\n"+
-			"In external mode, ethr client connects to non-ethr server")
-	use4 := flag.Bool("4", false, "Use IPv4 only")
-	use6 := flag.Bool("6", false, "Use IPv6 only")
-	gapStr := flag.String("g", "0",
-		"Time Gap/Interval between  successive measurements (format: <num>[ms | s | m | h] \n"+
-			"0: No gap")
+	flag.Usage = ethrUsage
+	isServer := flag.Bool("s", false, "")
+	clientDest := flag.String("c", "", "")
+	testTypePtr := flag.String("t", "", "")
+	thCount := flag.Int("n", 1, "")
+	bufLenStr := flag.String("l", "16KB", "")
+	protocol := flag.String("p", "tcp", "")
+	outputFile := flag.String("o", defaultLogFileName, "")
+	debug := flag.Bool("debug", false, "")
+	noOutput := flag.Bool("no", false, "")
+	duration := flag.Duration("d", 10*time.Second, "")
+	showUI := flag.Bool("ui", false, "")
+	rttCount := flag.Int("i", 1000, "")
+	portStr := flag.String("ports", "", "")
+	modeStr := flag.String("m", "", "")
+	use4 := flag.Bool("4", false, "")
+	use6 := flag.Bool("6", false, "")
+	gap := flag.Duration("g", 0, "")
 
 	flag.Parse()
 
@@ -111,13 +240,13 @@ func main() {
 	bufLen := unitToNumber(*bufLenStr)
 	if bufLen == 0 {
 		fmt.Println("Invalid length specified: " + *bufLenStr)
-		flag.PrintDefaults()
+		ethrUsage()
 		os.Exit(1)
 	}
 
 	if *rttCount <= 0 {
 		fmt.Println("Invalid RTT count for latency test:", *rttCount)
-		flag.PrintDefaults()
+		ethrUsage()
 		os.Exit(1)
 	}
 
@@ -167,16 +296,6 @@ func main() {
 			"Valid parameters and values are:\n", *protocol))
 	}
 
-	duration, err := time.ParseDuration(*durationStr)
-	if err != nil {
-		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-d\".\n", *durationStr))
-	}
-
-	gap, err := time.ParseDuration(*gapStr)
-	if err != nil {
-		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-g\".\n", *gapStr))
-	}
-
 	if *thCount <= 0 {
 		*thCount = runtime.NumCPU()
 	}
@@ -217,7 +336,7 @@ func main() {
 		logInit(logFileName, *debug)
 	}
 
-	clientParam := ethrClientParam{duration, gap}
+	clientParam := ethrClientParam{*duration, *gap}
 	serverParam := ethrServerParam{*showUI}
 
 	switch mode {
@@ -288,6 +407,6 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
 
 func printUsageError(s string) {
 	fmt.Printf("Error: %s\n", s)
-	flag.PrintDefaults()
+	ethrUsage()
 	os.Exit(1)
 }
