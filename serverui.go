@@ -179,8 +179,8 @@ func (u *serverTui) emitTestResultBegin() {
 	u.results = nil
 }
 
-func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol) {
-	str := getTestResults(s, proto)
+func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
+	str := getTestResults(s, proto, seconds)
 	if len(str) > 0 {
 		ui.printTestResults(str)
 	}
@@ -209,7 +209,7 @@ func (u *serverTui) emitLatencyResults(remote, proto string, avg, min, max, p50,
 	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
-func (u *serverTui) paint() {
+func (u *serverTui) paint(seconds uint64) {
 	tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	defer tm.Flush()
 	printCenterText(0, 0, u.w, "Ethr v0.1", tm.ColorBlack, tm.ColorWhite)
@@ -253,7 +253,7 @@ func (u *serverTui) paint() {
 	w := u.statW
 	y := u.statY
 	for _, ns := range gCurNetStats.netDevStats {
-		nsDiff := getNetDevStatDiff(ns, gPrevNetStats)
+		nsDiff := getNetDevStatDiff(ns, gPrevNetStats, seconds)
 		// TODO: Log the network adapter stats in file as well.
 		printText(x, y, w, fmt.Sprintf("if: %s", ns.interfaceName), tm.ColorWhite, tm.ColorBlack)
 		y++
@@ -275,7 +275,8 @@ func (u *serverTui) paint() {
 		y++
 	}
 	printText(x, y, w,
-		fmt.Sprintf("Tcp Retrans: %s", numberToUnit(gCurNetStats.tcpStats.segRetrans-gPrevNetStats.tcpStats.segRetrans)),
+		fmt.Sprintf("Tcp Retrans: %s",
+			numberToUnit((gCurNetStats.tcpStats.segRetrans-gPrevNetStats.tcpStats.segRetrans)/seconds)),
 		tm.ColorDefault, tm.ColorDefault)
 }
 
@@ -321,7 +322,7 @@ func (u *serverCli) printErr(format string, a ...interface{}) {
 	logErr(s)
 }
 
-func (u *serverCli) paint() {
+func (u *serverCli) paint(seconds uint64) {
 }
 
 func (u *serverCli) emitTestResultBegin() {
@@ -333,8 +334,8 @@ func (u *serverCli) emitTestResultBegin() {
 	}
 }
 
-func (u *serverCli) emitTestResult(s *ethrSession, proto EthrProtocol) {
-	str := getTestResults(s, proto)
+func (u *serverCli) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
+	str := getTestResults(s, proto, seconds)
 	if len(str) > 0 {
 		ui.printTestResults(str)
 	}
@@ -394,7 +395,7 @@ func emitAggregate(proto EthrProtocol) {
 	}
 }
 
-func getTestResults(s *ethrSession, proto EthrProtocol) []string {
+func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
@@ -402,6 +403,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol) []string {
 	if found && test.isActive {
 		bwTestOn = true
 		bw = atomic.SwapUint64(&test.testResult.data, 0)
+		bw /= seconds
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
 	}
@@ -409,6 +411,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol) []string {
 	if found && test.isActive {
 		cpsTestOn = true
 		cps = atomic.SwapUint64(&test.testResult.data, 0)
+		cps /= seconds
 		aggTestResult.cps += cps
 		aggTestResult.ccps++
 	}
@@ -416,6 +419,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol) []string {
 	if found && test.isActive {
 		ppsTestOn = true
 		pps = atomic.SwapUint64(&test.testResult.data, 0)
+		pps /= seconds
 		aggTestResult.pps += pps
 		aggTestResult.cpps++
 	}
