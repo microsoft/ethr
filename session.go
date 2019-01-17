@@ -159,6 +159,9 @@ type EthrTestParam struct {
 
 	// RttCount represents the rtt count.
 	RttCount uint32
+
+	// Reverse mode for bandwidth tests.
+	Reverse bool
 }
 
 type ethrTestResult struct {

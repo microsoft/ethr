@@ -190,16 +190,24 @@ func closeConn(conn net.Conn) {
 func runTCPBandwidthHandler(conn net.Conn, test *ethrTest) {
 	defer closeConn(conn)
 	size := test.testParam.BufferSize
-	bytes := make([]byte, size)
+	buff := make([]byte, size)
+	for i := uint32(0); i < test.testParam.BufferSize; i++ {
+		buff[i] = byte(i)
+	}
 ExitForLoop:
 	for {
 		select {
 		case <-test.done:
 			break ExitForLoop
 		default:
-			_, err := io.ReadFull(conn, bytes)
+			var err error
+			if test.testParam.Reverse {
+				_, err = conn.Write(buff)
+			} else {
+				_, err = io.ReadFull(conn, buff)
+			}
 			if err != nil {
-				ui.printDbg("Error receiving data on a connection for bandwidth test: %v", err)
+				ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 				continue
 			}
 			atomic.AddUint64(&test.testResult.data, uint64(size))

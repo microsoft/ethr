@@ -197,17 +197,14 @@ func runTCPBandwidthTest(test *ethrTest) {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					n, err := conn.Write(buff)
-					if err != nil {
-						// ui.printErr(err)
-						// test.ctrlConn.Close()
-						// return
-						continue
+					n := 0
+					if test.testParam.Reverse {
+						n, err = io.ReadFull(conn, buff)
+					} else {
+						n, err = conn.Write(buff)
 					}
-					if n < blen {
-						// ui.printErr("Partial write: " + strconv.Itoa(n))
-						// test.ctrlConn.Close()
-						// return
+					if err != nil || n < blen {
+						ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 						continue
 					}
 					atomic.AddUint64(&ec.data, uint64(blen))
