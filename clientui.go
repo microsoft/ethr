@@ -105,7 +105,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		if ccount > 1 {
 			ui.printMsg("[SUM]     %-5s    %03d-%03d sec   %7s",
 				protoToString(test.testParam.TestID.Protocol),
-				gInterval, gInterval+1, bytesToRate(value))
+				gInterval, gInterval+1, bytesToRate(cvalue))
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
 		}
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
