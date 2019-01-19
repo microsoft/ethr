@@ -111,7 +111,6 @@ func emitStats() {
 	if seconds < 1 {
 		seconds = 1
 	}
-	ui.printMsg("Number of seconds: %d", seconds)
 	ui.emitTestResultBegin()
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()

@@ -177,6 +177,15 @@ func ethrUsage() {
 }
 
 func main() {
+	//
+	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
+	// to send network traffic results in timer starvation, as well as unfair
+	// processing time across goroutines resulting in starvation of many TCP
+	// connections. Using a higher number of threads via GOMAXPROCS solves this
+	// problem.
+	//
+	runtime.GOMAXPROCS(1024)
+
 	flag.Usage = ethrUsage
 	isServer := flag.Bool("s", false, "")
 	clientDest := flag.String("c", "", "")
