@@ -80,6 +80,7 @@ func initClientUI() {
 }
 
 var gInterval uint64
+var noConnectionStats bool
 
 func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
@@ -91,12 +92,14 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		cvalue := uint64(0)
 		ccount := 0
 		test.connListDo(func(ec *ethrConn) {
-			value = atomic.SwapUint64(&ec.data, 0)
-			value /= seconds
-			ui.printMsg("[%3d]     %-5s    %03d-%03d sec   %7s", ec.fd,
-				protoToString(test.testParam.TestID.Protocol),
-				gInterval, gInterval+1, bytesToRate(value))
-			cvalue += value
+			val := atomic.SwapUint64(&ec.data, 0)
+			val /= seconds
+			if !noConnectionStats {
+				ui.printMsg("[%3d]     %-5s    %03d-%03d sec   %7s", ec.fd,
+					protoToString(test.testParam.TestID.Protocol),
+					gInterval, gInterval+1, bytesToRate(val))
+			}
+			cvalue += val
 			ccount++
 		})
 		if ccount > 1 {

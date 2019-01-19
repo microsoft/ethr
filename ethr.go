@@ -74,7 +74,7 @@ func printExtTestType() {
 }
 
 func printThreadUsage() {
-	printFlagUsage("n", "<number>", "Number of Threads",
+	printFlagUsage("n", "<number>", "Number of Parallel Sessions (and Threads).",
 		"0: Equal to number of CPUs",
 		"Default: 1")
 }
@@ -123,6 +123,13 @@ func printModeUsage() {
 		"'-m x' MUST be specified for external mode.")
 }
 
+func printNoConnStatUsage() {
+	printFlagUsage("ncs", "",
+		"No Connection Stats would be printed if this flag is specified.",
+		"This is useful for running with large number of connections as",
+		"specified by -n option.")
+}
+
 func ethrUsage() {
 	fmt.Println("\nEthr - Tool for comprehensive network performance measurements.")
 	fmt.Println("It supports 4 modes, usage of each mode is described below:")
@@ -152,6 +159,7 @@ func ethrUsage() {
 	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
 	printDurationUsage()
 	printThreadUsage()
+	printNoConnStatUsage()
 	printBufLenUsage()
 	printProtocolUsage()
 	printPortUsage()
@@ -170,6 +178,7 @@ func ethrUsage() {
 	printExtClientUsage()
 	printDurationUsage()
 	printThreadUsage()
+	printNoConnStatUsage()
 	printBufLenUsage()
 	printExtProtocolUsage()
 	printExtTestType()
@@ -205,6 +214,7 @@ func main() {
 	use6 := flag.Bool("6", false, "")
 	gap := flag.Duration("g", 0, "")
 	reverse := flag.Bool("r", false, "")
+	ncs := flag.Bool("ncs", false, "")
 
 	flag.Parse()
 
@@ -212,6 +222,12 @@ func main() {
 	// TODO: Handle the case if there are incorrect arguments
 	// fmt.Println("Number of incorrect arguments: " + strconv.Itoa(flag.NArg()))
 	//
+
+	//
+	// Only used in client mode, to control whether to display per connection
+	// statistics or not.
+	//
+	noConnectionStats = *ncs
 
 	xMode := false
 	switch *modeStr {
