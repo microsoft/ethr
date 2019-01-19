@@ -104,6 +104,11 @@ func stopStatsTimer() {
 
 var lastStatsTime time.Time = time.Now()
 
+func timeToNextTick() time.Duration {
+	nextTick := lastStatsTime.Add(time.Second)
+	return time.Until(nextTick)
+}
+
 func emitStats() {
 	d := time.Since(lastStatsTime)
 	lastStatsTime = time.Now()

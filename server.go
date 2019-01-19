@@ -120,7 +120,7 @@ func handleRequest(conn net.Conn) {
 			return
 		}
 	}
-	ethrMsg = createAckMsg(gCert)
+	ethrMsg = createAckMsg(gCert, timeToNextTick())
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
 		ui.printErr("send session message: %v", err)

@@ -72,6 +72,8 @@ func establishSession(testParam EthrTestParam, server string) (test *ethrTest, e
 		deleteTest(test)
 	}
 	gCert = ethrMsg.Ack.Cert
+	napDuration := ethrMsg.Ack.NapDuration
+	time.Sleep(napDuration)
 	// TODO: Enable this in future, right now there is not much value coming
 	// from this.
 	/**
