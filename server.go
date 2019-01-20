@@ -120,13 +120,15 @@ func handleRequest(conn net.Conn) {
 			return
 		}
 	}
-	ethrMsg = createAckMsg(gCert, timeToNextTick())
+	delay := timeToNextTick()
+	ethrMsg = createAckMsg(gCert, delay)
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
 		ui.printErr("send session message: %v", err)
 		cleanupFunc()
 		return
 	}
+	time.Sleep(delay)
 	// TODO: Enable this in future, right now there is not much value coming
 	// from this.
 	/**
@@ -140,8 +142,8 @@ func handleRequest(conn net.Conn) {
 	waitForChannelStop := make(chan bool, 1)
 	serverWatchControlChannel(test, waitForChannelStop)
 	<-waitForChannelStop
-	ui.printMsg("Ending " + testToString(testParam.TestID.Type) + " test from " + server)
 	test.isActive = false
+	ui.printMsg("Ending " + testToString(testParam.TestID.Type) + " test from " + server)
 	cleanupFunc()
 	if len(gSessionKeys) > 0 {
 		ui.emitTestHdr()

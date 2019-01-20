@@ -159,6 +159,7 @@ func runTest(test *ethrTest, d time.Duration) {
 	handleCtrlC(toStop)
 	reason := <-toStop
 	close(test.done)
+	sendSessionMsg(test.enc, &EthrMsg{})
 	test.ctrlConn.Close()
 	stopStatsTimer()
 	switch reason {
