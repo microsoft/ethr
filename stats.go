@@ -39,7 +39,7 @@ func getNetworkStats() ethrNetStat {
 	return *stats
 }
 
-func getNetDevStatDiff(curStats ethrNetDevStat, prevNetStats ethrNetStat) ethrNetDevStat {
+func getNetDevStatDiff(curStats ethrNetDevStat, prevNetStats ethrNetStat, seconds uint64) ethrNetDevStat {
 	for _, prevStats := range prevNetStats.netDevStats {
 		if prevStats.interfaceName != curStats.interfaceName {
 			continue
@@ -71,6 +71,10 @@ func getNetDevStatDiff(curStats ethrNetDevStat, prevNetStats ethrNetStat) ethrNe
 
 		break
 	}
+	curStats.rxBytes /= seconds
+	curStats.txBytes /= seconds
+	curStats.rxPkts /= seconds
+	curStats.txPkts /= seconds
 	return curStats
 }
 
@@ -98,23 +102,36 @@ func stopStatsTimer() {
 	statsEnabled = false
 }
 
-func emitStats() {
-	ui.emitTestResultBegin()
-	emitTestResults()
-	ui.emitTestResultEnd()
-	ui.emitStats(getNetworkStats())
-	ui.paint()
+var lastStatsTime time.Time = time.Now()
+
+func timeToNextTick() time.Duration {
+	nextTick := lastStatsTime.Add(time.Second)
+	return time.Until(nextTick)
 }
 
-func emitTestResults() {
+func emitStats() {
+	d := time.Since(lastStatsTime)
+	lastStatsTime = time.Now()
+	seconds := int64(d.Seconds())
+	if seconds < 1 {
+		seconds = 1
+	}
+	ui.emitTestResultBegin()
+	emitTestResults(uint64(seconds))
+	ui.emitTestResultEnd()
+	ui.emitStats(getNetworkStats())
+	ui.paint(uint64(seconds))
+}
+
+func emitTestResults(s uint64) {
 	gSessionLock.RLock()
 	defer gSessionLock.RUnlock()
 	for _, k := range gSessionKeys {
 		v := gSessions[k]
-		ui.emitTestResult(v, TCP)
-		ui.emitTestResult(v, UDP)
-		ui.emitTestResult(v, HTTP)
-		ui.emitTestResult(v, HTTPS)
-		ui.emitTestResult(v, ICMP)
+		ui.emitTestResult(v, TCP, s)
+		ui.emitTestResult(v, UDP, s)
+		ui.emitTestResult(v, HTTP, s)
+		ui.emitTestResult(v, HTTPS, s)
+		ui.emitTestResult(v, ICMP, s)
 	}
 }

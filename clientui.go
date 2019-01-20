@@ -37,7 +37,7 @@ func (u *clientUI) printDbg(format string, a ...interface{}) {
 	}
 }
 
-func (u *clientUI) paint() {
+func (u *clientUI) paint(seconds uint64) {
 }
 
 func (u *clientUI) emitTestResultBegin() {
@@ -80,8 +80,9 @@ func initClientUI() {
 }
 
 var gInterval uint64
+var noConnectionStats bool
 
-func printTestResult(test *ethrTest, value uint64) {
+func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
 		test.testParam.TestID.Protocol == UDP) {
 		if gInterval == 0 {
@@ -91,18 +92,23 @@ func printTestResult(test *ethrTest, value uint64) {
 		cvalue := uint64(0)
 		ccount := 0
 		test.connListDo(func(ec *ethrConn) {
-			value = atomic.SwapUint64(&ec.data, 0)
-			ui.printMsg("[%3d]     %-5s    %03d-%03d sec   %7s", ec.fd,
-				protoToString(test.testParam.TestID.Protocol),
-				gInterval, gInterval+1, bytesToRate(value))
-			cvalue += value
+			val := atomic.SwapUint64(&ec.data, 0)
+			val /= seconds
+			if !noConnectionStats {
+				ui.printMsg("[%3d]     %-5s    %03d-%03d sec   %7s", ec.fd,
+					protoToString(test.testParam.TestID.Protocol),
+					gInterval, gInterval+1, bytesToRate(val))
+			}
+			cvalue += val
 			ccount++
 		})
-		if ccount > 1 {
+		if ccount > 1 || noConnectionStats {
 			ui.printMsg("[SUM]     %-5s    %03d-%03d sec   %7s",
 				protoToString(test.testParam.TestID.Protocol),
 				gInterval, gInterval+1, bytesToRate(cvalue))
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
+			if !noConnectionStats {
+				ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
+			}
 		}
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(cvalue), "", "", ""})
@@ -141,7 +147,7 @@ func printTestResult(test *ethrTest, value uint64) {
 	gInterval++
 }
 
-func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol) {
+func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
 	var data uint64
 	var testList = []EthrTestType{Bandwidth, Cps, Pps}
 
@@ -149,7 +155,8 @@ func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol) {
 		test, found := s.tests[EthrTestID{proto, testType}]
 		if found && test.isActive {
 			data = atomic.SwapUint64(&test.testResult.data, 0)
-			printTestResult(test, data)
+			data /= seconds
+			printTestResult(test, data, seconds)
 		}
 	}
 }

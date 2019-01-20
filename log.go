@@ -14,6 +14,7 @@ import (
 )
 
 type logMessage struct {
+	Time    string
 	Type    string
 	Message string
 }
@@ -35,6 +36,7 @@ type logLatencyData struct {
 }
 
 type logTestResults struct {
+	Time                 string
 	Type                 string
 	RemoteAddr           string
 	Protocol             string
@@ -79,6 +81,7 @@ func runLogger(logFile *os.File) {
 func _log(prefix, msg string) {
 	if loggingActive {
 		logData := logMessage{}
+		logData.Time = time.Now().UTC().Format(time.RFC3339)
 		logData.Type = prefix
 		logData.Message = msg
 		logJSON, _ := json.Marshal(logData)
@@ -103,6 +106,7 @@ func logDbg(msg string) {
 func logResults(s []string) {
 	if loggingActive {
 		logData := logTestResults{}
+		logData.Time = time.Now().UTC().Format(time.RFC3339)
 		logData.Type = "TestResult"
 		logData.RemoteAddr = s[0]
 		logData.Protocol = s[1]

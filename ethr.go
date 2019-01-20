@@ -74,7 +74,7 @@ func printExtTestType() {
 }
 
 func printThreadUsage() {
-	printFlagUsage("n", "<number>", "Number of Threads",
+	printFlagUsage("n", "<number>", "Number of Parallel Sessions (and Threads).",
 		"0: Equal to number of CPUs",
 		"Default: 1")
 }
@@ -123,6 +123,13 @@ func printModeUsage() {
 		"'-m x' MUST be specified for external mode.")
 }
 
+func printNoConnStatUsage() {
+	printFlagUsage("ncs", "",
+		"No Connection Stats would be printed if this flag is specified.",
+		"This is useful for running with large number of connections as",
+		"specified by -n option.")
+}
+
 func ethrUsage() {
 	fmt.Println("\nEthr - Tool for comprehensive network performance measurements.")
 	fmt.Println("It supports 4 modes, usage of each mode is described below:")
@@ -149,8 +156,10 @@ func ethrUsage() {
 	fmt.Println("\nMode: Client")
 	fmt.Println("================================================================================")
 	printClientUsage()
+	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
 	printDurationUsage()
 	printThreadUsage()
+	printNoConnStatUsage()
 	printBufLenUsage()
 	printProtocolUsage()
 	printPortUsage()
@@ -169,6 +178,7 @@ func ethrUsage() {
 	printExtClientUsage()
 	printDurationUsage()
 	printThreadUsage()
+	printNoConnStatUsage()
 	printBufLenUsage()
 	printExtProtocolUsage()
 	printExtTestType()
@@ -176,6 +186,15 @@ func ethrUsage() {
 }
 
 func main() {
+	//
+	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
+	// to send network traffic results in timer starvation, as well as unfair
+	// processing time across goroutines resulting in starvation of many TCP
+	// connections. Using a higher number of threads via GOMAXPROCS solves this
+	// problem.
+	//
+	runtime.GOMAXPROCS(1024)
+
 	flag.Usage = ethrUsage
 	isServer := flag.Bool("s", false, "")
 	clientDest := flag.String("c", "", "")
@@ -194,6 +213,8 @@ func main() {
 	use4 := flag.Bool("4", false, "")
 	use6 := flag.Bool("6", false, "")
 	gap := flag.Duration("g", 0, "")
+	reverse := flag.Bool("r", false, "")
+	ncs := flag.Bool("ncs", false, "")
 
 	flag.Parse()
 
@@ -201,6 +222,12 @@ func main() {
 	// TODO: Handle the case if there are incorrect arguments
 	// fmt.Println("Number of incorrect arguments: " + strconv.Itoa(flag.NArg()))
 	//
+
+	//
+	// Only used in client mode, to control whether to display per connection
+	// statistics or not.
+	//
+	noConnectionStats = *ncs
 
 	xMode := false
 	switch *modeStr {
@@ -231,6 +258,10 @@ func main() {
 		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
 	}
 
+	if *reverse && mode != ethrModeClient {
+		printUsageError("Invalid arguments, \"-r\" can only be used in client mode.")
+	}
+
 	if *use4 && !*use6 {
 		ipVer = ethrIPv4
 	} else if *use6 && !*use4 {
@@ -239,15 +270,11 @@ func main() {
 
 	bufLen := unitToNumber(*bufLenStr)
 	if bufLen == 0 {
-		fmt.Println("Invalid length specified: " + *bufLenStr)
-		ethrUsage()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
 	}
 
 	if *rttCount <= 0 {
-		fmt.Println("Invalid RTT count for latency test:", *rttCount)
-		ethrUsage()
-		os.Exit(1)
+		printUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
 	}
 
 	var testType EthrTestType
@@ -312,10 +339,9 @@ func main() {
 	testParam := EthrTestParam{EthrTestID{EthrProtocol(proto), testType},
 		uint32(*thCount),
 		uint32(bufLen),
-		uint32(*rttCount)}
-	if !validateTestParam(mode, testParam) {
-		os.Exit(1)
-	}
+		uint32(*rttCount),
+		*reverse}
+	validateTestParam(mode, testParam)
 
 	generatePortNumbers(*portStr)
 
@@ -352,61 +378,53 @@ func main() {
 }
 
 func emitUnsupportedTest(testParam EthrTestParam) {
-	fmt.Printf("Error: \"%s\" test for \"%s\" is not supported.\n",
-		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol))
+	printUsageError(fmt.Sprintf("\"%s\" test for \"%s\" is not supported.\n",
+		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol)))
 }
 
-func validateTestParam(mode ethrMode, testParam EthrTestParam) bool {
+func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 	testType := testParam.TestID.Type
 	protocol := testParam.TestID.Protocol
 	if mode == ethrModeServer {
 		if testType != All || protocol != TCP {
 			emitUnsupportedTest(testParam)
-			return false
 		}
 	} else if mode == ethrModeClient {
 		switch protocol {
 		case TCP:
 			if testType != Bandwidth && testType != Cps && testType != Latency {
 				emitUnsupportedTest(testParam)
-				return false
 			}
 		case UDP:
 			if testType != Bandwidth && testType != Pps {
 				emitUnsupportedTest(testParam)
-				return false
 			}
 			if testType == Bandwidth {
 				if testParam.BufferSize > (64 * 1024) {
-					fmt.Printf("Error: Maximum supported buffer size for UDP is 64K\n")
-					return false
+					printUsageError("Maximum supported buffer size for UDP is 64K\n")
 				}
 			}
 		case HTTP:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
-				return false
 			}
 		case HTTPS:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
-				return false
 			}
 		default:
 			emitUnsupportedTest(testParam)
-			return false
 		}
 	} else if mode == ethrModeExtClient {
 		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth) {
 			emitUnsupportedTest(testParam)
-			return false
 		}
 	}
-	return true
 }
 
 func printUsageError(s string) {
 	fmt.Printf("Error: %s\n", s)
-	ethrUsage()
+	fmt.Printf("Please use \"ethr -h\" for ethr command line arguments.\n")
+	// ethrUsage()
 	os.Exit(1)
 }

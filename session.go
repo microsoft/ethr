@@ -125,7 +125,8 @@ type EthrMsgSyn struct {
 
 // EthrMsgAck represents the Ack entity.
 type EthrMsgAck struct {
-	Cert []byte
+	Cert        []byte
+	NapDuration time.Duration
 }
 
 // EthrMsgFin represents the Fin entity.
@@ -159,6 +160,9 @@ type EthrTestParam struct {
 
 	// RttCount represents the rtt count.
 	RttCount uint32
+
+	// Reverse mode for bandwidth tests.
+	Reverse bool
 }
 
 type ethrTestResult struct {
@@ -418,10 +422,11 @@ func sendSessionMsg(enc *gob.Encoder, ethrMsg *EthrMsg) error {
 	return err
 }
 
-func createAckMsg(cert []byte) (ethrMsg *EthrMsg) {
+func createAckMsg(cert []byte, d time.Duration) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
 	ethrMsg.Ack = &EthrMsgAck{}
 	ethrMsg.Ack.Cert = cert
+	ethrMsg.Ack.NapDuration = d
 	return
 }
 
