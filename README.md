@@ -95,13 +95,16 @@ Client:
 ethr -c <server ip>
 ```
 
-Example:
+Examples:
 ```
 // Start server
 ethr -s
 
 // Start client for default (bandwidth) test measurement using 1 thread
 ethr -c localhost
+
+// Start bandwidth test using 8 threads
+ethr -c localhost -n 8
 
 // Start connections/s test using 64 threads
 ethr -c localhost -t c -n 64
@@ -110,55 +113,134 @@ ethr -c localhost -t c -n 64
 ## Complete Command Line
 ### Common Parameters
 ```
--h                        Help
--no                       Disable logging to a file
--o <filename>             Log to the file specified by filename
-                          Default: ethrs.log for server, ethrc.log for client, ethrxc.log for external client mode
--debug                    Log debug output
--ports <string>           Use custom port numbers instead of default ones
-                          Format: "Key1=Value, Key2=value, ..."
-                          Default: "control=8888, tcp=9999, udp=9999, http=9899, https=9799"
-                          Control is used for control channel communication for ethr.
-                          For protocols, base port is specified by value and other ports are calculated.
-                          Example: tcp=9999 means port for Bandwidth: 9999, CPS: 9998, PPS: 9997, Latency: 9996
-                          Note: Same ports must be used on client and server
-                          Note: This option is not valid for external client mode
--4                        Use only IP v4 version
--6                        Use only IP v6 version
+	-h 
+		Help
+	-no 
+		Disable logging to file. Logging to file is enabled by default.
+	-o <filename>
+		Name of log file. By default, following file names are used:
+		Server mode: 'ethrs.log'
+		Client mode: 'ethrc.log'
+		External server mode: 'ethrxs.log'
+		External client mode: 'ethrxc.log'
+	-debug 
+		Enable debug information in logging output.
+	-4 
+		Use only IP v4 version
+	-6 
+		Use only IP v6 version
 ```
 ### Server Parameters
 ```
--s                        Server mode
--ui                       Display text UI
+	-s 
+		Run in server mode.
+	-ui 
+		Show output in text UI.
+	-ports <k=v,...>
+		Use custom port numbers instead of default ones.
+		A comma separated list of key=value pair is used.
+		Key specifies the protocol, and value specifies base port.
+		Ports used for various tests are calculated from base port.
+		Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996
+		Control is used for control channel communication for ethr.
+		Note: Same configuration must be used on both client & server.
+		Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'
 ```
 ### Client Parameters
 ```
--c <server>                   Client mode, connect to name or IP specified by server
--t <b|c|p|l>                  Test to be done, b: bandwidth, c: connections/s, p: packets/s, l: latency
-                              Default is bandwidth test
--p <tcp|udp|http|https|icmp>  Protocol to use, default is TCP
--n <number>                   Number of sessions/threads to use
--l <number>                   Buffer size to use for each request
--i <number>                   Number of iterations for latency test
--d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
+	-c <server>
+		Run in client mode and connect to <server>.
+		Server is specified using name, FQDN or IP address.
+	-r 
+		For Bandwidth tests, send data from server to client.
+	-d <duration>
+		Duration for the test (format: <num>[ms | s | m | h]
+		0: Run forever
+		Default: 10s
+	-n <number>
+		Number of Parallel Sessions (and Threads).
+		0: Equal to number of CPUs
+		Default: 1
+	-ncs 
+		No Connection Stats would be printed if this flag is specified.
+		This is useful for running with large number of connections as
+		specified by -n option.
+	-l <length>
+		Length of buffer to use (format: <num>[KB | MB | GB])
+		Only valid for Bandwidth tests. Max 1GB.
+		Default: 16KB
+	-p <protocol>
+		Protocol ("tcp", "udp", "http", "https", or "icmp")
+		Default: tcp
+	-ports <k=v,...>
+		Use custom port numbers instead of default ones.
+		A comma separated list of key=value pair is used.
+		Key specifies the protocol, and value specifies base port.
+		Ports used for various tests are calculated from base port.
+		Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996
+		Control is used for control channel communication for ethr.
+		Note: Same configuration must be used on both client & server.
+		Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'
+	-t <test>
+		Test to run ("b", "c", "p", or "l")
+		b: Bandwidth
+		c: Connections/s or Requests/s
+		p: Packets/s
+		l: Latency, Loss & Jitter
+		Default: b - Bandwidth measurement.
+	-i <iterations>
+		Number of round trip iterations for each latency measurement.
+		Default: 1000
 ```
 ### External Server Parameters
 ```
--m x                      External server mode - In this mode, Ethr only supports TCP, listening on 9999
-                          Any client can connect to Ethr in this mode. Ethr can also receive data in this mode
-                          This mode is useful for running Ethr server on multiple instances behind a load balancer,
-                          and traffic from clients getting distributed by load balancer to these instances
--s                        Server mode
--ui                       Display text UI
+	-m <mode>
+		'-m x' MUST be specified for external mode.
+	-s 
+		Run in server mode.
+	-ports <k=v,...>
+		Use custom port numbers instead of default ones.
+		A comma separated list of key=value pair is used.
+		Key specifies the protocol, and value specifies the port.
+		Default: 'tcp=9999,http=9899,https=9799'
 ```
 ### External Client Mode
 ```
--m x                          Set mode to External client mode
--c <destination>              External client mode, connect to destination specified by host:port
-                              Example: -x www.microsoft.com:443 or -x 10.1.0.4:22 etc.
--t <b|cl>                     Test to be done, b: bandwidth, cl: connection latency                              
--d <duration>                 Duration for the test run, for example, 10s, 4m, 5h etc. 0 - forever, default: 10s
--g <duration>                 Gap (or interval) between successive connection setup (for connection latency test)
+	-m <mode>
+		'-m x' MUST be specified for external mode.
+	-c <destination>
+		Run in external client mode and connect to <destination>.
+		<destination> is specified using host:port format.
+		Example: www.microsoft.com:443 or 10.1.0.4:22 etc.
+	-d <duration>
+		Duration for the test (format: <num>[ms | s | m | h]
+		0: Run forever
+		Default: 10s
+	-n <number>
+		Number of Parallel Sessions (and Threads).
+		0: Equal to number of CPUs
+		Default: 1
+	-ncs 
+		No Connection Stats would be printed if this flag is specified.
+		This is useful for running with large number of connections as
+		specified by -n option.
+	-l <length>
+		Length of buffer to use (format: <num>[KB | MB | GB])
+		Only valid for Bandwidth tests. Max 1GB.
+		Default: 16KB
+	-p <protocol>
+		Protocol ("tcp", "http", "https", or "icmp")
+		Default: tcp
+	-t <test>
+		Test to run ("b", "c", or "cl")
+		b: Bandwidth
+		c: Connections/s or Requests/s
+		cl: TCP connection setup latency
+		Default: b - Bandwidth measurement.
+	-g <gap>
+		Time interval between successive measurements (format: <num>[ms | s | m | h]
+		0: No gap
+		Default: 1s
 ```
 
 # Status
