@@ -15,6 +15,7 @@ import (
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
+var gVersion string
 
 func printFlagUsage(flag, info string, helptext ...string) {
 	fmt.Printf("\t-%s %s\n", flag, info)
@@ -131,8 +132,9 @@ func printNoConnStatUsage() {
 }
 
 func ethrUsage() {
-	fmt.Println("\nEthr - Tool for comprehensive network performance measurements.")
-	fmt.Println("It supports 4 modes, usage of each mode is described below:")
+	fmt.Println("\nEthr - A comprehensive network performance measurement tool.")
+    fmt.Println("Version: " + gVersion)
+	fmt.Println("It supports 4 modes. Usage of each mode is described below:")
 
 	fmt.Println("\nCommon Parameters")
 	fmt.Println("================================================================================")
@@ -186,6 +188,12 @@ func ethrUsage() {
 }
 
 func main() {
+    //
+    // If version is not set via ldflags, then default to UNKNOWN
+    //
+    if gVersion == "" {
+        gVersion = "[VERSION: UNKNOWN]"
+    }
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
 	// to send network traffic results in timer starvation, as well as unfair

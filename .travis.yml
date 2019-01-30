@@ -1,31 +1,51 @@
 language: go
 
 go:
-  - "1.11"
-  - master
+- '1.11'
+- master
 
 os:
-  - linux
-  - windows
-  - osx
+- linux
+- windows
+- osx
 
 matrix:
   allow_failures:
-    - os: windows
-      go: master
+  - os: windows
+    go: master
   fast_finish: true
 
 before_install:
-  - go get -t -v ./...
-  - go get -u golang.org/x/tools/cmd/goimports
-  - go get -u golang.org/x/lint/golint
-  - go get github.com/golang/dep/...
+- go get -t -v ./...
+- go get -u golang.org/x/tools/cmd/goimports
+- go get -u golang.org/x/lint/golint
+- go get github.com/golang/dep/...
+- chmod +x travis_build.sh
 
 install:
-  - $GOPATH/bin/dep ensure -v
+- "$GOPATH/bin/dep ensure -v"
+
+notifications:
+  email: false
 
 script:
-  - go test -v -race ./...
-  - go vet ./...
-  - goimports -d $(find . -type f -name '*.go' -not -path "./vendor/*")
-  - golint $(go list ./... | grep -v /vendor/)
+- go test -v -race ./...
+- go vet ./...
+- goimports -d $(find . -type f -name '*.go' -not -path "./vendor/*")
+- golint $(go list ./... | grep -v /vendor/)
+- "./travis_build.sh"
+
+deploy:
+  provider: releases
+  skip_cleanup: true
+  api_key:
+    secure: uavDDD3bYibA6DWYGoMI3OLQlfcAeN54Us1wjr+FBVqSXzfmQbuyla6G05cd0XdxkFbD7vvvyoFfVq9dfVqnVyqRV/PuoxDeQbICiJAiKhd0K6JrtUvOymYZ069oZdE5mlDxBRBUfqAlS74BuNiX8d48Bh9UA7HpJ10SbH5rRkH5gvEqOCsL4WacP+PPOzr5UAeA0YGRCF0fM1YnlHxaPdXQOhf6/KshnLLDdTnQ2IiV4RHWA+WgzUVcyCPBG6UxoSiLje8WR16vhjvCSUKYbk4M498ZkXmwIRKrD2fY0fb9uOGf+SLwNCeAP+9azdYtkZMHM8/8HbJinvLGZ4P0V08lE2ANBvX4umLhNKy0r7SuUxnAavRvELePy/wfzv7q6gEo8k4KiV8o9bcWwVuDrupTaMwkHCLFqTE9wkn91UML9ChDoGneJLeYNvcv0g6d5vWGES5SLQwkXMt73+qNvy5HbkzAVoWwZcZnf1srugRioCcNSAYw/AphPC7lcmcQE/c5L1x8407vkNuixy/Zbz8AdKbEcUT5vQWGCli3zN8y/1IQLbfg/CmxhYd8PyMbbwkiy3MR75rwn96rPpLrkQQiO16OoDdhe/MeaT5mT6xYm3HnXz60/14KZ62NtuwPUiNZ+vySKlmAnJbmOyuTEaQXq+F3LjNP/CBDlvUEq24=
+  file:
+  - ethr_linux.zip
+  - ethr_windows.zip
+  - ethr_osx.zip
+  on:
+    repo: Microsoft/ethr
+    branch: master
+    tags: true
+
