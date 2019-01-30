@@ -10,8 +10,8 @@ if [ "${TRAVIS_OS_NAME}" = "linux" ] && [[ ${TRAVIS_GO_VERSION} == 1.11* ]]; the
     go build -o linux/ethr -ldflags "-X main.gVersion=$TRAVIS_TAG"
     export GOOS=darwin
     go build -o osx/ethr -ldflags "-X main.gVersion=$TRAVIS_TAG"
-    zip ethr_windows.zip windows/ethr.exe
-    zip ethr_linux.zip linux/ethr
-    zip ethr_osx.zip osx/ethr
+    zip -j ethr_windows.zip windows/ethr.exe
+    zip -j ethr_linux.zip linux/ethr
+    zip -j ethr_osx.zip osx/ethr
 fi
 
