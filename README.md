@@ -15,9 +15,7 @@ Ethr is natively cross platform, thanks to golang, as compared to compiling via 
 # Download
 
 ```
-For Windows 10: https://github.com/Microsoft/Ethr/files/2640289/ethr.zip
-For Ubuntu: https://github.com/Microsoft/Ethr/files/2640288/ethr.gz
-For ArchLinux: https://aur.archlinux.org/packages/ethr
+https://github.com/Microsoft/ethr/releases/latest
 ```
 
 # Installation
