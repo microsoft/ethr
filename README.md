@@ -245,7 +245,7 @@ Protocol  | Bandwidth | Connections/s | Packets/s | Latency
 ------------- | ------------- | ------------- | ------------- | -------------
 TCP  | Yes | Yes | No | Yes
 UDP  | Yes | NA | Yes | No
-HTTP | Yes | No | No | No
+HTTP | Yes | No | No | Yes
 HTTPS | Yes | No | No | No
 ICMP | No | NA | No | No
 
