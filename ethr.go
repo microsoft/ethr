@@ -15,6 +15,7 @@ import (
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
+
 var gVersion string
 
 func printFlagUsage(flag, info string, helptext ...string) {
@@ -71,7 +72,7 @@ func printExtTestType() {
 		"b: Bandwidth",
 		"c: Connections/s or Requests/s",
 		"cl: TCP connection setup latency",
-		"Default: b - Bandwidth measurement.")
+		"Default: cl - TCP connection setup latency.")
 }
 
 func printThreadUsage() {
@@ -126,14 +127,20 @@ func printModeUsage() {
 
 func printNoConnStatUsage() {
 	printFlagUsage("ncs", "",
-		"No Connection Stats would be printed if this flag is specified.",
-		"This is useful for running with large number of connections as",
-		"specified by -n option.")
+		"No per Connection Stats would be printed if this flag is specified.",
+		"This is useful to suppress verbose logging when large number of",
+		"connections are used as specified by -n option for Bandwidth tests.")
+}
+
+func printIgnoreCertUsage() {
+	printFlagUsage("ic", "",
+		"Ignore Certificate is useful for HTTPS tests, for cases where a",
+		"middle box like a proxy is not able to supply a valid Ethr cert.")
 }
 
 func ethrUsage() {
 	fmt.Println("\nEthr - A comprehensive network performance measurement tool.")
-    fmt.Println("Version: " + gVersion)
+	fmt.Println("Version: " + gVersion)
 	fmt.Println("It supports 4 modes. Usage of each mode is described below:")
 
 	fmt.Println("\nCommon Parameters")
@@ -164,6 +171,7 @@ func ethrUsage() {
 	printNoConnStatUsage()
 	printBufLenUsage()
 	printProtocolUsage()
+	printIgnoreCertUsage()
 	printPortUsage()
 	printTestType()
 	printIterationUsage()
@@ -188,12 +196,12 @@ func ethrUsage() {
 }
 
 func main() {
-    //
-    // If version is not set via ldflags, then default to UNKNOWN
-    //
-    if gVersion == "" {
-        gVersion = "[VERSION: UNKNOWN]"
-    }
+	//
+	// If version is not set via ldflags, then default to UNKNOWN
+	//
+	if gVersion == "" {
+		gVersion = "[VERSION: UNKNOWN]"
+	}
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
 	// to send network traffic results in timer starvation, as well as unfair
@@ -223,6 +231,7 @@ func main() {
 	gap := flag.Duration("g", 0, "")
 	reverse := flag.Bool("r", false, "")
 	ncs := flag.Bool("ncs", false, "")
+	ic := flag.Bool("ic", false, "")
 
 	flag.Parse()
 
@@ -235,7 +244,12 @@ func main() {
 	// Only used in client mode, to control whether to display per connection
 	// statistics or not.
 	//
-	noConnectionStats = *ncs
+	gNoConnectionStats = *ncs
+
+	//
+	// Only used in client mode to ignore HTTPS cert errors.
+	//
+	gIgnoreCert = *ic
 
 	xMode := false
 	switch *modeStr {
@@ -296,7 +310,7 @@ func main() {
 		case ethrModeClient:
 			testType = Bandwidth
 		case ethrModeExtClient:
-			testType = Bandwidth
+			testType = ConnLatency
 		}
 	case "b":
 		testType = Bandwidth
@@ -390,6 +404,10 @@ func emitUnsupportedTest(testParam EthrTestParam) {
 		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol)))
 }
 
+func printReverseModeError() {
+	printUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
+}
+
 func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 	testType := testParam.TestID.Type
 	protocol := testParam.TestID.Protocol
@@ -403,6 +421,9 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			if testType != Bandwidth && testType != Cps && testType != Latency {
 				emitUnsupportedTest(testParam)
 			}
+			if testParam.Reverse && testType != Bandwidth {
+				printReverseModeError()
+			}
 		case UDP:
 			if testType != Bandwidth && testType != Pps {
 				emitUnsupportedTest(testParam)
@@ -412,13 +433,22 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 					printUsageError("Maximum supported buffer size for UDP is 64K\n")
 				}
 			}
+			if testParam.Reverse {
+				printReverseModeError()
+			}
 		case HTTP:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
 			}
+			if testParam.Reverse {
+				printReverseModeError()
+			}
 		case HTTPS:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
+			}
+			if testParam.Reverse {
+				printReverseModeError()
 			}
 		default:
 			emitUnsupportedTest(testParam)
@@ -433,6 +463,5 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 func printUsageError(s string) {
 	fmt.Printf("Error: %s\n", s)
 	fmt.Printf("Please use \"ethr -h\" for ethr command line arguments.\n")
-	// ethrUsage()
 	os.Exit(1)
 }

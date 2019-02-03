@@ -22,6 +22,8 @@ import (
 	"time"
 )
 
+var gIgnoreCert bool
+
 func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
 	server = "[" + server + "]"
@@ -438,7 +440,7 @@ func runHTTPSBandwidthTest(test *ethrTest) {
 		clientCertPool.AddCert(c)
 
 		tlsConfig := &tls.Config{
-			InsecureSkipVerify: false,
+			InsecureSkipVerify: gIgnoreCert,
 			// Certificates: []tls.Certificate{cert},
 			RootCAs: clientCertPool,
 		}
