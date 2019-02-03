@@ -35,6 +35,7 @@ func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	runTCPLatencyServer()
 	runHTTPBandwidthServer()
 	runHTTPSBandwidthServer()
+	runHTTPLatencyServer()
 	l := runControlChannel()
 	defer l.Close()
 	startStatsTimer()
@@ -582,5 +583,46 @@ func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p E
 	}
 	if r.ContentLength > 0 {
 		atomic.AddUint64(&test.testResult.data, uint64(r.ContentLength))
+	}
+}
+
+func runHTTPLatencyServer() {
+	sm := http.NewServeMux()
+	sm.HandleFunc("/", runHTTPLatencyHandler)
+	l, err := net.Listen(tcp(ipVer), ":"+httpLatencyPort)
+	if err != nil {
+		ui.printErr("Unable to start HTTP server. Error in listening on socket: %v", err)
+		return
+	}
+	ui.printMsg("Listening on " + httpLatencyPort + " for HTTP latency tests")
+	go runHTTPServer(tcpKeepAliveListener{l.(*net.TCPListener)}, sm)
+}
+
+func runHTTPLatencyHandler(w http.ResponseWriter, r *http.Request) {
+	runHTTPProtoLatencyHandler(w, r, HTTP)
+}
+
+func runHTTPProtoLatencyHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol) {
+	_, err := ioutil.ReadAll(r.Body)
+	if err != nil {
+		return
+	}
+
+ 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
+	test := getTest(server, p, Latency)
+	if test == nil {
+		return
+	}
+
+	switch r.Method {
+	case "GET":
+		w.Write([]byte("OK."))
+	case "PUT":
+		w.Write([]byte("OK."))
+	case "POST":
+		w.Write([]byte("OK."))
+	default:
+		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
+		return
 	}
 }

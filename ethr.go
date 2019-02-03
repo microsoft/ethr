@@ -413,7 +413,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 				}
 			}
 		case HTTP:
-			if testType != Bandwidth {
+			if testType != Bandwidth && testType != Latency {
 				emitUnsupportedTest(testParam)
 			}
 		case HTTPS:
