@@ -14,9 +14,7 @@ Ethr is natively cross platform, thanks to golang, as compared to compiling via 
 
 # Download
 
-```
 https://github.com/Microsoft/ethr/releases/latest
-```
 
 # Installation
 
