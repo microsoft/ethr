@@ -448,7 +448,7 @@ func runHTTPBandwidthServer() {
 }
 
 func runHTTPBandwidthHandler(w http.ResponseWriter, r *http.Request) {
-	runHTTPandHTTPSBandwidthHandler(w, r, HTTP)
+	runHTTPandHTTPSHandler(w, r, HTTP, Bandwidth)
 }
 
 func runHTTPSBandwidthServer() {
@@ -474,7 +474,7 @@ func runHTTPSBandwidthServer() {
 }
 
 func runHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request) {
-	runHTTPandHTTPSBandwidthHandler(w, r, HTTPS)
+	runHTTPandHTTPSHandler(w, r, HTTPS, Bandwidth)
 }
 
 func runHTTPServer(l net.Listener, handler http.Handler) error {
@@ -557,7 +557,7 @@ func allLocalIPs() (ipList []net.IP) {
 	return
 }
 
-func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol) {
+func runHTTPandHTTPSHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol, testType EthrTestType) {
 	_, err := ioutil.ReadAll(r.Body)
 	if err != nil {
 		ui.printDbg("Error reading HTTP body: %v", err)
@@ -565,7 +565,7 @@ func runHTTPandHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request, p E
 		return
 	}
 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
-	test := getTest(server, p, Bandwidth)
+	test := getTest(server, p, testType)
 	if test == nil {
 		http.Error(w, "Unauthorized request.", http.StatusUnauthorized)
 		return
@@ -599,30 +599,5 @@ func runHTTPLatencyServer() {
 }
 
 func runHTTPLatencyHandler(w http.ResponseWriter, r *http.Request) {
-	runHTTPProtoLatencyHandler(w, r, HTTP)
-}
-
-func runHTTPProtoLatencyHandler(w http.ResponseWriter, r *http.Request, p EthrProtocol) {
-	_, err := ioutil.ReadAll(r.Body)
-	if err != nil {
-		return
-	}
-
- 	server, _, _ := net.SplitHostPort(r.RemoteAddr)
-	test := getTest(server, p, Latency)
-	if test == nil {
-		return
-	}
-
-	switch r.Method {
-	case "GET":
-		w.Write([]byte("OK."))
-	case "PUT":
-		w.Write([]byte("OK."))
-	case "POST":
-		w.Write([]byte("OK."))
-	default:
-		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
-		return
-	}
+	runHTTPandHTTPSHandler(w, r, HTTP, Latency)
 }
