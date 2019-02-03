@@ -15,6 +15,7 @@ import (
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
+
 var gVersion string
 
 func printFlagUsage(flag, info string, helptext ...string) {
@@ -127,19 +128,19 @@ func printModeUsage() {
 func printNoConnStatUsage() {
 	printFlagUsage("ncs", "",
 		"No per Connection Stats would be printed if this flag is specified.",
-        "This is useful to suppress verbose logging when large number of",
-        "connections are used as specified by -n option for Bandwidth tests.")
+		"This is useful to suppress verbose logging when large number of",
+		"connections are used as specified by -n option for Bandwidth tests.")
 }
 
 func printIgnoreCertUsage() {
 	printFlagUsage("ic", "",
 		"Ignore Certificate is useful for HTTPS tests, for cases where a",
-        "middle box like a proxy is not able to supply a valid Ethr cert.")
+		"middle box like a proxy is not able to supply a valid Ethr cert.")
 }
 
 func ethrUsage() {
 	fmt.Println("\nEthr - A comprehensive network performance measurement tool.")
-    fmt.Println("Version: " + gVersion)
+	fmt.Println("Version: " + gVersion)
 	fmt.Println("It supports 4 modes. Usage of each mode is described below:")
 
 	fmt.Println("\nCommon Parameters")
@@ -170,7 +171,7 @@ func ethrUsage() {
 	printNoConnStatUsage()
 	printBufLenUsage()
 	printProtocolUsage()
-    printIgnoreCertUsage()
+	printIgnoreCertUsage()
 	printPortUsage()
 	printTestType()
 	printIterationUsage()
@@ -195,12 +196,12 @@ func ethrUsage() {
 }
 
 func main() {
-    //
-    // If version is not set via ldflags, then default to UNKNOWN
-    //
-    if gVersion == "" {
-        gVersion = "[VERSION: UNKNOWN]"
-    }
+	//
+	// If version is not set via ldflags, then default to UNKNOWN
+	//
+	if gVersion == "" {
+		gVersion = "[VERSION: UNKNOWN]"
+	}
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
 	// to send network traffic results in timer starvation, as well as unfair
@@ -230,7 +231,7 @@ func main() {
 	gap := flag.Duration("g", 0, "")
 	reverse := flag.Bool("r", false, "")
 	ncs := flag.Bool("ncs", false, "")
-    ic := flag.Bool("ic", false, "")
+	ic := flag.Bool("ic", false, "")
 
 	flag.Parse()
 
@@ -245,10 +246,10 @@ func main() {
 	//
 	gNoConnectionStats = *ncs
 
-    //
-    // Only used in client mode to ignore HTTPS cert errors.
-    //
-    gIgnoreCert = *ic
+	//
+	// Only used in client mode to ignore HTTPS cert errors.
+	//
+	gIgnoreCert = *ic
 
 	xMode := false
 	switch *modeStr {
@@ -404,7 +405,7 @@ func emitUnsupportedTest(testParam EthrTestParam) {
 }
 
 func printReverseModeError() {
-    printUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
+	printUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
 }
 
 func validateTestParam(mode ethrMode, testParam EthrTestParam) {
@@ -420,9 +421,9 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			if testType != Bandwidth && testType != Cps && testType != Latency {
 				emitUnsupportedTest(testParam)
 			}
-            if testParam.Reverse && testType != Bandwidth {
-                printReverseModeError()
-            }
+			if testParam.Reverse && testType != Bandwidth {
+				printReverseModeError()
+			}
 		case UDP:
 			if testType != Bandwidth && testType != Pps {
 				emitUnsupportedTest(testParam)
@@ -432,23 +433,23 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 					printUsageError("Maximum supported buffer size for UDP is 64K\n")
 				}
 			}
-            if testParam.Reverse {
-                printReverseModeError()
-            }
+			if testParam.Reverse {
+				printReverseModeError()
+			}
 		case HTTP:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
 			}
-            if testParam.Reverse {
-                printReverseModeError()
-            }
+			if testParam.Reverse {
+				printReverseModeError()
+			}
 		case HTTPS:
 			if testType != Bandwidth {
 				emitUnsupportedTest(testParam)
 			}
-            if testParam.Reverse {
-                printReverseModeError()
-            }
+			if testParam.Reverse {
+				printReverseModeError()
+			}
 		default:
 			emitUnsupportedTest(testParam)
 		}
@@ -464,4 +465,3 @@ func printUsageError(s string) {
 	fmt.Printf("Please use \"ethr -h\" for ethr command line arguments.\n")
 	os.Exit(1)
 }
-
