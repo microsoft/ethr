@@ -9,6 +9,9 @@ os:
 - windows
 - osx
 
+env:
+  - GO111MODULE=on
+
 matrix:
   allow_failures:
   - os: windows
@@ -16,14 +19,12 @@ matrix:
   fast_finish: true
 
 before_install:
-- go get -t -v ./...
 - go get -u golang.org/x/tools/cmd/goimports
 - go get -u golang.org/x/lint/golint
-- go get github.com/golang/dep/...
 - chmod +x travis_build.sh
 
 install:
-- "$GOPATH/bin/dep ensure -v"
+- go get -t -v ./...
 
 notifications:
   email: false

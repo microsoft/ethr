@@ -18,16 +18,20 @@ https://github.com/Microsoft/ethr/releases/latest
 
 # Installation
 
-Note: go version 1.10 or higher is required building it from the source.
+Note: go version 1.11 or higher is required building it from the source.
 
 ## Building from Source
+
+We use go-module to manage Ethr dependencies. for more information please check [how to use go-modules!](https://github.com/golang/go/wiki/Modules#how-to-use-modules)
 
 ```
 git clone https://github.com/Microsoft/ethr.git
 cd ethr
-dep ensure -v
+go get ./...
 go build
 ```
+
+If Ethr is cloned inside of the `$GOPATH/src` tree, please make sure you invoke the `go` command with `GO111MODULE=on`!
 
 ## Docker
 
