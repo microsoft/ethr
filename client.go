@@ -459,7 +459,6 @@ ExitForLoop:
 
 func runHTTPLatencyTest(test *ethrTest) {
 	uri := test.session.remoteAddr
-	ui.printMsg("uri=%s", uri)
 	uri = "http://" + uri + ":" + httpLatencyPort
 
 	buff := make([]byte, test.testParam.BufferSize)
@@ -494,7 +493,6 @@ ExitForLoop:
 					}
 					ethrUnused(contents)
 				}
-				
 				e2 := time.Since(s1)
 				latencyNumbers[i] = e2
 			}

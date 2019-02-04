@@ -581,8 +581,10 @@ func runHTTPandHTTPSHandler(w http.ResponseWriter, r *http.Request, p EthrProtoc
 		http.Error(w, "Only GET, PUT and POST are supported.", http.StatusMethodNotAllowed)
 		return
 	}
-	if r.ContentLength > 0 {
-		atomic.AddUint64(&test.testResult.data, uint64(r.ContentLength))
+	if (testType == Bandwidth) {
+		if r.ContentLength > 0 {
+			atomic.AddUint64(&test.testResult.data, uint64(r.ContentLength))
+		}
 	}
 }
 
