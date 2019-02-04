@@ -437,7 +437,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 				printReverseModeError()
 			}
 		case HTTP:
-			if testType != Bandwidth {
+			if testType != Bandwidth && testType != Latency {
 				emitUnsupportedTest(testParam)
 			}
 			if testParam.Reverse {

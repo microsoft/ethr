@@ -148,7 +148,11 @@ func runTest(test *ethrTest, d time.Duration) {
 	} else if test.testParam.TestID.Protocol == HTTP {
 		if test.testParam.TestID.Type == Bandwidth {
 			go runHTTPBandwidthTest(test)
+		} else if test.testParam.TestID.Type == Latency {
+			ui.emitLatencyHdr()
+			go runHTTPLatencyTest(test)
 		}
+
 	} else if test.testParam.TestID.Protocol == HTTPS {
 		if test.testParam.TestID.Type == Bandwidth {
 			go runHTTPSBandwidthTest(test)
@@ -297,36 +301,8 @@ ExitForLoop:
 			// TODO temp code, fix it better, this is to allow server to do
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
-			sum := int64(0)
-			for _, d := range latencyNumbers {
-				sum += d.Nanoseconds()
-			}
-			elapsed := time.Duration(sum / int64(rttCount))
-			sort.SliceStable(latencyNumbers, func(i, j int) bool {
-				return latencyNumbers[i] < latencyNumbers[j]
-			})
-			//
-			// Special handling for rttCount == 1. This prevents negative index
-			// in the latencyNumber index. The other option is to use
-			// roundUpToZero() but that is more expensive.
-			//
-			rttCountFixed := rttCount
-			if rttCountFixed == 1 {
-				rttCountFixed = 2
-			}
-			avg := elapsed
-			min := latencyNumbers[0]
-			max := latencyNumbers[rttCount-1]
-			p50 := latencyNumbers[((rttCountFixed*50)/100)-1]
-			p90 := latencyNumbers[((rttCountFixed*90)/100)-1]
-			p95 := latencyNumbers[((rttCountFixed*95)/100)-1]
-			p99 := latencyNumbers[((rttCountFixed*99)/100)-1]
-			p999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.9)/100)-1)]
-			p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
-			ui.emitLatencyResults(
-				test.session.remoteAddr,
-				protoToString(test.testParam.TestID.Protocol),
-				avg, min, max, p50, p90, p95, p99, p999, p9999)
+
+		    calcLatency(test, rttCount, latencyNumbers)
 		}
 	}
 }
@@ -481,4 +457,82 @@ ExitForLoop:
 			atomic.AddUint64(&test.testResult.data, uint64(test.testParam.BufferSize))
 		}
 	}
+}
+
+func runHTTPLatencyTest(test *ethrTest) {
+	uri := test.session.remoteAddr
+	uri = "http://" + uri + ":" + httpLatencyPort
+
+	buff := make([]byte, test.testParam.BufferSize)
+	for i := uint32(0); i < test.testParam.BufferSize; i++ {
+		buff[i] = 'x'
+	}
+	
+	rttCount := test.testParam.RttCount
+	latencyNumbers := make([]time.Duration, rttCount)
+	tr := &http.Transport{DisableCompression: true}
+	client := &http.Client{Transport: tr}
+ExitForLoop:
+	for {
+	ExitSelect:
+		select {
+		case <-test.done:
+			break ExitForLoop
+		default:
+			for i := uint32(0); i < rttCount; i++ {
+				s1 := time.Now()
+				response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
+				if err != nil {
+					break ExitSelect
+				} else {
+					if response.StatusCode != http.StatusOK {
+						break ExitSelect
+					}
+					contents, err := ioutil.ReadAll(response.Body)
+					response.Body.Close()
+					if err != nil {
+						break ExitSelect	
+					}
+					ethrUnused(contents)
+				}
+				e2 := time.Since(s1)
+				latencyNumbers[i] = e2
+			}
+
+		    calcLatency(test, rttCount, latencyNumbers)
+		}
+	}
+}
+
+func calcLatency (test *ethrTest, rttCount uint32, latencyNumbers []time.Duration) {
+    sum := int64(0)
+	for _, d := range latencyNumbers {
+		sum += d.Nanoseconds()
+	}
+	elapsed := time.Duration(sum / int64(rttCount))
+	sort.SliceStable(latencyNumbers, func(i, j int) bool {
+		return latencyNumbers[i] < latencyNumbers[j]
+	})
+	//
+	// Special handling for rttCount == 1. This prevents negative index
+	// in the latencyNumber index. The other option is to use
+	// roundUpToZero() but that is more expensive.
+	//
+	rttCountFixed := rttCount
+	if rttCountFixed == 1 {
+		rttCountFixed = 2
+	}
+	avg := elapsed
+	min := latencyNumbers[0]
+	max := latencyNumbers[rttCount-1]
+	p50 := latencyNumbers[((rttCountFixed*50)/100)-1]
+	p90 := latencyNumbers[((rttCountFixed*90)/100)-1]
+	p95 := latencyNumbers[((rttCountFixed*95)/100)-1]
+	p99 := latencyNumbers[((rttCountFixed*99)/100)-1]
+	p999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.9)/100)-1)]
+	p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
+	ui.emitLatencyResults(
+		test.session.remoteAddr,
+		protoToString(test.testParam.TestID.Protocol),
+		avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
