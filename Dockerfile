@@ -1,10 +1,8 @@
 FROM golang:1.11.3
 
-ADD ./ $GOPATH/src/ethr
+WORKDIR /app
 
-RUN mkdir /out
+ADD ./ /app
 
-WORKDIR $GOPATH/src/ethr
-
-RUN go get -u github.com/golang/dep/cmd/dep 
-RUN dep ensure -v 
+RUN mkdir /out && \
+    go get ./...
