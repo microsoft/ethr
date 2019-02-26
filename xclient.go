@@ -7,6 +7,7 @@ package main
 
 import (
 	"fmt"
+	"math/rand"
 	"net"
 	"os"
 	"sync/atomic"
@@ -34,6 +35,8 @@ func xcRunTest(test *ethrTest, d, g time.Duration) {
 			go xcRunTCPConnLatencyTest(test, g)
 		} else if test.testParam.TestID.Type == Bandwidth {
 			go xcRunTCPBandwidthTest(test)
+		} else if test.testParam.TestID.Type == ConcurrentConn {
+			go xcRunTCPConcurrencyTest(test)
 		}
 	}
 	test.isActive = true
@@ -181,5 +184,64 @@ func xcRunTCPBandwidthTest(test *ethrTest) {
 				}
 			}
 		}()
+	}
+}
+
+func xcRunTCPConcurrencyTest(test *ethrTest) {
+	wait := time.Duration(test.testParam.PingSleepTime) * time.Second
+
+	// Spread the total number of connections per second out over 30 seconds
+	// to ensure we don't overload the xserver.
+	spread := time.Duration(0)
+	if test.testParam.PingSpreadTime > 0 {
+		spread = time.Duration(int64(test.testParam.PingSpreadTime) * int64(time.Second) / int64(test.testParam.NumThreads))
+	}
+
+	// Seed the random number generator
+	rand.Seed(time.Now().UnixNano())
+
+	server := test.session.remoteAddr
+	ui.printMsg("Connecting to host %s, port %s", server, tcpBandwidthPort)
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		buff := make([]byte, test.testParam.PingBufferSize)
+		for i := uint32(0); i < test.testParam.PingBufferSize; i++ {
+			buff[i] = byte(i)
+		}
+		go func() {
+			conn, err := net.Dial(tcp(ipVer), server)
+			if err != nil {
+				ui.printErr("Error in dialing TCP connection: %v", err)
+				return
+			}
+			test.newConn(conn)
+			blen := len(buff)
+			addRef(test)
+			defer xcCloseConn(conn, test)
+
+			// Randomly sleep each thread in an attempt to smooth out the sending of data
+			randomSleep := rand.Int63n(wait.Nanoseconds())
+			time.Sleep(time.Duration(randomSleep) * time.Nanosecond)
+
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					n, err := conn.Write(buff)
+					if err != nil || n < blen {
+						return
+					}
+
+					atomic.AddUint64(&test.testResult.data, uint64(blen))
+
+					// Wait before looping and sending more data. This is used to
+					// limit the amount of data sent per thread in order to hit the
+					// maximum throughput desired for this test.
+					time.Sleep(wait)
+				}
+			}
+		}()
+		time.Sleep(spread)
 	}
 }

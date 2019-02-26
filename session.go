@@ -36,6 +36,9 @@ const (
 
 	// ConnLatency represents connection setup latency.
 	ConnLatency
+
+	// ConcurrentConn represents a concurrent connection test.
+	ConcurrentConn
 )
 
 // EthrProtocol represents the network protocol.
@@ -163,6 +166,16 @@ type EthrTestParam struct {
 
 	// Reverse mode for bandwidth tests.
 	Reverse bool
+
+	// PingSleepTime for Concurrent Connection Test
+	PingSleepTime uint32
+
+	// PingBufferSize represents the buffer size for the Concurrent Connection Test
+	PingBufferSize uint32
+
+	// PingSpreadTime represents the number of seconds Concurrent Connections should
+	// be spread over
+	PingSpreadTime uint32
 }
 
 type ethrTestResult struct {

@@ -9,6 +9,7 @@ import (
 	"errors"
 	"fmt"
 	"os"
+	"strconv"
 	"sync"
 	"sync/atomic"
 	"time"
@@ -115,7 +116,7 @@ func initServerTuiInternal() error {
 	tui.errX = tui.botVSplitX + 1
 	tui.errY = h - botScnH + 1
 	tui.errW = w - tui.msgW - 1
-	tui.res = table{6, []int{13, 5, 7, 7, 7, 8}, 0, 2, 0, justifyRight, noBorder}
+	tui.res = table{7, []int{13, 5, 7, 7, 7, 8, 10}, 0, 2, 0, justifyRight, noBorder}
 	tui.results = make([][]string, 0)
 	tui.msg = table{1, []int{tui.msgW}, tui.msgX, tui.msgY, 0, justifyLeft, noBorder}
 	tui.msgRing = make([]string, botScnH-1)
@@ -198,7 +199,7 @@ func (u *serverTui) emitTestResultEnd() {
 }
 
 func (u *serverTui) emitTestHdr() {
-	s := []string{"RemoteAddress", "Proto", "Bits/s", "Conn/s", "Pkts/s", "Latency"}
+	s := []string{"RemoteAddress", "Proto", "Bits/s", "Conn/s", "Pkts/s", "Latency", "Connections"}
 	u.resultHdr = s
 }
 
@@ -212,7 +213,7 @@ func (u *serverTui) emitLatencyResults(remote, proto string, avg, min, max, p50,
 func (u *serverTui) paint(seconds uint64) {
 	tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	defer tm.Flush()
-	printCenterText(0, 0, u.w, "Ethr " + gVersion, tm.ColorBlack, tm.ColorWhite)
+	printCenterText(0, 0, u.w, "Ethr "+gVersion, tm.ColorBlack, tm.ColorWhite)
 	printHLineText(u.resX, u.resY-1, u.resW, "Test Results")
 	printHLineText(u.statX, u.statY-1, u.statW, "Statistics")
 	printVLine(u.topVSplitX, u.topVSplitY, u.topVSplitH)
@@ -346,9 +347,9 @@ func (u *serverCli) emitTestResultEnd() {
 }
 
 func (u *serverCli) emitTestHdr() {
-	s := []string{"RemoteAddress", "Proto", "Bits/s", "Conn/s", "Pkt/s", "Latency"}
-	fmt.Println("-----------------------------------------------------------")
-	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", s[0], s[1], s[2], s[3], s[4], s[5])
+	s := []string{"RemoteAddress", "Proto", "Bits/s", "Conn/s", "Pkt/s", "Latency", "Connections"}
+	fmt.Println("------------------------------------------------------------------------")
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s  %10s\n", s[0], s[1], s[2], s[3], s[4], s[5], s[6])
 }
 
 func (u *serverCli) emitLatencyHdr() {
@@ -363,8 +364,8 @@ func (u *serverCli) emitStats(netStats ethrNetStat) {
 
 func (u *serverCli) printTestResults(s []string) {
 	logResults(s)
-	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateString(s[0], 13),
-		s[1], s[2], s[3], s[4], s[5])
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s  %11s\n", truncateString(s[0], 13),
+		s[1], s[2], s[3], s[4], s[5], s[6])
 }
 
 func emitAggregateResults() {
@@ -398,6 +399,7 @@ func emitAggregate(proto EthrProtocol) {
 func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
+	var connections int
 	aggTestResult, _ := gAggregateTestResults[proto]
 	test, found := s.tests[EthrTestID{proto, Bandwidth}]
 	if found && test.isActive {
@@ -406,6 +408,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		bw /= seconds
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
+		connections = test.connList.Len()
 	}
 	test, found = s.tests[EthrTestID{proto, Cps}]
 	if found && test.isActive {
@@ -429,9 +432,10 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		latency = atomic.LoadUint64(&test.testResult.data)
 	}
 	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
-		var bwStr, cpsStr, ppsStr, latStr string
+		var bwStr, cpsStr, ppsStr, latStr, connStr string
 		if bwTestOn {
 			bwStr = bytesToRate(bw)
+			connStr = strconv.Itoa(connections)
 		}
 		if cpsTestOn {
 			cpsStr = cpsToString(cps)
@@ -443,7 +447,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 			latStr = durationToString(time.Duration(latency))
 		}
 		str := []string{s.remoteAddr, protoToString(proto),
-			bwStr, cpsStr, ppsStr, latStr}
+			bwStr, cpsStr, ppsStr, latStr, connStr}
 		return str
 	}
 

@@ -68,11 +68,35 @@ func printTestType() {
 }
 
 func printExtTestType() {
-	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\")",
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\", or \"cc\")",
 		"b: Bandwidth",
 		"c: Connections/s or Requests/s",
 		"cl: TCP connection setup latency",
+		"cc: Concurrent Connections",
 		"Default: cl - TCP connection setup latency.")
+}
+
+func printPingSleepTimeUsage() {
+	printFlagUsage("pt", "<seconds>", "Number of seconds to sleep between each packet sent",
+		"The Ping Sleep Time option is used to control the amount of time each thread",
+		"will wait before sending the next packet. This is useful when you are testing concurrency",
+		"with a high number of threads and need to control packets per second or total bandwidth",
+		"Note: Each Session (thread) follows this limit independently",
+		"Default: 1")
+}
+
+func printPingSpreadTimeUsage() {
+	printFlagUsage("ps", "<seconds>", "Number of seconds to spread session/thread connections over",
+		"The Ping Spread Time is used to tune how fast connections are built to the server.",
+		"Note: The calculation is (number of threads) / (amount of spread time in seconds)",
+		"Default: 0")
+}
+
+func printPingBufLenUsage() {
+	printFlagUsage("pl", "<length>",
+		"Length of buffer to use (format: <num>[B | KB | MB | GB])",
+		"Only valid for Concurrent Connection tests. Max 1GB.",
+		"Default: 1300B")
 }
 
 func printThreadUsage() {
@@ -193,6 +217,9 @@ func ethrUsage() {
 	printExtProtocolUsage()
 	printExtTestType()
 	printGapUsage()
+	printPingSleepTimeUsage()
+	printPingSpreadTimeUsage()
+	printPingBufLenUsage()
 }
 
 func main() {
@@ -232,6 +259,9 @@ func main() {
 	reverse := flag.Bool("r", false, "")
 	ncs := flag.Bool("ncs", false, "")
 	ic := flag.Bool("ic", false, "")
+	pingSleepTime := flag.Int("pt", 1, "")
+	pingSpreadTime := flag.Int("ps", 0, "")
+	pingBufLenStr := flag.String("pl", "1300B", "")
 
 	flag.Parse()
 
@@ -295,6 +325,11 @@ func main() {
 		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
 	}
 
+	pingBufLen := unitToNumber(*pingBufLenStr)
+	if bufLen == 0 {
+		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *pingBufLenStr))
+	}
+
 	if *rttCount <= 0 {
 		printUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
 	}
@@ -322,6 +357,8 @@ func main() {
 		testType = Latency
 	case "cl":
 		testType = ConnLatency
+	case "cc":
+		testType = ConcurrentConn
 	default:
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
 			"Valid parameters and values are:\n", *testTypePtr))
@@ -362,7 +399,10 @@ func main() {
 		uint32(*thCount),
 		uint32(bufLen),
 		uint32(*rttCount),
-		*reverse}
+		*reverse,
+		uint32(*pingSleepTime),
+		uint32(pingBufLen),
+		uint32(*pingSpreadTime)}
 	validateTestParam(mode, testParam)
 
 	generatePortNumbers(*portStr)
@@ -454,7 +494,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			emitUnsupportedTest(testParam)
 		}
 	} else if mode == ethrModeExtClient {
-		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth) {
+		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth && testType != ConcurrentConn) {
 			emitUnsupportedTest(testParam)
 		}
 	}

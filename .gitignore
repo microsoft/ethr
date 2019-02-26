@@ -28,3 +28,4 @@
 
 # Golang vendor directory
 vendor/
+.vscode

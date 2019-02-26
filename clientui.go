@@ -143,13 +143,23 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 			gInterval, gInterval+1, bytesToRate(value))
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(value), "", "", ""})
+	} else if test.testParam.TestID.Type == ConcurrentConn {
+		if gInterval == 0 {
+			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+			ui.printMsg("[ ID]   Protocol    Interval      Bits/s     Connections")
+		}
+		ui.printMsg("[SUM]     %-5s    %03d-%03d sec   %7s     %d",
+			protoToString(test.testParam.TestID.Protocol),
+			gInterval, gInterval+1, bytesToRate(value), test.connList.Len())
+		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+			bytesToRate(value), "", "", ""})
 	}
 	gInterval++
 }
 
 func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
 	var data uint64
-	var testList = []EthrTestType{Bandwidth, Cps, Pps}
+	var testList = []EthrTestType{Bandwidth, Cps, Pps, ConcurrentConn}
 
 	for _, testType := range testList {
 		test, found := s.tests[EthrTestID{proto, testType}]

@@ -77,6 +77,7 @@ func xsRunTCPServer() {
 }
 
 func xsCloseConn(conn net.Conn, cpsTest, bwTest *ethrTest) {
+	bwTest.delConn(conn)
 	err := conn.Close()
 	if err != nil {
 		ui.printDbg("Failed to close TCP connection, error: %v", err)
@@ -102,6 +103,7 @@ func xserverTCPHandler(conn net.Conn) {
 		ui.emitTestHdr()
 	}
 	bwTest, _ := createOrGetTest(server, TCP, Bandwidth)
+	bwTest.newConn(conn)
 	defer xsCloseConn(conn, cpsTest, bwTest)
 	buff := make([]byte, 2048)
 	for {
