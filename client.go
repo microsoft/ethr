@@ -72,6 +72,7 @@ func establishSession(testParam EthrTestParam, server string) (test *ethrTest, e
 			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
 		}
 		deleteTest(test)
+		return nil, err
 	}
 	gCert = ethrMsg.Ack.Cert
 	napDuration := ethrMsg.Ack.NapDuration
@@ -302,7 +303,7 @@ ExitForLoop:
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
 
-		    calcLatency(test, rttCount, latencyNumbers)
+			calcLatency(test, rttCount, latencyNumbers)
 		}
 	}
 }
@@ -467,7 +468,7 @@ func runHTTPLatencyTest(test *ethrTest) {
 	for i := uint32(0); i < test.testParam.BufferSize; i++ {
 		buff[i] = 'x'
 	}
-	
+
 	rttCount := test.testParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
 	tr := &http.Transport{DisableCompression: true}
@@ -491,7 +492,7 @@ ExitForLoop:
 					contents, err := ioutil.ReadAll(response.Body)
 					response.Body.Close()
 					if err != nil {
-						break ExitSelect	
+						break ExitSelect
 					}
 					ethrUnused(contents)
 				}
@@ -499,13 +500,13 @@ ExitForLoop:
 				latencyNumbers[i] = e2
 			}
 
-		    calcLatency(test, rttCount, latencyNumbers)
+			calcLatency(test, rttCount, latencyNumbers)
 		}
 	}
 }
 
-func calcLatency (test *ethrTest, rttCount uint32, latencyNumbers []time.Duration) {
-    sum := int64(0)
+func calcLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.Duration) {
+	sum := int64(0)
 	for _, d := range latencyNumbers {
 		sum += d.Nanoseconds()
 	}
