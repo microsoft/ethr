@@ -1,8 +1,7 @@
 language: go
 
 go:
-- '1.11'
-- master
+- stable
 
 os:
 - linux
@@ -46,7 +45,7 @@ deploy:
   - ethr_windows.zip
   - ethr_osx.zip
   on:
-    repo: Microsoft/ethr
+    repo: microsoft/ethr
     branch: master
     tags: true
 
