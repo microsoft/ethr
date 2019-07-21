@@ -9,6 +9,8 @@ import (
 	"fmt"
 	"sync/atomic"
 	"time"
+
+	"github.com/microsoft/ethr/internal/stats"
 )
 
 type clientUI struct {
@@ -68,7 +70,7 @@ func (u *clientUI) emitLatencyResults(remote, proto string, avg, min, max, p50, 
 func (u *clientUI) emitTestResultEnd() {
 }
 
-func (u *clientUI) emitStats(netStats ethrNetStat) {
+func (u *clientUI) emitStats(netStats stats.EthrNetStats) {
 }
 
 func (u *clientUI) printTestResults(s []string) {

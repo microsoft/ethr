@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/mattn/go-runewidth"
+	"github.com/microsoft/ethr/internal/stats"
 	tm "github.com/nsf/termbox-go"
 )
 
@@ -222,7 +223,7 @@ type ethrUI interface {
 	emitTestResult(*ethrSession, EthrProtocol, uint64)
 	printTestResults([]string)
 	emitTestResultEnd()
-	emitStats(ethrNetStat)
+	emitStats(stats.EthrNetStats)
 }
 
 var ui ethrUI
