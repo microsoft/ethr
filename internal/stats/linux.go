@@ -9,6 +9,7 @@ package stats
 
 import (
 	"bufio"
+	"fmt"
 	"net"
 	"os"
 	"strconv"
@@ -75,6 +76,13 @@ func (s osStats) GetNetDevStats() ([]EthrNetDevStat, error) {
 func buildNetDevStat(line string) (EthrNetDevStat, error) {
 	fields := strings.Fields(line)
 	interfaceName := strings.TrimSuffix(fields[0], ":")
+
+	if len(fields) < 18 {
+		return EthrNetDevStat{}, errors.New(
+			fmt.Sprintf(
+				"buildNetDevStat: unexpected net stats file format, erroneous line %s"),
+			line)
+	}
 
 	rxInfo, err := toNetDevInfo(fields[1:9])
 	if err != nil {
