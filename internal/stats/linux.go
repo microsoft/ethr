@@ -80,8 +80,8 @@ func buildNetDevStat(line string) (EthrNetDevStat, error) {
 	if len(fields) < 18 {
 		return EthrNetDevStat{}, errors.New(
 			fmt.Sprintf(
-				"buildNetDevStat: unexpected net stats file format, erroneous line %s"),
-			line)
+				"buildNetDevStat: unexpected net stats file format, erroneous line %s",
+				line))
 	}
 
 	rxInfo, err := toNetDevInfo(fields[1:9])
