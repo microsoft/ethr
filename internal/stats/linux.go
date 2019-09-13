@@ -77,7 +77,7 @@ func buildNetDevStat(line string) (EthrNetDevStat, error) {
 	fields := strings.Fields(line)
 	interfaceName := strings.TrimSuffix(fields[0], ":")
 
-	if len(fields) < 18 {
+	if len(fields) < 17 {
 		return EthrNetDevStat{}, errors.New(
 			fmt.Sprintf(
 				"buildNetDevStat: unexpected net stats file format, erroneous line %s",
