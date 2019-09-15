@@ -29,7 +29,7 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 	server = "[" + server + "]"
 	test, err := establishSession(testParam, server)
 	if err != nil {
-		ui.printErr("%v", err)
+		ui.printErr("runClient: %v", err)
 		return
 	}
 	runTest(test, clientParam.duration)
@@ -190,7 +190,7 @@ func runTCPBandwidthTest(test *ethrTest) {
 		go func() {
 			conn, err := net.Dial(tcp(ipVer), server+":"+tcpBandwidthPort)
 			if err != nil {
-				ui.printErr("%v", err)
+				ui.printErr("runTCPBandwidthTest: %v", err)
 				os.Exit(1)
 				return
 			}
@@ -254,7 +254,7 @@ func runTCPLatencyTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	conn, err := net.Dial(tcp(ipVer), server+":"+tcpLatencyPort)
 	if err != nil {
-		ui.printErr("Error dialing the latency connection: %v", err)
+		ui.printErr("runTCPLatencyTest: error dialing the latency connection: %v", err)
 		os.Exit(1)
 		return
 	}
@@ -411,7 +411,7 @@ func runHTTPSBandwidthTest(test *ethrTest) {
 		}
 		c, err := x509.ParseCertificate(gCert)
 		if err != nil {
-			ui.printErr("Failed to parse certificate: %v", err)
+			ui.printErr("runHTTPSBandwidthTest: failed to parse certificate: %v", err)
 		}
 		clientCertPool := x509.NewCertPool()
 		clientCertPool.AddCert(c)

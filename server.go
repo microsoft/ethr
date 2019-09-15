@@ -42,7 +42,7 @@ func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	for {
 		conn, err := l.Accept()
 		if err != nil {
-			ui.printErr("Error accepting new control connection: %v", err)
+			ui.printErr("runServer: error accepting new control connection: %v", err)
 			continue
 		}
 		go handleRequest(conn)
@@ -125,7 +125,7 @@ func handleRequest(conn net.Conn) {
 	ethrMsg = createAckMsg(gCert, delay)
 	err = sendSessionMsg(enc, ethrMsg)
 	if err != nil {
-		ui.printErr("send session message: %v", err)
+		ui.printErr("handleRequest: send session message: %v", err)
 		cleanupFunc()
 		return
 	}
@@ -168,7 +168,7 @@ func runTCPBandwidthServer() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				ui.printErr("Error accepting new bandwidth connection: %v", err)
+				ui.printErr("runTCPBandwidthServer: error accepting new bandwidth connection: %v", err)
 				continue
 			}
 			server, port, _ := net.SplitHostPort(conn.RemoteAddr().String())
@@ -263,7 +263,7 @@ func runTCPLatencyServer() {
 		for {
 			conn, err := l.Accept()
 			if err != nil {
-				ui.printErr("Error accepting new latency connection: %v", err)
+				ui.printErr("runTCPLatencyServer: error accepting new latency connection: %v", err)
 				continue
 			}
 			server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
@@ -440,7 +440,7 @@ func runHTTPBandwidthServer() {
 	sm.HandleFunc("/", runHTTPBandwidthHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpBandwidthPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server. Error in listening on socket: %v", err)
+		ui.printErr("runHTTPBandwidthServer: unable to start HTTP server. Error in listening on socket: %v", err)
 		return
 	}
 	ui.printMsg("Listening on " + httpBandwidthPort + " for HTTP bandwidth tests")
@@ -454,7 +454,7 @@ func runHTTPBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 func runHTTPSBandwidthServer() {
 	cert, err := genX509KeyPair()
 	if err != nil {
-		ui.printErr("Unable to start HTTPS server. Error in X509 certificate: %v", err)
+		ui.printErr("runHTTPSBandwidthServer: unable to start HTTPS server. Error in X509 certificate: %v", err)
 		return
 	}
 	config := &tls.Config{}
@@ -465,7 +465,7 @@ func runHTTPSBandwidthServer() {
 	sm.HandleFunc("/", runHTTPSBandwidthHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpsBandwidthPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTPS server. Error in listening on socket: %v", err)
+		ui.printErr("runHTTPSBandwidthServer: unable to start HTTPS server. Error in listening on socket: %v", err)
 		return
 	}
 	ui.printMsg("Listening on " + httpsBandwidthPort + " for HTTPS bandwidth tests")
@@ -480,7 +480,7 @@ func runHTTPSBandwidthHandler(w http.ResponseWriter, r *http.Request) {
 func runHTTPServer(l net.Listener, handler http.Handler) error {
 	err := http.Serve(l, handler)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server, error: %v", err)
+		ui.printErr("runHTTPServer: unable to start HTTP server, error: %v", err)
 	}
 	return err
 }
@@ -593,7 +593,7 @@ func runHTTPLatencyServer() {
 	sm.HandleFunc("/", runHTTPLatencyHandler)
 	l, err := net.Listen(tcp(ipVer), ":"+httpLatencyPort)
 	if err != nil {
-		ui.printErr("Unable to start HTTP server. Error in listening on socket: %v", err)
+		ui.printErr("runHTTPLatencyServer: unable to start HTTP server. Error in listening on socket: %v", err)
 		return
 	}
 	ui.printMsg("Listening on " + httpLatencyPort + " for HTTP latency tests")
