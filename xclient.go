@@ -17,7 +17,7 @@ func runXClient(testParam EthrTestParam, clientParam ethrClientParam, server str
 	initClient()
 	test, err := newTest(server, nil, testParam, nil, nil)
 	if err != nil {
-		ui.printErr("Failed to create the new test.")
+		ui.printErr("runXClient: failed to create the new test.")
 		return
 	}
 	xcRunTest(test, clientParam.duration, clientParam.gap)
@@ -147,7 +147,7 @@ func xcRunTCPBandwidthTest(test *ethrTest) {
 		go func() {
 			conn, err := net.Dial(tcp(ipVer), server)
 			if err != nil {
-				ui.printErr("Error in dialing TCP connection: %v", err)
+				ui.printErr("xcRunTCPBandwidthTest: error in dialing TCP connection: %v", err)
 				os.Exit(1)
 				return
 			}

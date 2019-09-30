@@ -148,29 +148,33 @@ func (s osStats) GetTCPStats() (EthrTCPStat, error) {
 
 	reader := bufio.NewReader(snmpStatsFile)
 
+	retransSeg, err := parseSNMPProcfile(reader)
+	if err != nil {
+		return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: could not parse /proc/net/snmp")
+	}
+	return EthrTCPStat{retransSeg}, nil
+}
+
+// parseSNMPProcfile parses the /proc/net/snmp file to look for the TCP
+// retransmission segments count
+func parseSNMPProcfile(reader *bufio.Reader) (uint64, error) {
+	// Header line we're looking for:
 	// Tcp: RtoAlgorithm RtoMin RtoMax MaxConn ActiveOpens PassiveOpens AttemptFails EstabResets
 	//      CurrEstab InSegs OutSegs RetransSegs InErrs OutRsts InCsumErrors
-	line, err := reader.ReadString('\n')
-	if err != nil {
-		return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: error reading from /proc/net/snmp")
-	}
-	if line == "" || !strings.HasPrefix(line, "Tcp") {
-		return EthrTCPStat{}, errors.New("GetTCPStats: could not find a TCP info")
-	}
 
-	// Skip the first line starting with Tcp
-	line, err = reader.ReadString('\n')
-	if err != nil {
-		return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: error reading from /proc/net/snmp")
+	scanner := bufio.NewScanner(reader)
+	scanner.Split(bufio.ScanLines)
+	for scanner.Scan() {
+		line := scanner.Text()
+		if line == "" || !strings.HasPrefix(line, "Tcp") {
+			continue
+		}
+		fields := strings.Fields(line)
+		intField, err := strconv.ParseUint(fields[12], 10, 64)
+		if err != nil {
+			continue
+		}
+		return intField, nil
 	}
-	if !strings.HasPrefix(line, "Tcp") {
-		return EthrTCPStat{}, errors.New("GetTCPStats: could not find TCP info")
-	}
-
-	fields := strings.Fields(line)
-	intField, err := strconv.ParseUint(fields[12], 10, 64)
-	if err != nil {
-		return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: could not convert field data to integer")
-	}
-	return EthrTCPStat{intField}, nil
+	return 0, errors.New("parseSNMPProcfile: could not find a valid number")
 }

@@ -114,7 +114,7 @@ func emitStats() {
 	ui.emitTestResultEnd()
 	stats, err := getNetworkStats()
 	if err != nil {
-		ui.printErr("could not get network stats")
+		ui.printErr("emitStats: could not get network stats: %v", err)
 	}
 	ui.emitStats(stats)
 	ui.paint(uint64(seconds))
