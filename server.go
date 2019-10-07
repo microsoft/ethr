@@ -281,9 +281,6 @@ func runTCPLatencyServer() {
 func runTCPLatencyHandler(conn net.Conn, test *ethrTest) {
 	defer conn.Close()
 	bytes := make([]byte, test.testParam.BufferSize)
-	// TODO Override buffer size to 1 for now. Evaluate if we need to allow
-	// client to specify the buffer size in future.
-	bytes = make([]byte, 1)
 	rttCount := test.testParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
 	for {
