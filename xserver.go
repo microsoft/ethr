@@ -6,31 +6,13 @@
 package main
 
 import (
-	/*
-		"crypto/rand"
-		"crypto/rsa"
-		"crypto/tls"
-		"crypto/x509"
-		"crypto/x509/pkix"
-		"encoding/gob"
-	*/
 	"fmt"
-	/*
-		"io"
-		"io/ioutil"
-		"math/big"
-	*/
 	"net"
-	/*
-		"net/http"
-	*/
 	"os"
-	/*
-		"runtime"
-		"sort"
-	*/
 	"sync/atomic"
 	"time"
+
+	"github.com/microsoft/ethr/internal/ethrLog"
 )
 
 func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
@@ -52,7 +34,7 @@ func initXServer(showUI bool) {
 
 func finiXServer() {
 	ui.fini()
-	logFini()
+	ethrLog.LogFini()
 }
 
 func xsRunTCPServer() {

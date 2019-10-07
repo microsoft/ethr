@@ -3,7 +3,7 @@
 // Licensed under the MIT license.
 // See LICENSE.txt file in the project root for full license information.
 //-----------------------------------------------------------------------------
-package main
+package ethrLog
 
 import (
 	"encoding/json"
@@ -11,6 +11,8 @@ import (
 	"log"
 	"os"
 	"time"
+
+	"github.com/microsoft/ethr/utils"
 )
 
 type logMessage struct {
@@ -47,14 +49,12 @@ type logTestResults struct {
 }
 
 var loggingActive = false
-var logDebug = false
 var logChan = make(chan string, 64)
 
-func logInit(fileName string, debug bool) {
+func LogInit(fileName string) {
 	if fileName == "" {
 		return
 	}
-	logDebug = debug
 	logFile, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
 		fmt.Printf("Unable to open the log file %s, Error: %v", fileName, err)
@@ -66,7 +66,7 @@ func logInit(fileName string, debug bool) {
 	go runLogger(logFile)
 }
 
-func logFini() {
+func LogFini() {
 	loggingActive = false
 }
 
@@ -78,7 +78,7 @@ func runLogger(logFile *os.File) {
 	logFile.Close()
 }
 
-func _log(prefix, msg string) {
+func logMsg(prefix, msg string) {
 	if loggingActive {
 		logData := logMessage{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
@@ -89,21 +89,19 @@ func _log(prefix, msg string) {
 	}
 }
 
-func logMsg(msg string) {
-	_log("INFO", msg)
+func Info(msg string) {
+	logMsg("INFO", msg)
 }
 
-func logErr(msg string) {
-	_log("ERROR", msg)
+func Error(msg string) {
+	logMsg("ERROR", msg)
 }
 
-func logDbg(msg string) {
-	if logDebug {
-		_log("DEBUG", msg)
-	}
+func Debug(msg string) {
+	logMsg("DEBUG", msg)
 }
 
-func logResults(s []string) {
+func LogResults(s []string) {
 	if loggingActive {
 		logData := logTestResults{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
@@ -119,22 +117,22 @@ func logResults(s []string) {
 	}
 }
 
-func logLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
+func LogLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
 	if loggingActive {
 		logData := logLatencyData{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
 		logData.Type = "LatencyResult"
 		logData.RemoteAddr = remoteAddr
 		logData.Protocol = proto
-		logData.Avg = durationToString(avg)
-		logData.Min = durationToString(min)
-		logData.P50 = durationToString(p50)
-		logData.P90 = durationToString(p90)
-		logData.P95 = durationToString(p95)
-		logData.P99 = durationToString(p99)
-		logData.P999 = durationToString(p999)
-		logData.P9999 = durationToString(p9999)
-		logData.Max = durationToString(max)
+		logData.Avg = utils.DurationToString(avg)
+		logData.Min = utils.DurationToString(min)
+		logData.P50 = utils.DurationToString(p50)
+		logData.P90 = utils.DurationToString(p90)
+		logData.P95 = utils.DurationToString(p95)
+		logData.P99 = utils.DurationToString(p99)
+		logData.P999 = utils.DurationToString(p999)
+		logData.P9999 = utils.DurationToString(p9999)
+		logData.Max = utils.DurationToString(max)
 		logJSON, _ := json.Marshal(logData)
 		logChan <- string(logJSON)
 	}
