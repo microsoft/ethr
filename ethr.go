@@ -13,11 +13,15 @@ import (
 	"time"
 
 	"github.com/microsoft/ethr/internal/cmd"
+	"github.com/microsoft/ethr/internal/ethrLog"
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
 
-var gVersion string
+var (
+	gVersion     string
+	loggingLevel ethrLog.LogLevel = ethrLog.LogLevelInfo
+)
 
 func main() {
 	//
@@ -74,6 +78,10 @@ func main() {
 	// Only used in client mode to ignore HTTPS cert errors.
 	//
 	gIgnoreCert = *ic
+
+	if *debug {
+		loggingLevel = ethrLog.LogLevelDebug
+	}
 
 	xMode := false
 	switch *modeStr {
@@ -205,7 +213,7 @@ func main() {
 				logFileName = "ethrxc.log"
 			}
 		}
-		logInit(logFileName, *debug)
+		ethrLog.LogInit(logFileName)
 	}
 
 	clientParam := ethrClientParam{*duration, *gap}

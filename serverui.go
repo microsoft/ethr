@@ -13,8 +13,10 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/microsoft/ethr/internal/ethrLog"
 	"github.com/microsoft/ethr/internal/plot"
 	"github.com/microsoft/ethr/internal/stats"
+	"github.com/microsoft/ethr/utils"
 	tm "github.com/nsf/termbox-go"
 )
 
@@ -148,7 +150,7 @@ func (u *serverTui) fini() {
 
 func (u *serverTui) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	logMsg(s)
+	ethrLog.Info(s)
 	ss := splitString(s, u.msgW)
 	u.ringLock.Lock()
 	u.msgRing = u.msgRing[len(ss):]
@@ -158,7 +160,7 @@ func (u *serverTui) printMsg(format string, a ...interface{}) {
 
 func (u *serverTui) printErr(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	logErr(s)
+	ethrLog.Error(s)
 	ss := splitString(s, u.errW)
 	u.ringLock.Lock()
 	u.errRing = u.errRing[len(ss):]
@@ -167,15 +169,16 @@ func (u *serverTui) printErr(format string, a ...interface{}) {
 }
 
 func (u *serverTui) printDbg(format string, a ...interface{}) {
-	if logDebug {
-		s := fmt.Sprintf(format, a...)
-		logDbg(s)
-		ss := splitString(s, u.errW)
-		u.ringLock.Lock()
-		u.errRing = u.errRing[len(ss):]
-		u.errRing = append(u.errRing, ss...)
-		u.ringLock.Unlock()
+	if loggingLevel != ethrLog.LogLevelDebug {
+		return
 	}
+	s := fmt.Sprintf(format, a...)
+	ethrLog.Debug(s)
+	ss := splitString(s, u.errW)
+	u.ringLock.Lock()
+	u.errRing = u.errRing[len(ss):]
+	u.errRing = append(u.errRing, ss...)
+	u.ringLock.Unlock()
 }
 
 func (u *serverTui) emitTestResultBegin() {
@@ -191,7 +194,7 @@ func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds u
 
 func (u *serverTui) printTestResults(s []string) {
 	// Log before truncation of remote address.
-	logResults(s)
+	ethrLog.LogResults(s)
 	s[0] = truncateString(s[0], 13)
 	u.results = append(u.results, s)
 }
@@ -209,7 +212,7 @@ func (u *serverTui) emitLatencyHdr() {
 }
 
 func (u *serverTui) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
-	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
+	ethrLog.LogLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
 func (u *serverTui) paint(seconds uint64) {
@@ -308,21 +311,22 @@ func (u *serverCli) fini() {
 func (u *serverCli) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
-	logMsg(s)
+	ethrLog.Info(s)
 }
 
 func (u *serverCli) printDbg(format string, a ...interface{}) {
-	if logDebug {
-		s := fmt.Sprintf(format, a...)
-		fmt.Println(s)
-		logDbg(s)
+	if loggingLevel != ethrLog.LogLevelDebug {
+		return
 	}
+	s := fmt.Sprintf(format, a...)
+	fmt.Println(s)
+	ethrLog.Debug(s)
 }
 
 func (u *serverCli) printErr(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
-	logErr(s)
+	ethrLog.Error(s)
 }
 
 func (u *serverCli) paint(seconds uint64) {
@@ -358,14 +362,14 @@ func (u *serverCli) emitLatencyHdr() {
 }
 
 func (u *serverCli) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
-	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
+	ethrLog.LogLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
 func (u *serverCli) emitStats(netStats stats.EthrNetStats) {
 }
 
 func (u *serverCli) printTestResults(s []string) {
-	logResults(s)
+	ethrLog.LogResults(s)
 	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateString(s[0], 13),
 		s[1], s[2], s[3], s[4], s[5])
 }
@@ -443,7 +447,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 			ppsStr = ppsToString(pps)
 		}
 		if latTestOn {
-			latStr = durationToString(time.Duration(latency))
+			latStr = utils.DurationToString(time.Duration(latency))
 		}
 		str := []string{s.remoteAddr, protoToString(proto),
 			bwStr, cpsStr, ppsStr, latStr}

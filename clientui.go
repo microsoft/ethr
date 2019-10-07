@@ -10,7 +10,9 @@ import (
 	"sync/atomic"
 	"time"
 
+	"github.com/microsoft/ethr/internal/ethrLog"
 	"github.com/microsoft/ethr/internal/stats"
+	"github.com/microsoft/ethr/utils"
 )
 
 type clientUI struct {
@@ -21,22 +23,20 @@ func (u *clientUI) fini() {
 
 func (u *clientUI) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	logMsg(s)
+	ethrLog.Info(s)
 	fmt.Println(s)
 }
 
 func (u *clientUI) printErr(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	logErr(s)
+	ethrLog.Error(s)
 	fmt.Println(s)
 }
 
 func (u *clientUI) printDbg(format string, a ...interface{}) {
-	if logDebug {
-		s := fmt.Sprintf(format, a...)
-		logDbg(s)
-		fmt.Println(s)
-	}
+	s := fmt.Sprintf(format, a...)
+	ethrLog.Debug(s)
+	fmt.Println(s)
 }
 
 func (u *clientUI) paint(seconds uint64) {
@@ -58,13 +58,13 @@ func (u *clientUI) emitLatencyHdr() {
 }
 
 func (u *clientUI) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
-	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
+	ethrLog.LogLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 	fmt.Printf("%8s %8s %8s %8s %8s %8s %8s %8s %8s\n",
-		durationToString(avg), durationToString(min),
-		durationToString(p50), durationToString(p90),
-		durationToString(p95), durationToString(p99),
-		durationToString(p999), durationToString(p9999),
-		durationToString(max))
+		utils.DurationToString(avg), utils.DurationToString(min),
+		utils.DurationToString(p50), utils.DurationToString(p90),
+		utils.DurationToString(p95), utils.DurationToString(p99),
+		utils.DurationToString(p999), utils.DurationToString(p9999),
+		utils.DurationToString(max))
 }
 
 func (u *clientUI) emitTestResultEnd() {
@@ -112,7 +112,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 				ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
 			}
 		}
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		ethrLog.LogResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(cvalue), "", "", ""})
 	} else if test.testParam.TestID.Type == Cps {
 		if gInterval == 0 {
@@ -122,7 +122,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
 			protoToString(test.testParam.TestID.Protocol),
 			gInterval, gInterval+1, cpsToString(value))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		ethrLog.LogResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			"", cpsToString(value), "", ""})
 	} else if test.testParam.TestID.Type == Pps {
 		if gInterval == 0 {
@@ -132,7 +132,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
 			protoToString(test.testParam.TestID.Protocol),
 			gInterval, gInterval+1, ppsToString(value))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		ethrLog.LogResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			"", "", ppsToString(value), ""})
 	} else if test.testParam.TestID.Type == Bandwidth &&
 		(test.testParam.TestID.Protocol == HTTP || test.testParam.TestID.Protocol == HTTPS) {
@@ -143,7 +143,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
 			protoToString(test.testParam.TestID.Protocol),
 			gInterval, gInterval+1, bytesToRate(value))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		ethrLog.LogResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(value), "", "", ""})
 	}
 	gInterval++
