@@ -42,7 +42,7 @@ func main() {
 	clientDest := flag.String("c", "", "")
 	testTypePtr := flag.String("t", "", "")
 	thCount := flag.Int("n", 1, "")
-	bufLenStr := flag.String("l","", "")
+	bufLenStr := flag.String("l", "", "")
 	protocol := flag.String("p", "tcp", "")
 	outputFile := flag.String("o", defaultLogFileName, "")
 	debug := flag.Bool("debug", false, "")
