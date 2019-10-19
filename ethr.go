@@ -17,6 +17,8 @@ import (
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
+const latencyDefaultBufferLenStr = "1B"
+const defaultBufferLenStr = "16KB"
 
 var (
 	gVersion     string
@@ -44,7 +46,7 @@ func main() {
 	clientDest := flag.String("c", "", "")
 	testTypePtr := flag.String("t", "", "")
 	thCount := flag.Int("n", 1, "")
-	bufLenStr := flag.String("l", "16KB", "")
+	bufLenStr := flag.String("l", "", "")
 	protocol := flag.String("p", "tcp", "")
 	outputFile := flag.String("o", defaultLogFileName, "")
 	debug := flag.Bool("debug", false, "")
@@ -120,6 +122,12 @@ func main() {
 		ipVer = ethrIPv4
 	} else if *use6 && !*use4 {
 		ipVer = ethrIPv6
+	}
+
+	//Default latency test to 1KB if length is not specified
+	switch *bufLenStr {
+	case "":
+		*bufLenStr = getDefaultBufferLenStr(*testTypePtr)
 	}
 
 	bufLen := unitToNumber(*bufLenStr)
@@ -229,6 +237,13 @@ func main() {
 	case ethrModeExtClient:
 		runXClient(testParam, clientParam, *clientDest)
 	}
+}
+
+func getDefaultBufferLenStr(testTypePtr string) string {
+	if testTypePtr == "l" {
+		return latencyDefaultBufferLenStr
+	}
+	return defaultBufferLenStr
 }
 
 func emitUnsupportedTest(testParam EthrTestParam) {

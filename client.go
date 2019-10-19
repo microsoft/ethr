@@ -260,9 +260,6 @@ func runTCPLatencyTest(test *ethrTest) {
 	}
 	defer conn.Close()
 	buffSize := test.testParam.BufferSize
-	// TODO Override buffer size to 1 for now. Evaluate if we need to allow
-	// client to specify the buffer size in future.
-	buffSize = 1
 	buff := make([]byte, buffSize)
 	for i := uint32(0); i < buffSize; i++ {
 		buff[i] = byte(i)
