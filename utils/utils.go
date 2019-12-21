@@ -27,7 +27,7 @@ func DurationToString(d time.Duration) string {
 			unit = "s"
 		}
 
-		result := strconv.FormatFloat(val, 'f', 2, 64)
+		result := strconv.FormatFloat(val, 'f', 3, 64)
 		return result + unit
 	}
 
