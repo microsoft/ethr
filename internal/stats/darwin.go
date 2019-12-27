@@ -308,9 +308,8 @@ func (s osStats) GetNetDevStats() ([]EthrNetDevStat, error) {
 	}
 
 	var res []EthrNetDevStat
-	res = make([]EthrNetDevStat, len(ifs))
 
-	for i, iface := range ifs {
+	for _, iface := range ifs {
 		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}
@@ -322,13 +321,13 @@ func (s osStats) GetNetDevStats() ([]EthrNetDevStat, error) {
 			continue
 		}
 
-		res[i] = EthrNetDevStat{
+		res = append(res, EthrNetDevStat{
 			InterfaceName: iface.Name,
 			RxBytes:       ifaceData.Data.Ibytes,
 			RxPkts:        ifaceData.Data.Ipackets,
 			TxBytes:       ifaceData.Data.Obytes,
 			TxPkts:        ifaceData.Data.Opackets,
-		}
+		})
 	}
 	return res, nil
 }
