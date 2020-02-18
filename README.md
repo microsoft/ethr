@@ -71,6 +71,18 @@ Assuming you are using [`yay`](https://aur.archlinux.org/packages/yay/) (https:/
 ```
 yay -S ethr
 ```
+# Publishing Nuget package
+Follow the topic Building from Source to build ethr.exe
+
+Modify ethr.nuspec to add new release version
+```
+vim ethr.nuspec
+```
+Create a nuget package(like Ethr.0.2.1.nupkg)
+```
+nuget.exe pack ethr.nuspec
+```
+Upload the package to nuget.org.
 
 # Usage
 
