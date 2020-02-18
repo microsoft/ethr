@@ -1,0 +1,23 @@
+<?xml version="1.0"?>
+<package >
+  <metadata>
+    <id>Ethr</id>
+    <version>0.2.1</version>
+    <authors>Pankaj Garg</authors>
+    <owners>Pankaj Garg</owners>
+    <projectUrl>https://github.com/microsoft/ethr</projectUrl>
+    <requireLicenseAcceptance>false</requireLicenseAcceptance>
+    <description>Ethr is a Network Performance Measurement Tool for TCP, UDP and HTTP.</description>
+    <releaseNotes>This version supports many new options and features described below:
+	    1> -4 or -6 to use specific IP version
+	    2> Reverse mode for TCP
+	    3> HTTPS support
+	    4> External mode for server and client
+	    5> Many more features and options</releaseNotes>
+    <copyright>Copyright 2020</copyright>
+    <tags>Network Performance</tags>
+  </metadata>
+  <files>
+    <file src="ethr.exe" />
+  </files>
+</package>
