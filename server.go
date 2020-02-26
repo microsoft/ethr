@@ -32,6 +32,7 @@ var gCert []byte
 func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
+	showAcceptedIPVersion()
 	runTCPBandwidthServer()
 	runTCPCpsServer()
 	runTCPLatencyServer()
@@ -155,6 +156,16 @@ func handleRequest(conn net.Conn) {
 
 func serverWatchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
 	watchControlChannel(test, waitForChannelStop)
+}
+
+func showAcceptedIPVersion() {
+	var ipVerString = "ipv4, ipv6"
+	if ipVer == ethrIPv4 {
+		ipVerString = "ipv4"
+	} else if ipVer == ethrIPv6 {
+		ipVerString = "ipv6"
+	}
+	ui.printMsg("Accepting IP version: %s", ipVerString)
 }
 
 func runTCPBandwidthServer() {
