@@ -5,16 +5,77 @@
 // Licensed under the MIT license.
 // See LICENSE.txt file in the project root for full license information.
 //-----------------------------------------------------------------------------
-package stats
+package main
 
 import (
 	"bytes"
 	"encoding/binary"
 	"net"
 
-	"github.com/pkg/errors"
 	"golang.org/x/sys/unix"
+	tm "github.com/nsf/termbox-go"
 )
+
+func getNetDevStats(stats *ethrNetStat) {
+	ifs, err := net.Interfaces()
+	if err != nil {
+		ui.printErr("%v", err)
+		return
+	}
+
+	for _, iface := range ifs {
+		if iface.Flags & net.FlagUp == 0 {
+			continue
+		}
+
+		ifaceData, err := getIfaceData(iface.Index)
+		if err != nil {
+			ui.printErr("Failed to load data for interface %q: %v", iface.Name, err)
+			continue
+		}
+
+		stats.netDevStats = append(stats.netDevStats, ethrNetDevStat{
+			interfaceName: iface.Name,
+			rxBytes:       ifaceData.Data.Ibytes,
+			rxPkts:        ifaceData.Data.Ipackets,
+			txBytes:       ifaceData.Data.Obytes,
+			txPkts:        ifaceData.Data.Opackets,
+		})
+	}
+}
+
+func getTCPStats(stats *ethrNetStat) {
+	var data tcpStat
+	rawData, err := unix.SysctlRaw("net.inet.tcp.stats")
+	if err != nil {
+		// return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: could not get net.inet.tcp.stats")
+		return
+	}
+	buf := bytes.NewReader(rawData)
+	binary.Read(buf, binary.LittleEndian, &data)
+
+	// return EthrTCPStat{uint64(data.Sndrexmitpack)}, nil
+	// return the TCP Retransmits	
+	stats.tcpStats.segRetrans = uint64(data.Sndrexmitpack)
+	return
+}
+
+func hideCursor() {
+	tm.SetCursor(0, 0)
+}
+
+func blockWindowResize() {
+}
+
+func getIfaceData(index int) (*ifMsghdr2, error) {
+	var data ifMsghdr2
+	rawData, err := unix.SysctlRaw("net", unix.AF_ROUTE, 0, 0, unix.NET_RT_IFLIST2, index)
+	if err != nil {
+		return nil, err
+	}
+	err = binary.Read(bytes.NewReader(rawData), binary.LittleEndian, &data)
+	return &data, err
+}
 
 type ifMsghdr2 struct {
 	Msglen    uint16
@@ -296,61 +357,4 @@ type tcpStat struct {
 	Mptcp_wifi_proxy                 uint32
 	Mptcp_cell_proxy                 uint32
 	_                                [4]byte
-}
-
-type osStats struct {
-}
-
-func (s osStats) GetNetDevStats() ([]EthrNetDevStat, error) {
-	ifs, err := net.Interfaces()
-	if err != nil {
-		return nil, errors.Wrap(err, "GetNetDevStats: error getting network interfaces")
-	}
-
-	var res []EthrNetDevStat
-
-	for _, iface := range ifs {
-		if iface.Flags&net.FlagUp == 0 {
-			continue
-		}
-
-		ifaceData, err := getIfaceData(iface.Index)
-		if err != nil {
-			// TODO: use the ui package once refactored
-			// ui.printErr("failed to load data for interface %q: %v", iface.Name, err)
-			continue
-		}
-
-		res = append(res, EthrNetDevStat{
-			InterfaceName: iface.Name,
-			RxBytes:       ifaceData.Data.Ibytes,
-			RxPkts:        ifaceData.Data.Ipackets,
-			TxBytes:       ifaceData.Data.Obytes,
-			TxPkts:        ifaceData.Data.Opackets,
-		})
-	}
-	return res, nil
-}
-
-func getIfaceData(index int) (*ifMsghdr2, error) {
-	var data ifMsghdr2
-	rawData, err := unix.SysctlRaw("net", unix.AF_ROUTE, 0, 0, unix.NET_RT_IFLIST2, index)
-	if err != nil {
-		return nil, err
-	}
-	err = binary.Read(bytes.NewReader(rawData), binary.LittleEndian, &data)
-	return &data, err
-}
-
-// GetTCPStats returns the TCP retransmits count
-func (s osStats) GetTCPStats() (EthrTCPStat, error) {
-	var data tcpStat
-	rawData, err := unix.SysctlRaw("net.inet.tcp.stats")
-	if err != nil {
-		return EthrTCPStat{}, errors.Wrap(err, "GetTCPStats: could not get net.inet.tcp.stats")
-	}
-	buf := bytes.NewReader(rawData)
-	binary.Read(buf, binary.LittleEndian, &data)
-
-	return EthrTCPStat{uint64(data.Sndrexmitpack)}, nil
 }

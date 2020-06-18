@@ -11,8 +11,6 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
-
-	"github.com/microsoft/ethr/utils"
 )
 
 func runXClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
@@ -72,8 +70,8 @@ func xcRunTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 				case <-test.done:
 					ui.printMsg("TCP connect statistics for %s:", server)
 					ui.printMsg("  Sent = %d, Received = %d, Lost = %d", sent, rcvd, lost)
-					ui.printMsg("  Min = %s, Max = %s, Avg = %s", utils.DurationToString(min),
-						utils.DurationToString(max), utils.DurationToString(avg))
+					ui.printMsg("  Min = %s, Max = %s, Avg = %s", durationToString(min),
+						durationToString(max), durationToString(avg))
 					break ExitForLoop
 				default:
 					sent++
@@ -89,7 +87,7 @@ func xcRunTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 					rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
 					lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 					ui.printMsg("[tcp] %sConnection from [%s]:%s to [%s]:%s: %s",
-						warmupText, lserver, lport, rserver, rport, utils.DurationToString(t1))
+						warmupText, lserver, lport, rserver, rport, durationToString(t1))
 					if !warmup {
 						rcvd++
 						sum += t1.Nanoseconds()

@@ -3,7 +3,7 @@
 // Licensed under the MIT license.
 // See LICENSE.txt file in the project root for full license information.
 //-----------------------------------------------------------------------------
-package ethrLog
+package main
 
 import (
 	"encoding/json"
@@ -11,8 +11,15 @@ import (
 	"log"
 	"os"
 	"time"
+)
 
-	"github.com/microsoft/ethr/utils"
+// LogLevel specifies the logging level to use in both screen and
+// file-based logging
+type LogLevel int
+
+const (
+	LogLevelInfo LogLevel = iota
+	LogLevelDebug
 )
 
 type logMessage struct {
@@ -51,7 +58,7 @@ type logTestResults struct {
 var loggingActive = false
 var logChan = make(chan string, 64)
 
-func LogInit(fileName string) {
+func logInit(fileName string) {
 	if fileName == "" {
 		return
 	}
@@ -66,7 +73,7 @@ func LogInit(fileName string) {
 	go runLogger(logFile)
 }
 
-func LogFini() {
+func logFini() {
 	loggingActive = false
 }
 
@@ -89,19 +96,19 @@ func logMsg(prefix, msg string) {
 	}
 }
 
-func Info(msg string) {
+func logInfo(msg string) {
 	logMsg("INFO", msg)
 }
 
-func Error(msg string) {
+func logError(msg string) {
 	logMsg("ERROR", msg)
 }
 
-func Debug(msg string) {
+func logDebug(msg string) {
 	logMsg("DEBUG", msg)
 }
 
-func LogResults(s []string) {
+func logResults(s []string) {
 	if loggingActive {
 		logData := logTestResults{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
@@ -117,22 +124,22 @@ func LogResults(s []string) {
 	}
 }
 
-func LogLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
+func logLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
 	if loggingActive {
 		logData := logLatencyData{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
 		logData.Type = "LatencyResult"
 		logData.RemoteAddr = remoteAddr
 		logData.Protocol = proto
-		logData.Avg = utils.DurationToString(avg)
-		logData.Min = utils.DurationToString(min)
-		logData.P50 = utils.DurationToString(p50)
-		logData.P90 = utils.DurationToString(p90)
-		logData.P95 = utils.DurationToString(p95)
-		logData.P99 = utils.DurationToString(p99)
-		logData.P999 = utils.DurationToString(p999)
-		logData.P9999 = utils.DurationToString(p9999)
-		logData.Max = utils.DurationToString(max)
+		logData.Avg = durationToString(avg)
+		logData.Min = durationToString(min)
+		logData.P50 = durationToString(p50)
+		logData.P90 = durationToString(p90)
+		logData.P95 = durationToString(p95)
+		logData.P99 = durationToString(p99)
+		logData.P999 = durationToString(p999)
+		logData.P9999 = durationToString(p9999)
+		logData.Max = durationToString(max)
 		logJSON, _ := json.Marshal(logData)
 		logChan <- string(logJSON)
 	}

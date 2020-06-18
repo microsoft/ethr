@@ -13,10 +13,6 @@ import (
 	"sync/atomic"
 	"time"
 
-	"github.com/microsoft/ethr/internal/ethrLog"
-	"github.com/microsoft/ethr/internal/plot"
-	"github.com/microsoft/ethr/internal/stats"
-	"github.com/microsoft/ethr/utils"
 	tm "github.com/nsf/termbox-go"
 )
 
@@ -86,13 +82,12 @@ func initServerTuiInternal() error {
 		return errors.New(s)
 	}
 
-	plotter := plot.GetPlotter()
 	tm.SetInputMode(tm.InputEsc | tm.InputMouse)
 	tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	tm.Sync()
 	tm.Flush()
-	plotter.HideCursor()
-	plotter.BlockWindowResize()
+	hideCursor()
+	blockWindowResize()
 
 	tui := &serverTui{}
 	botScnH := 8
@@ -150,7 +145,7 @@ func (u *serverTui) fini() {
 
 func (u *serverTui) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	ethrLog.Info(s)
+	logInfo(s)
 	ss := splitString(s, u.msgW)
 	u.ringLock.Lock()
 	u.msgRing = u.msgRing[len(ss):]
@@ -160,7 +155,7 @@ func (u *serverTui) printMsg(format string, a ...interface{}) {
 
 func (u *serverTui) printErr(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
-	ethrLog.Error(s)
+	logError(s)
 	ss := splitString(s, u.errW)
 	u.ringLock.Lock()
 	u.errRing = u.errRing[len(ss):]
@@ -169,16 +164,15 @@ func (u *serverTui) printErr(format string, a ...interface{}) {
 }
 
 func (u *serverTui) printDbg(format string, a ...interface{}) {
-	if loggingLevel != ethrLog.LogLevelDebug {
-		return
+	if loggingLevel == LogLevelDebug {
+		s := fmt.Sprintf(format, a...)
+		logDebug(s)
+		ss := splitString(s, u.errW)
+		u.ringLock.Lock()
+		u.errRing = u.errRing[len(ss):]
+		u.errRing = append(u.errRing, ss...)
+		u.ringLock.Unlock()
 	}
-	s := fmt.Sprintf(format, a...)
-	ethrLog.Debug(s)
-	ss := splitString(s, u.errW)
-	u.ringLock.Lock()
-	u.errRing = u.errRing[len(ss):]
-	u.errRing = append(u.errRing, ss...)
-	u.ringLock.Unlock()
 }
 
 func (u *serverTui) emitTestResultBegin() {
@@ -194,7 +188,7 @@ func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds u
 
 func (u *serverTui) printTestResults(s []string) {
 	// Log before truncation of remote address.
-	ethrLog.LogResults(s)
+	logResults(s)
 	s[0] = truncateString(s[0], 13)
 	u.results = append(u.results, s)
 }
@@ -212,7 +206,7 @@ func (u *serverTui) emitLatencyHdr() {
 }
 
 func (u *serverTui) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
-	ethrLog.LogLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
+	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
 func (u *serverTui) paint(seconds uint64) {
@@ -251,45 +245,45 @@ func (u *serverTui) paint(seconds uint64) {
 		u.res.addTblSpr()
 	}
 
-	if len(gPrevNetStats.NetDevStats) == 0 {
+	if len(gPrevNetStats.netDevStats) == 0 {
 		return
 	}
 
 	x := u.statX
 	w := u.statW
 	y := u.statY
-	for _, ns := range gCurNetStats.NetDevStats {
+	for _, ns := range gCurNetStats.netDevStats {
 		nsDiff := getNetDevStatDiff(ns, gPrevNetStats, seconds)
 		// TODO: Log the network adapter stats in file as well.
-		printText(x, y, w, fmt.Sprintf("if: %s", ns.InterfaceName), tm.ColorWhite, tm.ColorBlack)
+		printText(x, y, w, fmt.Sprintf("if: %s", ns.interfaceName), tm.ColorWhite, tm.ColorBlack)
 		y++
-		printText(x, y, w, fmt.Sprintf("Tx %sbps", bytesToRate(nsDiff.TxBytes)), tm.ColorWhite, tm.ColorBlack)
-		bw := nsDiff.TxBytes * 8
+		printText(x, y, w, fmt.Sprintf("Tx %sbps", bytesToRate(nsDiff.txBytes)), tm.ColorWhite, tm.ColorBlack)
+		bw := nsDiff.txBytes * 8
 		printUsageBar(x+14, y, 10, bw, KILO, tm.ColorYellow)
 		y++
-		printText(x, y, w, fmt.Sprintf("Rx %sbps", bytesToRate(nsDiff.RxBytes)), tm.ColorWhite, tm.ColorBlack)
-		bw = nsDiff.RxBytes * 8
+		printText(x, y, w, fmt.Sprintf("Rx %sbps", bytesToRate(nsDiff.rxBytes)), tm.ColorWhite, tm.ColorBlack)
+		bw = nsDiff.rxBytes * 8
 		printUsageBar(x+14, y, 10, bw, KILO, tm.ColorGreen)
 		y++
-		printText(x, y, w, fmt.Sprintf("Tx %spps", numberToUnit(nsDiff.TxPkts)), tm.ColorWhite, tm.ColorBlack)
-		printUsageBar(x+14, y, 10, nsDiff.TxPkts, 10, tm.ColorWhite)
+		printText(x, y, w, fmt.Sprintf("Tx %spps", numberToUnit(nsDiff.txPkts)), tm.ColorWhite, tm.ColorBlack)
+		printUsageBar(x+14, y, 10, nsDiff.txPkts, 10, tm.ColorWhite)
 		y++
-		printText(x, y, w, fmt.Sprintf("Rx %spps", numberToUnit(nsDiff.RxPkts)), tm.ColorWhite, tm.ColorBlack)
-		printUsageBar(x+14, y, 10, nsDiff.RxPkts, 10, tm.ColorCyan)
+		printText(x, y, w, fmt.Sprintf("Rx %spps", numberToUnit(nsDiff.rxPkts)), tm.ColorWhite, tm.ColorBlack)
+		printUsageBar(x+14, y, 10, nsDiff.rxPkts, 10, tm.ColorCyan)
 		y++
 		printText(x, y, w, "-------------------------", tm.ColorDefault, tm.ColorDefault)
 		y++
 	}
 	printText(x, y, w,
 		fmt.Sprintf("Tcp Retrans: %s",
-			numberToUnit((gCurNetStats.TCPStats.SegRetrans-gPrevNetStats.TCPStats.SegRetrans)/seconds)),
+			numberToUnit((gCurNetStats.tcpStats.segRetrans-gPrevNetStats.tcpStats.segRetrans)/seconds)),
 		tm.ColorDefault, tm.ColorDefault)
 }
 
-var gPrevNetStats stats.EthrNetStats
-var gCurNetStats stats.EthrNetStats
+var gPrevNetStats ethrNetStat
+var gCurNetStats ethrNetStat
 
-func (u *serverTui) emitStats(netStats stats.EthrNetStats) {
+func (u *serverTui) emitStats(netStats ethrNetStat) {
 	gPrevNetStats = gCurNetStats
 	gCurNetStats = netStats
 }
@@ -311,22 +305,22 @@ func (u *serverCli) fini() {
 func (u *serverCli) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
-	ethrLog.Info(s)
+	logInfo(s)
 }
 
 func (u *serverCli) printDbg(format string, a ...interface{}) {
-	if loggingLevel != ethrLog.LogLevelDebug {
+	if loggingLevel != LogLevelDebug {
 		return
 	}
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
-	ethrLog.Debug(s)
+	logDebug(s)
 }
 
 func (u *serverCli) printErr(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
-	ethrLog.Error(s)
+	logError(s)
 }
 
 func (u *serverCli) paint(seconds uint64) {
@@ -362,14 +356,14 @@ func (u *serverCli) emitLatencyHdr() {
 }
 
 func (u *serverCli) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
-	ethrLog.LogLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
+	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
-func (u *serverCli) emitStats(netStats stats.EthrNetStats) {
+func (u *serverCli) emitStats(netStats ethrNetStat) {
 }
 
 func (u *serverCli) printTestResults(s []string) {
-	ethrLog.LogResults(s)
+	logResults(s)
 	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateString(s[0], 13),
 		s[1], s[2], s[3], s[4], s[5])
 }
@@ -447,7 +441,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 			ppsStr = ppsToString(pps)
 		}
 		if latTestOn {
-			latStr = utils.DurationToString(time.Duration(latency))
+			latStr = durationToString(time.Duration(latency))
 		}
 		str := []string{s.remoteAddr, protoToString(proto),
 			bwStr, cpsStr, ppsStr, latStr}

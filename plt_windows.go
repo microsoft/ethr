@@ -5,7 +5,7 @@
 // Licensed under the MIT license.
 // See LICENSE.txt file in the project root for full license information.
 //-----------------------------------------------------------------------------
-package stats
+package main
 
 import (
 	"net"
@@ -13,66 +13,68 @@ import (
 	"syscall"
 	"unsafe"
 
-	"github.com/pkg/errors"
+	tm "github.com/nsf/termbox-go"
 )
-
-var iphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
 
 var (
+	kernel32 = syscall.NewLazyDLL("kernel32.dll")
+	user32   = syscall.NewLazyDLL("user32.dll")
+	iphlpapi = syscall.NewLazyDLL("iphlpapi.dll")
+
 	proc_get_tcp_statistics_ex = iphlpapi.NewProc("GetTcpStatisticsEx")
 	proc_get_if_entry2         = iphlpapi.NewProc("GetIfEntry2")
+	proc_get_console_window    = kernel32.NewProc("GetConsoleWindow")
+	proc_get_system_menu       = user32.NewProc("GetSystemMenu")
+	proc_delete_menu           = user32.NewProc("DeleteMenu")
 )
 
-type winEthrNetDevInfo struct {
+type ethrNetDevInfo struct {
 	bytes   uint64
 	packets uint64
 	drop    uint64
 	errs    uint64
 }
 
-type osStats struct{}
-
-func (s osStats) GetNetDevStats() ([]EthrNetDevStat, error) {
+func getNetDevStats(stats *ethrNetStat) {
 	ifs, err := net.Interfaces()
 	if err != nil {
-		return nil, errors.Wrap(err, "GetNetDevStats: error getting network interfaces")
+		ui.printErr("%v", err)
+		return
 	}
 
-	var res []EthrNetDevStat
-
 	for _, ifi := range ifs {
-		if (ifi.Flags&net.FlagUp) == 0 || strings.Contains(ifi.Name, "Pseudo") {
+		if (ifi.Flags & net.FlagUp) == 0 || strings.Contains(ifi.Name, "Pseudo") {
 			continue
 		}
 		row, err := getIfEntry2(uint32(ifi.Index))
 		if err != nil {
-			return nil, errors.Wrap(err, "GetNetDevStats:")
+			ui.printErr("%v", err)
+			return
 		}
-		rxInfo := winEthrNetDevInfo{
+		rxInfo := ethrNetDevInfo{
 			bytes:   uint64(row.InOctets),
 			packets: uint64(row.InUcastPkts),
 			drop:    uint64(row.InDiscards),
 			errs:    uint64(row.InErrors),
 		}
-		txInfo := winEthrNetDevInfo{
+		txInfo := ethrNetDevInfo{
 			bytes:   uint64(row.OutOctets),
 			packets: uint64(row.OutUcastPkts),
 			drop:    uint64(row.OutDiscards),
 			errs:    uint64(row.OutErrors),
 		}
-		netStats := EthrNetDevStat{
-			InterfaceName: ifi.Name,
-			RxBytes:       rxInfo.bytes,
-			TxBytes:       txInfo.bytes,
-			RxPkts:        rxInfo.packets,
-			TxPkts:        txInfo.packets,
+		netStats := ethrNetDevStat{
+			interfaceName: ifi.Name,
+			rxBytes:       rxInfo.bytes,
+			txBytes:       txInfo.bytes,
+			rxPkts:        rxInfo.packets,
+			txPkts:        txInfo.packets,
 		}
-		res = append(res, netStats)
+		stats.netDevStats = append(stats.netDevStats, netStats)
 	}
-	return res, nil
 }
 
-type mibTCPStats struct {
+type mib_tcpstats struct {
 	DwRtoAlgorithm uint32
 	DwRtoMin       uint32
 	DwRtoMax       uint32
@@ -91,20 +93,21 @@ type mibTCPStats struct {
 }
 
 const (
-	afInet  = 2
-	afInet6 = 23
+	AF_INET  = 2
+	AF_INET6 = 23
 )
 
-func (s osStats) GetTCPStats() (EthrTCPStat, error) {
-	tcpStats := &mibTCPStats{}
+func getTCPStats(stats *ethrNetStat) (errcode error) {
+	tcpStats := &mib_tcpstats{}
 	r0, _, _ := syscall.Syscall(proc_get_tcp_statistics_ex.Addr(), 2,
-		uintptr(unsafe.Pointer(tcpStats)), uintptr(afInet), 0)
+		uintptr(unsafe.Pointer(tcpStats)), uintptr(AF_INET), 0)
 
 	if r0 != 0 {
-		errcode := syscall.Errno(r0)
-		return EthrTCPStat{}, errcode
+		errcode = syscall.Errno(r0)
+		return
 	}
-	return EthrTCPStat{uint64(tcpStats.DwRetransSegs)}, nil
+	stats.tcpStats.segRetrans = uint64(tcpStats.DwRetransSegs)
+	return
 }
 
 type guid struct {
@@ -115,20 +118,20 @@ type guid struct {
 }
 
 const (
-	maxStringSize        = 256
-	maxPhysAddressLength = 32
-	pad0for64_4for32     = 0
+	MAX_STRING_SIZE         = 256
+	MAX_PHYS_ADDRESS_LENGTH = 32
+	pad0for64_4for32        = 0
 )
 
 type mibIfRow2 struct {
 	InterfaceLuid               uint64
 	InterfaceIndex              uint32
 	InterfaceGuid               guid
-	Alias                       [maxStringSize + 1]uint16
-	Description                 [maxStringSize + 1]uint16
+	Alias                       [MAX_STRING_SIZE + 1]uint16
+	Description                 [MAX_STRING_SIZE + 1]uint16
 	PhysicalAddressLength       uint32
-	PhysicalAddress             [maxPhysAddressLength]uint8
-	PermanentPhysicalAddress    [maxPhysAddressLength]uint8
+	PhysicalAddress             [MAX_PHYS_ADDRESS_LENGTH]uint8
+	PermanentPhysicalAddress    [MAX_PHYS_ADDRESS_LENGTH]uint8
 	Mtu                         uint32
 	Type                        uint32
 	TunnelType                  uint32
@@ -176,3 +179,31 @@ func getIfEntry2(ifIndex uint32) (mibIfRow2, error) {
 	}
 	return *res, nil
 }
+
+func hideCursor() {
+	tm.HideCursor()
+}
+
+const (
+	MF_BYCOMMAND = 0x00000000
+	SC_CLOSE     = 0xF060
+	SC_MINIMIZE  = 0xF020
+	SC_MAXIMIZE  = 0xF030
+	SC_SIZE      = 0xF000
+)
+
+func blockWindowResize() {
+	h, _, err := syscall.Syscall(proc_get_console_window.Addr(), 0, 0, 0, 0)
+	if err != 0 {
+		return
+	}
+
+	sysMenu, _, err := syscall.Syscall(proc_get_system_menu.Addr(), 2, h, 0, 0)
+	if err != 0 {
+		return
+	}
+
+	syscall.Syscall(proc_delete_menu.Addr(), 3, sysMenu, SC_MAXIMIZE, MF_BYCOMMAND)
+	syscall.Syscall(proc_delete_menu.Addr(), 3, sysMenu, SC_SIZE, MF_BYCOMMAND)
+}
+
