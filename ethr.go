@@ -8,12 +8,10 @@ package main
 import (
 	"flag"
 	"fmt"
+	"os"
 	"runtime"
 	"strings"
 	"time"
-
-	"github.com/microsoft/ethr/internal/cmd"
-	"github.com/microsoft/ethr/internal/ethrLog"
 )
 
 const defaultLogFileName = "./ethrs.log for server, ./ethrc.log for client"
@@ -22,7 +20,7 @@ const defaultBufferLenStr = "16KB"
 
 var (
 	gVersion     string
-	loggingLevel ethrLog.LogLevel = ethrLog.LogLevelInfo
+	loggingLevel LogLevel = LogLevelInfo
 )
 
 func main() {
@@ -41,7 +39,7 @@ func main() {
 	//
 	runtime.GOMAXPROCS(1024)
 
-	flag.Usage = func() { cmd.EthrUsage(gVersion) }
+	flag.Usage = func() { ethrUsage(gVersion) }
 	isServer := flag.Bool("s", false, "")
 	clientDest := flag.String("c", "", "")
 	testTypePtr := flag.String("t", "", "")
@@ -82,7 +80,7 @@ func main() {
 	gIgnoreCert = *ic
 
 	if *debug {
-		loggingLevel = ethrLog.LogLevelDebug
+		loggingLevel = LogLevelDebug
 	}
 
 	xMode := false
@@ -91,13 +89,13 @@ func main() {
 	case "x":
 		xMode = true
 	default:
-		cmd.PrintUsageError("Invalid value for execution mode (-m).")
+		printUsageError("Invalid value for execution mode (-m).")
 	}
 	mode := ethrModeInv
 
 	if *isServer {
 		if *clientDest != "" {
-			cmd.PrintUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
+			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
 		}
 		if xMode {
 			mode = ethrModeExtServer
@@ -111,11 +109,11 @@ func main() {
 			mode = ethrModeClient
 		}
 	} else {
-		cmd.PrintUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
+		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
 	}
 
 	if *reverse && mode != ethrModeClient {
-		cmd.PrintUsageError("Invalid arguments, \"-r\" can only be used in client mode.")
+		printUsageError("Invalid arguments, \"-r\" can only be used in client mode.")
 	}
 
 	if *use4 && !*use6 {
@@ -132,11 +130,11 @@ func main() {
 
 	bufLen := unitToNumber(*bufLenStr)
 	if bufLen == 0 {
-		cmd.PrintUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
+		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
 	}
 
 	if *rttCount <= 0 {
-		cmd.PrintUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
+		printUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
 	}
 
 	var testType EthrTestType
@@ -163,7 +161,7 @@ func main() {
 	case "cl":
 		testType = ConnLatency
 	default:
-		cmd.PrintUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
 			"Valid parameters and values are:\n", *testTypePtr))
 	}
 
@@ -181,7 +179,7 @@ func main() {
 	case "ICMP":
 		proto = ICMP
 	default:
-		cmd.PrintUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
 			"Valid parameters and values are:\n", *protocol))
 	}
 
@@ -221,7 +219,7 @@ func main() {
 				logFileName = "ethrxc.log"
 			}
 		}
-		ethrLog.LogInit(logFileName)
+		logInit(logFileName)
 	}
 
 	clientParam := ethrClientParam{*duration, *gap}
@@ -247,12 +245,12 @@ func getDefaultBufferLenStr(testTypePtr string) string {
 }
 
 func emitUnsupportedTest(testParam EthrTestParam) {
-	cmd.PrintUsageError(fmt.Sprintf("\"%s\" test for \"%s\" is not supported.\n",
+	printUsageError(fmt.Sprintf("\"%s\" test for \"%s\" is not supported.\n",
 		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol)))
 }
 
 func printReverseModeError() {
-	cmd.PrintUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
+	printUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
 }
 
 func validateTestParam(mode ethrMode, testParam EthrTestParam) {
@@ -277,7 +275,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			}
 			if testType == Bandwidth {
 				if testParam.BufferSize > (64 * 1024) {
-					cmd.PrintUsageError("Maximum supported buffer size for UDP is 64K\n")
+					printUsageError("Maximum supported buffer size for UDP is 64K\n")
 				}
 			}
 			if testParam.Reverse {
@@ -305,4 +303,188 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			emitUnsupportedTest(testParam)
 		}
 	}
+}
+
+// ethrUsage prints the command-line usage text
+func ethrUsage(gVersion string) {
+	fmt.Println("\nEthr - A comprehensive network performance measurement tool.")
+	fmt.Println("Version: " + gVersion)
+	fmt.Println("It supports 4 modes. Usage of each mode is described below:")
+
+	fmt.Println("\nCommon Parameters")
+	fmt.Println("================================================================================")
+	printFlagUsage("h", "", "Help")
+	printFlagUsage("no", "", "Disable logging to file. Logging to file is enabled by default.")
+	printFlagUsage("o", "<filename>", "Name of log file. By default, following file names are used:",
+		"Server mode: 'ethrs.log'",
+		"Client mode: 'ethrc.log'",
+		"External server mode: 'ethrxs.log'",
+		"External client mode: 'ethrxc.log'")
+	printFlagUsage("debug", "", "Enable debug information in logging output.")
+	printFlagUsage("4", "", "Use only IP v4 version")
+	printFlagUsage("6", "", "Use only IP v6 version")
+
+	fmt.Println("\nMode: Server")
+	fmt.Println("================================================================================")
+    printServerUsage()
+	printFlagUsage("ui", "", "Show output in text UI.")
+    printPortUsage()
+
+	fmt.Println("\nMode: Client")
+	fmt.Println("================================================================================")
+    printClientUsage()
+	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
+    printDurationUsage()
+    printThreadUsage()
+    printNoConnStatUsage()
+    printBufLenUsage()
+    printProtocolUsage()
+    printIgnoreCertUsage()
+    printPortUsage()
+    printTestType()
+    printIterationUsage()
+
+	fmt.Println("\nMode: External Server")
+	fmt.Println("================================================================================")
+    printModeUsage()
+    printServerUsage()
+    printExtPortUsage()
+
+	fmt.Println("\nMode: External Client")
+	fmt.Println("================================================================================")
+    printModeUsage()
+    printExtClientUsage()
+    printDurationUsage()
+    printThreadUsage()
+    printNoConnStatUsage()
+    printBufLenUsage()
+    printExtProtocolUsage()
+    printExtTestType()
+    printGapUsage()
+}
+
+func printFlagUsage(flag, info string, helptext ...string) {
+	fmt.Printf("\t-%s %s\n", flag, info)
+	for _, help := range helptext {
+		fmt.Printf("\t\t%s\n", help)
+	}
+}
+
+func printServerUsage() {
+	printFlagUsage("s", "", "Run in server mode.")
+}
+
+func printClientUsage() {
+	printFlagUsage("c", "<server>", "Run in client mode and connect to <server>.",
+		"Server is specified using name, FQDN or IP address.")
+}
+
+func printExtClientUsage() {
+	printFlagUsage("c", "<destination>", "Run in external client mode and connect to <destination>.",
+		"<destination> is specified using host:port format.",
+		"Example: www.microsoft.com:443 or 10.1.0.4:22 etc.")
+}
+
+func printPortUsage() {
+	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
+		"A comma separated list of key=value pair is used.",
+		"Key specifies the protocol, and value specifies base port.",
+		"Ports used for various tests are calculated from base port.",
+		"Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996",
+		"Control is used for control channel communication for ethr.",
+		"Note: Same configuration must be used on both client & server.",
+		"Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'")
+}
+
+func printExtPortUsage() {
+	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
+		"A comma separated list of key=value pair is used.",
+		"Key specifies the protocol, and value specifies the port.",
+		"Default: 'tcp=9999,http=9899,https=9799'")
+}
+
+func printTestType() {
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", \"p\", or \"l\")",
+		"b: Bandwidth",
+		"c: Connections/s or Requests/s",
+		"p: Packets/s",
+		"l: Latency, Loss & Jitter",
+		"Default: b - Bandwidth measurement.")
+}
+
+func printExtTestType() {
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\")",
+		"b: Bandwidth",
+		"c: Connections/s or Requests/s",
+		"cl: TCP connection setup latency",
+		"Default: cl - TCP connection setup latency.")
+}
+
+func printThreadUsage() {
+	printFlagUsage("n", "<number>", "Number of Parallel Sessions (and Threads).",
+		"0: Equal to number of CPUs",
+		"Default: 1")
+}
+
+func printDurationUsage() {
+	printFlagUsage("d", "<duration>",
+		"Duration for the test (format: <num>[ms | s | m | h]",
+		"0: Run forever",
+		"Default: 10s")
+}
+
+func printGapUsage() {
+	printFlagUsage("g", "<gap>",
+		"Time interval between successive measurements (format: <num>[ms | s | m | h]",
+		"0: No gap",
+		"Default: 1s")
+}
+
+func printBufLenUsage() {
+	printFlagUsage("l", "<length>",
+		"Length of buffer to use (format: <num>[KB | MB | GB])",
+		"Only valid for Bandwidth tests. Max 1GB.",
+		"Default: 16KB")
+}
+
+func printProtocolUsage() {
+	printFlagUsage("p", "<protocol>",
+		"Protocol (\"tcp\", \"udp\", \"http\", \"https\", or \"icmp\")",
+		"Default: tcp")
+}
+
+func printExtProtocolUsage() {
+	printFlagUsage("p", "<protocol>",
+		"Protocol (\"tcp\", \"http\", \"https\", or \"icmp\")",
+		"Default: tcp")
+}
+
+func printIterationUsage() {
+	printFlagUsage("i", "<iterations>",
+		"Number of round trip iterations for each latency measurement.",
+		"Default: 1000")
+}
+
+func printModeUsage() {
+	printFlagUsage("m", "<mode>",
+		"'-m x' MUST be specified for external mode.")
+}
+
+func printNoConnStatUsage() {
+	printFlagUsage("ncs", "",
+		"No per Connection Stats would be printed if this flag is specified.",
+		"This is useful to suppress verbose logging when large number of",
+		"connections are used as specified by -n option for Bandwidth tests.")
+}
+
+func printIgnoreCertUsage() {
+	printFlagUsage("ic", "",
+		"Ignore Certificate is useful for HTTPS tests, for cases where a",
+		"middle box like a proxy is not able to supply a valid Ethr cert.")
+}
+
+func printUsageError(s string) {
+	fmt.Printf("Error: %s\n", s)
+	fmt.Printf("Please use \"ethr -h\" for ethr command line arguments.\n")
+	os.Exit(1)
 }

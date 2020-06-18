@@ -8,66 +8,87 @@ package main
 import (
 	"sort"
 	"time"
-
-	"github.com/pkg/errors"
-
-	"github.com/microsoft/ethr/internal/stats"
 )
 
-func getNetworkStats() (stats.EthrNetStats, error) {
-	osStats := stats.GetOSStats()
+
+type ethrNetStat struct {
+	netDevStats []ethrNetDevStat
+	tcpStats    ethrTCPStat
+}
+
+type ethrNetDevStat struct {
+	interfaceName string
+	rxBytes       uint64
+	txBytes       uint64
+	rxPkts        uint64
+	txPkts        uint64
+}
+
+type ethrTCPStat struct {
+	segRetrans uint64
+}
+
+func getNetworkStats() ethrNetStat {
+	stats := &ethrNetStat{}
+	getNetDevStats(stats)
+	/*
 	devStats, err := osStats.GetNetDevStats()
 	if err != nil {
 		return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net device stats")
 	}
-	sort.SliceStable(devStats, func(i, j int) bool {
-		return devStats[i].InterfaceName < devStats[j].InterfaceName
+	*/
+	sort.SliceStable(stats.netDevStats, func(i, j int) bool {
+		return stats.netDevStats[i].interfaceName < stats.netDevStats[j].interfaceName
 	})
+	getTCPStats(stats)
 
+	/*
 	tcpStats, err := osStats.GetTCPStats()
 	if err != nil {
 		return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net TCP stats")
 	}
 
 	return stats.EthrNetStats{NetDevStats: devStats, TCPStats: tcpStats}, nil
+	*/
+	return *stats
 }
 
-func getNetDevStatDiff(curStats stats.EthrNetDevStat, prevNetStats stats.EthrNetStats, seconds uint64) stats.EthrNetDevStat {
-	for _, prevStats := range prevNetStats.NetDevStats {
-		if prevStats.InterfaceName != curStats.InterfaceName {
+func getNetDevStatDiff(curStats ethrNetDevStat, prevNetStats ethrNetStat, seconds uint64) ethrNetDevStat {
+	for _, prevStats := range prevNetStats.netDevStats {
+		if prevStats.interfaceName != curStats.interfaceName {
 			continue
 		}
 
-		if curStats.RxBytes >= prevStats.RxBytes {
-			curStats.RxBytes -= prevStats.RxBytes
+		if curStats.rxBytes >= prevStats.rxBytes {
+			curStats.rxBytes -= prevStats.rxBytes
 		} else {
-			curStats.RxBytes += (^uint64(0) - prevStats.RxBytes)
+			curStats.rxBytes += (^uint64(0) - prevStats.rxBytes)
 		}
 
-		if curStats.TxBytes >= prevStats.TxBytes {
-			curStats.TxBytes -= prevStats.TxBytes
+		if curStats.txBytes >= prevStats.txBytes {
+			curStats.txBytes -= prevStats.txBytes
 		} else {
-			curStats.TxBytes += (^uint64(0) - prevStats.TxBytes)
+			curStats.txBytes += (^uint64(0) - prevStats.txBytes)
 		}
 
-		if curStats.RxPkts >= prevStats.RxPkts {
-			curStats.RxPkts -= prevStats.RxPkts
+		if curStats.rxPkts >= prevStats.rxPkts {
+			curStats.rxPkts -= prevStats.rxPkts
 		} else {
-			curStats.RxPkts += (^uint64(0) - prevStats.RxPkts)
+			curStats.rxPkts += (^uint64(0) - prevStats.rxPkts)
 		}
 
-		if curStats.TxPkts >= prevStats.TxPkts {
-			curStats.TxPkts -= prevStats.TxPkts
+		if curStats.txPkts >= prevStats.txPkts {
+			curStats.txPkts -= prevStats.txPkts
 		} else {
-			curStats.TxPkts += (^uint64(0) - prevStats.TxPkts)
+			curStats.txPkts += (^uint64(0) - prevStats.txPkts)
 		}
 
 		break
 	}
-	curStats.RxBytes /= seconds
-	curStats.TxBytes /= seconds
-	curStats.RxPkts /= seconds
-	curStats.TxPkts /= seconds
+	curStats.rxBytes /= seconds
+	curStats.txBytes /= seconds
+	curStats.rxPkts /= seconds
+	curStats.txPkts /= seconds
 	return curStats
 }
 
@@ -112,11 +133,7 @@ func emitStats() {
 	ui.emitTestResultBegin()
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()
-	stats, err := getNetworkStats()
-	if err != nil {
-		ui.printErr("emitStats: could not get network stats: %v", err)
-	}
-	ui.emitStats(stats)
+	ui.emitStats(getNetworkStats())
 	ui.paint(uint64(seconds))
 }
 

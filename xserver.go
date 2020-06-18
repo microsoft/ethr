@@ -11,8 +11,6 @@ import (
 	"os"
 	"sync/atomic"
 	"time"
-
-	"github.com/microsoft/ethr/internal/ethrLog"
 )
 
 func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
@@ -34,7 +32,7 @@ func initXServer(showUI bool) {
 
 func finiXServer() {
 	ui.fini()
-	ethrLog.LogFini()
+	logFini()
 }
 
 func xsRunTCPServer() {

@@ -23,8 +23,6 @@ import (
 	"sort"
 	"sync/atomic"
 	"time"
-
-	"github.com/microsoft/ethr/internal/ethrLog"
 )
 
 var gCert []byte
@@ -58,7 +56,7 @@ func initServer(showUI bool) {
 
 func finiServer() {
 	ui.fini()
-	ethrLog.LogFini()
+	logFini()
 }
 
 func runControlChannel() net.Listener {
