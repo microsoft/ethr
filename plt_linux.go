@@ -9,14 +9,15 @@ package main
 
 import (
 	"bufio"
-	"fmt"
 	"net"
 	"os"
 	"strconv"
 	"strings"
+
+	tm "github.com/nsf/termbox-go"
 )
 
-type linuxEthrNetDevInfo struct {
+type ethrNetDevInfo struct {
 	bytes      uint64
 	packets    uint64
 	drop       uint64

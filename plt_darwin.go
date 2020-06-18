@@ -19,7 +19,8 @@ import (
 func getNetDevStats(stats *ethrNetStat) {
 	ifs, err := net.Interfaces()
 	if err != nil {
-		return nil, errors.Wrap(err, "GetNetDevStats: error getting network interfaces")
+		ui.printErr("%v", err)
+		return
 	}
 
 	for _, iface := range ifs {
