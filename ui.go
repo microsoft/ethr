@@ -161,7 +161,7 @@ func printText(x, y, w int, text string, fg, bg tm.Attribute) {
 	for i := 0; i < len(textArr); i++ {
 		tm.SetCell(x+i+xoff, y, textArr[i], fg, bg)
 		if runewidth.RuneWidth(textArr[i]) == 2 {
-			xoff++
+			xoff = xoff + 2
 		}
 	}
 }
