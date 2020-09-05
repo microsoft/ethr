@@ -35,7 +35,7 @@ func xcRunTest(test *ethrTest, d, g time.Duration) {
 		} else if test.testParam.TestID.Type == Bandwidth {
 			go xcRunTCPBandwidthTest(test)
 		} else if test.testParam.TestID.Type == Cps {
-			xcRunTCPCpsTest(test)
+			go xcRunTCPCpsTest(test)
 		}
 	}
 	test.isActive = true
