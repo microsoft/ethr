@@ -34,6 +34,8 @@ func xcRunTest(test *ethrTest, d, g time.Duration) {
 			go xcRunTCPConnLatencyTest(test, g)
 		} else if test.testParam.TestID.Type == Bandwidth {
 			go xcRunTCPBandwidthTest(test)
+		} else if test.testParam.TestID.Type == Cps {
+			xcRunTCPCpsTest(test)
 		}
 	}
 	test.isActive = true
@@ -111,6 +113,31 @@ func xcRunTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 					t1 = time.Since(t0)
 					if t1 < g {
 						time.Sleep(g - t1)
+					}
+				}
+			}
+		}()
+	}
+}
+
+func xcRunTCPCpsTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		go func() {
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					conn, err := net.Dial(tcp(ipVer), server)
+					if err == nil {
+						atomic.AddUint64(&test.testResult.data, 1)
+						tcpconn, ok := conn.(*net.TCPConn)
+						if ok {
+							tcpconn.SetLinger(0)
+						}
+						conn.Close()
 					}
 				}
 			}

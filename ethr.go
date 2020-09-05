@@ -299,7 +299,7 @@ func validateTestParam(mode ethrMode, testParam EthrTestParam) {
 			emitUnsupportedTest(testParam)
 		}
 	} else if mode == ethrModeExtClient {
-		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth) {
+		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth && testType != Cps) {
 			emitUnsupportedTest(testParam)
 		}
 	}
@@ -326,41 +326,41 @@ func ethrUsage(gVersion string) {
 
 	fmt.Println("\nMode: Server")
 	fmt.Println("================================================================================")
-    printServerUsage()
+	printServerUsage()
 	printFlagUsage("ui", "", "Show output in text UI.")
-    printPortUsage()
+	printPortUsage()
 
 	fmt.Println("\nMode: Client")
 	fmt.Println("================================================================================")
-    printClientUsage()
+	printClientUsage()
 	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
-    printDurationUsage()
-    printThreadUsage()
-    printNoConnStatUsage()
-    printBufLenUsage()
-    printProtocolUsage()
-    printIgnoreCertUsage()
-    printPortUsage()
-    printTestType()
-    printIterationUsage()
+	printDurationUsage()
+	printThreadUsage()
+	printNoConnStatUsage()
+	printBufLenUsage()
+	printProtocolUsage()
+	printIgnoreCertUsage()
+	printPortUsage()
+	printTestType()
+	printIterationUsage()
 
 	fmt.Println("\nMode: External Server")
 	fmt.Println("================================================================================")
-    printModeUsage()
-    printServerUsage()
-    printExtPortUsage()
+	printModeUsage()
+	printServerUsage()
+	printExtPortUsage()
 
 	fmt.Println("\nMode: External Client")
 	fmt.Println("================================================================================")
-    printModeUsage()
-    printExtClientUsage()
-    printDurationUsage()
-    printThreadUsage()
-    printNoConnStatUsage()
-    printBufLenUsage()
-    printExtProtocolUsage()
-    printExtTestType()
-    printGapUsage()
+	printModeUsage()
+	printExtClientUsage()
+	printDurationUsage()
+	printThreadUsage()
+	printNoConnStatUsage()
+	printBufLenUsage()
+	printExtProtocolUsage()
+	printExtTestType()
+	printGapUsage()
 }
 
 func printFlagUsage(flag, info string, helptext ...string) {
