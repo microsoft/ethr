@@ -21,7 +21,7 @@ func runXServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	// runHTTPSBandwidthServer()
 	startStatsTimer()
 	toStop := make(chan int, 1)
-	handleCtrlC(toStop)
+	handleInterrupt(toStop)
 	<-toStop
 	ui.printMsg("Ethr done, received interrupt signal.")
 }

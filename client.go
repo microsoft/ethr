@@ -95,17 +95,16 @@ const (
 	serverDone = 2
 )
 
-func handleCtrlC(toStop chan int) {
+// handleInterrupt handles os.Interrupt
+// os.Interrupt guaranteed to be present on all systems
+func handleInterrupt(toStop chan<- int) {
 	sigChan := make(chan os.Signal)
-	signal.Notify(sigChan, os.Interrupt, os.Kill)
+	// TODO: Handle graceful shutdown in containers as well
+	// by handling syscall.SIGTERM
+	signal.Notify(sigChan, os.Interrupt)
 	go func() {
-		sig := <-sigChan
-		switch sig {
-		case os.Interrupt:
-			fallthrough
-		case os.Kill:
-			toStop <- interrupt
-		}
+		<-sigChan
+		toStop <- interrupt
 	}()
 }
 
@@ -163,7 +162,7 @@ func runTest(test *ethrTest, d time.Duration) {
 	toStop := make(chan int, 1)
 	runDurationTimer(d, toStop)
 	clientWatchControlChannel(test, toStop)
-	handleCtrlC(toStop)
+	handleInterrupt(toStop)
 	reason := <-toStop
 	close(test.done)
 	sendSessionMsg(test.enc, &EthrMsg{})
