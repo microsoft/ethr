@@ -41,7 +41,7 @@ func xcRunTest(test *ethrTest, d, g time.Duration) {
 	test.isActive = true
 	toStop := make(chan int, 1)
 	runDurationTimer(d, toStop)
-	handleCtrlC(toStop)
+	handleInterrupt(toStop)
 	reason := <-toStop
 	close(test.done)
 	stopStatsTimer()
