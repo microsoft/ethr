@@ -166,7 +166,12 @@ type EthrTestParam struct {
 }
 
 type ethrTestResult struct {
-	data uint64
+	data      uint64
+	bandwidth uint64
+	cps       uint64
+	pps       uint64
+	latency   uint64
+	clatency  uint64
 }
 
 type ethrTest struct {
