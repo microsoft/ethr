@@ -420,10 +420,6 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		pps /= seconds
 		aggTestResult.pps += pps
 		aggTestResult.cpps++
-
-		currentTime := time.Now()
-		fmt.Println("Time: ", currentTime.Format("2006.01.02 15:04:05"))
-		ui.printMsg("gCps=%v", gCps)
 	}
 
 	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {

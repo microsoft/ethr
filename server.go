@@ -55,10 +55,7 @@ func runControlChannel() net.Listener {
 	return l
 }
 
-var gCps uint64 = 0
-
 func handleRequest(conn net.Conn) {
-	atomic.AddUint64(&gCps, 1)
 	defer conn.Close()
 
 	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())

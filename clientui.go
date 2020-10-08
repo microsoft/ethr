@@ -87,7 +87,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 		test.testParam.TestID.Protocol == UDP) {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("[ ID]   Protocol    Interval      Bits/s")
+			ui.printMsg("[  ID ]   Protocol    Interval      Bits/s")
 		}
 		cvalue := uint64(0)
 		ccount := 0
@@ -95,7 +95,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 			val := atomic.SwapUint64(&ec.data, 0)
 			val /= seconds
 			if !gNoConnectionStats {
-				ui.printMsg("[%3d]     %-5s    %03d-%03d sec   %7s", ec.fd,
+				ui.printMsg("[%5d]     %-5s    %03d-%03d sec   %7s", ec.fd,
 					protoToString(test.testParam.TestID.Protocol),
 					gInterval, gInterval+1, bytesToRate(val))
 			}
@@ -103,7 +103,7 @@ func printTestResult(test *ethrTest, value uint64, seconds uint64) {
 			ccount++
 		})
 		if ccount > 1 || gNoConnectionStats {
-			ui.printMsg("[SUM]     %-5s    %03d-%03d sec   %7s",
+			ui.printMsg("[ SUM ]     %-5s    %03d-%03d sec   %7s",
 				protoToString(test.testParam.TestID.Protocol),
 				gInterval, gInterval+1, bytesToRate(cvalue))
 			if !gNoConnectionStats {
