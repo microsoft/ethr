@@ -9,10 +9,11 @@ import (
 	//	"bytes"
 	//	"crypto/tls"
 	//	"crypto/x509"
-	"container/list"
+
 	"encoding/gob"
 	"fmt"
 	"io"
+	"sort"
 	"sync"
 	"sync/atomic"
 
@@ -60,15 +61,6 @@ func runDurationTimer(d time.Duration, toStop chan int) {
 	}()
 }
 
-func clientWatchControlChannel(test *ethrTest, toStop chan int) {
-	go func() {
-		waitForChannelStop := make(chan bool, 1)
-		watchControlChannel(test, waitForChannelStop)
-		<-waitForChannelStop
-		toStop <- disconnect
-	}()
-}
-
 func initClient() {
 	initClientUI()
 }
@@ -76,23 +68,32 @@ func initClient() {
 func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
 	server = "[" + server + "]"
-	runTest(testParam, server, clientParam.duration)
+	test, err := newTest(server, nil, testParam, nil, nil)
+	if err != nil {
+		ui.printErr("runXClient: failed to create the new test.")
+		return
+	}
+	runTest(test, clientParam.duration, clientParam.gap)
 }
 
-func runTest(testParam EthrTestParam, server string, d time.Duration) {
+func runTest(test *ethrTest, d, g time.Duration) {
 	startStatsTimer()
 	toStop := make(chan int, 1)
-	testList := runTestThreads(testParam, server, toStop)
+	if test.testParam.TestID.Protocol == TCP {
+		if test.testParam.TestID.Type == Bandwidth {
+			runBandwidthTest(test, toStop)
+		} else if test.testParam.TestID.Type == Latency {
+			go runTCPLatencyTest(test, toStop)
+		} else if test.testParam.TestID.Type == Cps {
+			go runTCPCpsTest(test)
+		}
+	}
+	test.isActive = true
 	runDurationTimer(d, toStop)
 	handleInterrupt(toStop)
 	reason := <-toStop
-	ui.printMsg("out of waiting state")
-	for e := testList.Front(); e != nil; e = e.Next() {
-		test, ok := e.Value.(*ethrTest)
-		ui.printMsg("Ethr: %v", ok)
-		close(test.done)
-	}
 	stopStatsTimer()
+	close(test.done)
 	switch reason {
 	case timeout:
 		ui.printMsg("Ethr done, duration: " + d.String() + ".")
@@ -104,82 +105,52 @@ func runTest(testParam EthrTestParam, server string, d time.Duration) {
 	return
 }
 
-func runTestThreads(testParam EthrTestParam, server string, toStop chan int) (tList *list.List) {
+func runBandwidthTest(test *ethrTest, toStop chan int) {
 	var wg sync.WaitGroup
-	testList := list.New()
-	runTestThreadsAsync(testParam, server, &wg, testList)
+	runBandwidthTestThreads(test, &wg)
 	go func(wg *sync.WaitGroup) {
 		wg.Wait()
-		toStop <- interrupt
+		toStop <- disconnect
 	}(&wg)
-	return testList
 }
 
-func runTestThreadsAsync(testParam EthrTestParam, server string, wg *sync.WaitGroup, testList *list.List) {
-	ui.printMsg("TestParam: %v", testParam)
-	for th := uint32(0); th < testParam.NumThreads; th++ {
+func runBandwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
 		if err != nil {
 			ui.printErr("Error dialing connection: %v", err)
 			return
 		}
-		test := setupClientSession(testParam, conn)
-		ui.printErr("test: %v", test)
-		if test == nil {
-			ui.printErr("Failed to create a test")
-			return
-		}
-		testList.PushBack(test)
-		if testParam.TestID.Type == Bandwidth {
-			wg.Add(1)
-			go runTCPBandwidthTest(test)
+		handshakeBandwidthTest(test, conn)
+		wg.Add(1)
+		go runTCPBandwidthTest(test, conn, wg)
+	}
+}
+
+func handshakeBandwidthTest(test *ethrTest, conn net.Conn) {
+	dec := gob.NewDecoder(conn)
+	enc := gob.NewEncoder(conn)
+	ethrMsg := createSynMsg(test.testParam)
+	err := sendSessionMsg(enc, ethrMsg)
+	if err != nil {
+		ui.printErr("Failed to send session message: %v", err)
+		return
+	}
+	ethrMsg = recvSessionMsg(dec)
+	if ethrMsg.Type != EthrAck {
+		if ethrMsg.Type == EthrFin {
+			err = fmt.Errorf("%s", ethrMsg.Fin.Message)
 		} else {
+			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
 		}
 	}
 }
 
-func setupClientSession(testParam EthrTestParam, conn net.Conn) (test *ethrTest) {
-	if testParam.TestID.Type == Bandwidth {
-		dec := gob.NewDecoder(conn)
-		enc := gob.NewEncoder(conn)
-		ethrMsg := createSynMsg(testParam)
-		err := sendSessionMsg(enc, ethrMsg)
-		if err != nil {
-			ui.printErr("1")
-			return
-		}
-		rserver, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
-		server := "[" + rserver + "]"
-		test, err = newTest(server, conn, testParam, enc, dec)
-		if err != nil {
-			ui.printErr("2")
-			ethrMsg = createFinMsg(err.Error())
-			sendSessionMsg(enc, ethrMsg)
-			return
-		}
-		ethrMsg = recvSessionMsg(test.dec)
-		ui.printErr("ethrMsg: %v", ethrMsg)
-		if ethrMsg.Type != EthrAck {
-			if ethrMsg.Type == EthrFin {
-				err = fmt.Errorf("%s", ethrMsg.Fin.Message)
-			} else {
-				err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
-			}
-			ui.printErr("%v", err)
-			deleteTest(test)
-			test = nil
-			return
-		}
-		// napDuration := ethrMsg.Ack.NapDuration
-		// time.Sleep(napDuration)
-	}
-	return
-}
-
-func runTCPBandwidthTest(test *ethrTest) {
-	conn := test.ctrlConn
+func runTCPBandwidthTest(test *ethrTest, conn net.Conn, wg *sync.WaitGroup) {
+	defer wg.Done()
+	defer conn.Close()
 	ec := test.newConn(conn)
-	test.isActive = true
 	buff := make([]byte, test.testParam.BufferSize)
 	for i := uint32(0); i < test.testParam.BufferSize; i++ {
 		buff[i] = byte(i)
@@ -206,129 +177,19 @@ ExitForLoop:
 			atomic.AddUint64(&test.testResult.data, uint64(blen))
 		}
 	}
-	defer func() {
-		conn.Close()
-	}()
 }
 
-/*
-func runTest(test *ethrTest, d time.Duration) {
-	startStatsTimer()
-	if test.testParam.TestID.Protocol == TCP {
-		if test.testParam.TestID.Type == Bandwidth {
-			go runTCPBandwidthTest(test)
-		} else if test.testParam.TestID.Type == Cps {
-			go runTCPCpsTest(test)
-		} else if test.testParam.TestID.Type == Latency {
-			ui.emitLatencyHdr()
-			go runTCPLatencyTest(test)
-		}
-	} else if test.testParam.TestID.Protocol == UDP {
-		if test.testParam.TestID.Type == Bandwidth {
-			go runUDPBandwidthTest(test)
-		} else if test.testParam.TestID.Type == Pps {
-			go runUDPPpsTest(test)
-		}
-	}
-	test.isActive = true
-	toStop := make(chan int, 1)
-	runDurationTimer(d, toStop)
-	handleInterrupt(toStop)
-	reason := <-toStop
-	close(test.done)
-	sendSessionMsg(test.enc, &EthrMsg{})
-	test.ctrlConn.Close()
-	stopStatsTimer()
-	switch reason {
-	case timeout:
-		ui.printMsg("Ethr done, duration: " + d.String() + ".")
-	case interrupt:
-		ui.printMsg("Ethr done, received interrupt signal.")
-	case serverDone:
-		ui.printMsg("Ethr done, server terminated the session.")
-	}
-}
-
-func runTCPBandwidthTest(test *ethrTest) {
+func runTCPLatencyTest(test *ethrTest, toStop chan int) {
 	server := test.session.remoteAddr
-	ui.printMsg("Connecting to host %s, port %s", server, tcpBandwidthPort)
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		buff := make([]byte, test.testParam.BufferSize)
-		for i := uint32(0); i < test.testParam.BufferSize; i++ {
-			buff[i] = byte(i)
-		}
-		go func() {
-			conn, err := net.Dial(tcp(ipVer), server+":"+tcpBandwidthPort)
-			if err != nil {
-				ui.printErr("runTCPBandwidthTest: %v", err)
-				os.Exit(1)
-				return
-			}
-			defer conn.Close()
-			ec := test.newConn(conn)
-			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
-				ec.fd, lserver, lport, rserver, rport)
-			blen := len(buff)
-		ExitForLoop:
-			for {
-				select {
-				case <-test.done:
-					break ExitForLoop
-				default:
-					n := 0
-					if test.testParam.Reverse {
-						n, err = io.ReadFull(conn, buff)
-					} else {
-						n, err = conn.Write(buff)
-					}
-					if err != nil || n < blen {
-						ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
-						continue
-					}
-					atomic.AddUint64(&ec.data, uint64(blen))
-					atomic.AddUint64(&test.testResult.data, uint64(blen))
-				}
-			}
-		}()
-	}
-}
-
-func runTCPCpsTest(test *ethrTest) {
-	server := test.session.remoteAddr
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		go func() {
-		ExitForLoop:
-			for {
-				select {
-				case <-test.done:
-					break ExitForLoop
-				default:
-					conn, err := net.Dial(tcp(ipVer), server+":"+tcpCpsPort)
-					if err == nil {
-						atomic.AddUint64(&test.testResult.data, 1)
-						tcpconn, ok := conn.(*net.TCPConn)
-						if ok {
-							tcpconn.SetLinger(0)
-						}
-						conn.Close()
-					}
-				}
-			}
-		}()
-	}
-}
-
-func runTCPLatencyTest(test *ethrTest) {
-	server := test.session.remoteAddr
-	conn, err := net.Dial(tcp(ipVer), server+":"+tcpLatencyPort)
+	conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
 	if err != nil {
-		ui.printErr("runTCPLatencyTest: error dialing the latency connection: %v", err)
+		ui.printErr("Error dialing the latency connection: %v", err)
 		os.Exit(1)
 		return
 	}
 	defer conn.Close()
+	handshakeBandwidthTest(test, conn)
+	ui.emitLatencyHdr()
 	buffSize := test.testParam.BufferSize
 	buff := make([]byte, buffSize)
 	for i := uint32(0); i < buffSize; i++ {
@@ -347,20 +208,15 @@ ExitForLoop:
 			for i := uint32(0); i < rttCount; i++ {
 				s1 := time.Now()
 				n, err := conn.Write(buff)
-				if err != nil {
-					// ui.printErr(err)
-					// return
-					break ExitSelect
-				}
-				if n < blen {
-					// ui.printErr("Partial write: " + strconv.Itoa(n))
-					// return
+				if err != nil || n < blen {
+					ui.printDbg("Error sending/receiving data on a connection for latency test: %v", err)
+					toStop <- disconnect
 					break ExitSelect
 				}
 				_, err = io.ReadFull(conn, buff)
 				if err != nil {
-					// ui.printErr(err)
-					// return
+					ui.printDbg("Error sending/receiving data on a connection for latency test: %v", err)
+					toStop <- disconnect
 					break ExitSelect
 				}
 				e2 := time.Since(s1)
@@ -369,203 +225,6 @@ ExitForLoop:
 			// TODO temp code, fix it better, this is to allow server to do
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
-
-			calcLatency(test, rttCount, latencyNumbers)
-		}
-	}
-}
-
-func runUDPBandwidthTest(test *ethrTest) {
-	server := test.session.remoteAddr
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		go func() {
-			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(udp(ipVer), server+":"+udpBandwidthPort)
-			if err != nil {
-				ui.printDbg("Unable to dial UDP, error: %v", err)
-				return
-			}
-			defer conn.Close()
-			ec := test.newConn(conn)
-			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
-				ec.fd, lserver, lport, rserver, rport)
-			blen := len(buff)
-		ExitForLoop:
-			for {
-				select {
-				case <-test.done:
-					break ExitForLoop
-				default:
-					n, err := conn.Write(buff)
-					if err != nil {
-						ui.printDbg("%v", err)
-						continue
-					}
-					if n < blen {
-						ui.printDbg("Partial write: %d", n)
-						continue
-					}
-					atomic.AddUint64(&ec.data, uint64(n))
-					atomic.AddUint64(&test.testResult.data, uint64(n))
-				}
-			}
-		}()
-	}
-}
-
-func runUDPPpsTest(test *ethrTest) {
-	server := test.session.remoteAddr
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		go func() {
-			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(udp(ipVer), server+":"+udpPpsPort)
-			if err != nil {
-				ui.printDbg("Unable to dial UDP, error: %v", err)
-				return
-			}
-			defer conn.Close()
-			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
-			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
-			ui.printMsg("[udp] local %s port %s connected to %s port %s",
-				lserver, lport, rserver, rport)
-			blen := len(buff)
-		ExitForLoop:
-			for {
-				select {
-				case <-test.done:
-					break ExitForLoop
-				default:
-					n, err := conn.Write(buff)
-					if err != nil {
-						ui.printDbg("%v", err)
-						continue
-					}
-					if n < blen {
-						ui.printDbg("Partial write: %d", n)
-						continue
-					}
-					atomic.AddUint64(&test.testResult.data, 1)
-				}
-			}
-		}()
-	}
-}
-
-func runHTTPBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteAddr
-	ui.printMsg("uri=%s", uri)
-	uri = "http://" + uri + ":" + httpBandwidthPort
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		buff := make([]byte, test.testParam.BufferSize)
-		for i := uint32(0); i < test.testParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		tr := &http.Transport{DisableCompression: true}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPSBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteAddr
-	uri = "https://" + uri + ":" + httpsBandwidthPort
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		buff := make([]byte, test.testParam.BufferSize)
-		for i := uint32(0); i < test.testParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		c, err := x509.ParseCertificate(gCert)
-		if err != nil {
-			ui.printErr("runHTTPSBandwidthTest: failed to parse certificate: %v", err)
-		}
-		clientCertPool := x509.NewCertPool()
-		clientCertPool.AddCert(c)
-
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: gIgnoreCert,
-			// Certificates: []tls.Certificate{cert},
-			RootCAs: clientCertPool,
-		}
-		//tlsConfig.BuildNameToCertificate()
-		tr := &http.Transport{DisableCompression: true, TLSClientConfig: tlsConfig}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPandHTTPSBandwidthTest(test *ethrTest, client *http.Client, uri string, buff []byte) {
-ExitForLoop:
-	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			// response, err := http.Get(uri)
-			response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
-			if err != nil {
-				ui.printDbg("Error in HTTP request: %v", err)
-				continue
-			} else {
-				ui.printDbg("Status received: %v", response.StatusCode)
-				if response.StatusCode != http.StatusOK {
-					ui.printDbg("Error in HTTP request, received status: %v", response.StatusCode)
-					continue
-				}
-				contents, err := ioutil.ReadAll(response.Body)
-				response.Body.Close()
-				if err != nil {
-					ui.printDbg("Error in receving HTTP response: %v", err)
-					continue
-				}
-				ethrUnused(contents)
-				// ui.printDbg("%s", string(contents))
-			}
-			atomic.AddUint64(&test.testResult.data, uint64(test.testParam.BufferSize))
-		}
-	}
-}
-
-func runHTTPLatencyTest(test *ethrTest) {
-	uri := test.session.remoteAddr
-	uri = "http://" + uri + ":" + httpLatencyPort
-
-	buff := make([]byte, test.testParam.BufferSize)
-	for i := uint32(0); i < test.testParam.BufferSize; i++ {
-		buff[i] = 'x'
-	}
-
-	rttCount := test.testParam.RttCount
-	latencyNumbers := make([]time.Duration, rttCount)
-	tr := &http.Transport{DisableCompression: true}
-	client := &http.Client{Transport: tr}
-ExitForLoop:
-	for {
-	ExitSelect:
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			for i := uint32(0); i < rttCount; i++ {
-				s1 := time.Now()
-				response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
-				if err != nil {
-					break ExitSelect
-				} else {
-					if response.StatusCode != http.StatusOK {
-						break ExitSelect
-					}
-					contents, err := ioutil.ReadAll(response.Body)
-					response.Body.Close()
-					if err != nil {
-						break ExitSelect
-					}
-					ethrUnused(contents)
-				}
-				e2 := time.Since(s1)
-				latencyNumbers[i] = e2
-			}
 
 			calcLatency(test, rttCount, latencyNumbers)
 		}
@@ -604,4 +263,30 @@ func calcLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.Duration
 		protoToString(test.testParam.TestID.Protocol),
 		avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
-*/
+
+func runTCPCpsTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		go func() {
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
+					if err == nil {
+						atomic.AddUint64(&test.testResult.data, 1)
+						tcpconn, ok := conn.(*net.TCPConn)
+						if ok {
+							tcpconn.SetLinger(0)
+						}
+						conn.Close()
+					} else {
+						ui.printDbg("Error setting connection for CPS test: %v", err)
+					}
+				}
+			}
+		}()
+	}
+}

@@ -397,6 +397,59 @@ func emitAggregate(proto EthrProtocol) {
 }
 
 func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
+
+	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
+	var bw, cps, pps, latency uint64
+	aggTestResult, _ := gAggregateTestResults[proto]
+	test, found := s.tests[EthrTestID{proto, All}]
+	if found && test.isActive {
+		bwTestOn = true
+		bw = atomic.SwapUint64(&test.testResult.bw, 0)
+		bw /= seconds
+		aggTestResult.bw += bw
+		aggTestResult.cbw++
+
+		cpsTestOn = true
+		cps = atomic.SwapUint64(&test.testResult.cps, 0)
+		cps /= seconds
+		aggTestResult.cps += cps
+		aggTestResult.ccps++
+
+		ppsTestOn = true
+		pps = atomic.SwapUint64(&test.testResult.pps, 0)
+		pps /= seconds
+		aggTestResult.pps += pps
+		aggTestResult.cpps++
+
+		currentTime := time.Now()
+		fmt.Println("Time: ", currentTime.Format("2006.01.02 15:04:05"))
+		ui.printMsg("gCps=%v", gCps)
+	}
+
+	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
+		var bwStr, cpsStr, ppsStr, latStr string
+		if bwTestOn {
+			bwStr = bytesToRate(bw)
+		}
+		if cpsTestOn {
+			cpsStr = cpsToString(cps)
+		}
+		if ppsTestOn {
+			ppsStr = ppsToString(pps)
+		}
+		if latTestOn {
+			latStr = durationToString(time.Duration(latency))
+		}
+		str := []string{s.remoteAddr, protoToString(proto),
+			bwStr, cpsStr, ppsStr, latStr}
+		return str
+	}
+
+	return []string{}
+}
+
+/*
+func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
@@ -450,3 +503,4 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 
 	return []string{}
 }
+*/

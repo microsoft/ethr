@@ -52,12 +52,12 @@ func (u *clientUI) emitTestHdr() {
 func (u *clientUI) emitLatencyHdr() {
 	s := []string{"Avg", "Min", "50%", "90%", "95%", "99%", "99.9%", "99.99%", "Max"}
 	fmt.Println("-----------------------------------------------------------")
-	fmt.Printf("%8s %8s %8s %8s %8s %8s %8s %8s %8s\n", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8])
+	fmt.Printf("%9s %9s %9s %9s %9s %9s %9s %9s %9s\n", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8])
 }
 
 func (u *clientUI) emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
 	logLatency(remote, proto, avg, min, max, p50, p90, p95, p99, p999, p9999)
-	fmt.Printf("%8s %8s %8s %8s %8s %8s %8s %8s %8s\n",
+	fmt.Printf("%9s %9s %9s %9s %9s %9s %9s %9s %9s\n",
 		durationToString(avg), durationToString(min),
 		durationToString(p50), durationToString(p90),
 		durationToString(p95), durationToString(p99),
