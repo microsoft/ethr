@@ -166,7 +166,7 @@ type EthrTestParam struct {
 }
 
 type ethrTestResult struct {
-	data     uint64
+	//data     uint64
 	bw       uint64
 	cps      uint64
 	pps      uint64
@@ -186,6 +186,7 @@ type ethrTest struct {
 	testResult ethrTestResult
 	done       chan struct{}
 	connList   *list.List
+	lastAccess time.Time
 }
 
 type ethrMode uint32
@@ -218,7 +219,8 @@ type ethrServerParam struct {
 var ipVer ethrIPVer = ethrIPAny
 
 type ethrConn struct {
-	data    uint64
+	bw      uint64
+	pps     uint64
 	test    *ethrTest
 	conn    net.Conn
 	elem    *list.Element
@@ -279,6 +281,7 @@ func newTestInternal(remoteAddr string, conn net.Conn, testParam EthrTestParam, 
 	test.testParam = testParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
+	test.lastAccess = time.Now()
 	session.tests[testParam.TestID] = test
 
 	return test, nil

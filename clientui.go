@@ -82,81 +82,76 @@ func initClientUI() {
 var gInterval uint64
 var gNoConnectionStats bool
 
-func printTestResult(test *ethrTest, value uint64, seconds uint64) {
+func printTestResult(test *ethrTest, seconds uint64) {
 	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
 		test.testParam.TestID.Protocol == UDP) {
 		if gInterval == 0 {
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("[  ID ]   Protocol    Interval      Bits/s")
+			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+			ui.printMsg("[  ID ]   Protocol    Interval      Bits/s    Pkts/s")
 		}
-		cvalue := uint64(0)
+		cbw := uint64(0)
+		cpps := uint64(0)
 		ccount := 0
 		test.connListDo(func(ec *ethrConn) {
-			val := atomic.SwapUint64(&ec.data, 0)
-			val /= seconds
+			bw := atomic.SwapUint64(&ec.bw, 0)
+			pps := atomic.SwapUint64(&ec.pps, 0)
+			bw /= seconds
 			if !gNoConnectionStats {
-				ui.printMsg("[%5d]     %-5s    %03d-%03d sec   %7s", ec.fd,
+				ui.printMsg("[%5d]     %-5s    %03d-%03d sec   %7s   %7s", ec.fd,
 					protoToString(test.testParam.TestID.Protocol),
-					gInterval, gInterval+1, bytesToRate(val))
+					gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
 			}
-			cvalue += val
+			cbw += bw
+			cpps += pps
 			ccount++
 		})
 		if ccount > 1 || gNoConnectionStats {
-			ui.printMsg("[ SUM ]     %-5s    %03d-%03d sec   %7s",
+			ui.printMsg("[ SUM ]     %-5s    %03d-%03d sec   %7s   %7s",
 				protoToString(test.testParam.TestID.Protocol),
-				gInterval, gInterval+1, bytesToRate(cvalue))
+				gInterval, gInterval+1, bytesToRate(cbw), ppsToString(cpps))
 			if !gNoConnectionStats {
-				ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
+				ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - -")
 			}
 		}
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
-			bytesToRate(cvalue), "", "", ""})
+			bytesToRate(cbw), "", ppsToString(cpps), ""})
 	} else if test.testParam.TestID.Type == Cps {
 		if gInterval == 0 {
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
+			ui.printMsg("- - - - - - - - - - - - - - - - - - ")
 			ui.printMsg("Protocol    Interval      Conn/s")
 		}
+		cps := atomic.SwapUint64(&test.testResult.cps, 0)
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
 			protoToString(test.testParam.TestID.Protocol),
-			gInterval, gInterval+1, cpsToString(value))
+			gInterval, gInterval+1, cpsToString(cps))
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
-			"", cpsToString(value), "", ""})
+			"", cpsToString(cps), "", ""})
 	} else if test.testParam.TestID.Type == Pps {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("Protocol    Interval      Pkts/s")
+			ui.printMsg("Protocol    Interval      Bits/s    Pkts/s")
 		}
-		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
+		bw := atomic.SwapUint64(&test.testResult.bw, 0)
+		pps := atomic.SwapUint64(&test.testResult.pps, 0)
+		ui.printMsg("  %-5s    %03d-%03d sec   %7s   %7s",
 			protoToString(test.testParam.TestID.Protocol),
-			gInterval, gInterval+1, ppsToString(value))
+			gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
-			"", "", ppsToString(value), ""})
-	} else if test.testParam.TestID.Type == Bandwidth &&
-		(test.testParam.TestID.Protocol == HTTP || test.testParam.TestID.Protocol == HTTPS) {
-		if gInterval == 0 {
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("Protocol    Interval      Bits/s")
-		}
-		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
-			protoToString(test.testParam.TestID.Protocol),
-			gInterval, gInterval+1, bytesToRate(value))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
-			bytesToRate(value), "", "", ""})
+			bytesToRate(bw), "", ppsToString(pps), ""})
 	}
 	gInterval++
 }
 
 func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
-	var data uint64
+	//var data uint64
 	var testList = []EthrTestType{Bandwidth, Cps, Pps}
 
 	for _, testType := range testList {
 		test, found := s.tests[EthrTestID{proto, testType}]
 		if found && test.isActive {
-			data = atomic.SwapUint64(&test.testResult.data, 0)
-			data /= seconds
-			printTestResult(test, data, seconds)
+			//data = atomic.SwapUint64(&test.testResult.data, 0)
+			//data /= seconds
+			printTestResult(test, seconds)
 		}
 	}
 }

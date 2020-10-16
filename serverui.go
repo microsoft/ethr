@@ -409,21 +409,32 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
 
-		cpsTestOn = true
-		cps = atomic.SwapUint64(&test.testResult.cps, 0)
-		cps /= seconds
-		aggTestResult.cps += cps
-		aggTestResult.ccps++
+		if proto == TCP {
+			cpsTestOn = true
+			cps = atomic.SwapUint64(&test.testResult.cps, 0)
+			cps /= seconds
+			aggTestResult.cps += cps
+			aggTestResult.ccps++
+		}
 
-		ppsTestOn = true
-		pps = atomic.SwapUint64(&test.testResult.pps, 0)
-		pps /= seconds
-		aggTestResult.pps += pps
-		aggTestResult.cpps++
+		if proto == UDP {
+			ppsTestOn = true
+			pps = atomic.SwapUint64(&test.testResult.pps, 0)
+			pps /= seconds
+			aggTestResult.pps += pps
+			aggTestResult.cpps++
+		}
+
+		if proto == TCP {
+			latency = atomic.LoadUint64(&test.testResult.latency)
+			if latency > 0 {
+				latTestOn = true
+			}
+		}
 	}
 
 	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
-		var bwStr, cpsStr, ppsStr, latStr string
+		var bwStr, cpsStr, ppsStr, latStr string = "--  ", "--  ", "--  ", "--  "
 		if bwTestOn {
 			bwStr = bytesToRate(bw)
 		}

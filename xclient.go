@@ -132,7 +132,7 @@ func xcRunTCPCpsTest(test *ethrTest) {
 				default:
 					conn, err := net.Dial(tcp(ipVer), server)
 					if err == nil {
-						atomic.AddUint64(&test.testResult.data, 1)
+						atomic.AddUint64(&test.testResult.cps, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
 						if ok {
 							tcpconn.SetLinger(0)
@@ -203,8 +203,8 @@ func xcRunTCPBandwidthTest(test *ethrTest) {
 						// test.ctrlConn.Close()
 						return
 					}
-					atomic.AddUint64(&ec.data, uint64(blen))
-					atomic.AddUint64(&test.testResult.data, uint64(blen))
+					atomic.AddUint64(&ec.bw, uint64(blen))
+					atomic.AddUint64(&test.testResult.bw, uint64(blen))
 				}
 			}
 		}()

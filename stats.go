@@ -10,7 +10,6 @@ import (
 	"time"
 )
 
-
 type ethrNetStat struct {
 	netDevStats []ethrNetDevStat
 	tcpStats    ethrTCPStat
@@ -32,10 +31,10 @@ func getNetworkStats() ethrNetStat {
 	stats := &ethrNetStat{}
 	getNetDevStats(stats)
 	/*
-	devStats, err := osStats.GetNetDevStats()
-	if err != nil {
-		return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net device stats")
-	}
+		devStats, err := osStats.GetNetDevStats()
+		if err != nil {
+			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net device stats")
+		}
 	*/
 	sort.SliceStable(stats.netDevStats, func(i, j int) bool {
 		return stats.netDevStats[i].interfaceName < stats.netDevStats[j].interfaceName
@@ -43,12 +42,12 @@ func getNetworkStats() ethrNetStat {
 	getTCPStats(stats)
 
 	/*
-	tcpStats, err := osStats.GetTCPStats()
-	if err != nil {
-		return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net TCP stats")
-	}
+		tcpStats, err := osStats.GetTCPStats()
+		if err != nil {
+			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net TCP stats")
+		}
 
-	return stats.EthrNetStats{NetDevStats: devStats, TCPStats: tcpStats}, nil
+		return stats.EthrNetStats{NetDevStats: devStats, TCPStats: tcpStats}, nil
 	*/
 	return *stats
 }
@@ -98,6 +97,8 @@ func startStatsTimer() {
 	if statsEnabled {
 		return
 	}
+	SleepUntilNextWholeSecond()
+	lastStatsTime = time.Now()
 	ticker := time.NewTicker(time.Second)
 	statsEnabled = true
 	go func() {
@@ -131,6 +132,7 @@ func emitStats() {
 		seconds = 1
 	}
 	ui.emitTestResultBegin()
+	// ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()
 	ui.emitStats(getNetworkStats())

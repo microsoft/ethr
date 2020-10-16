@@ -11,29 +11,13 @@ import (
 	"io"
 	"net"
 	"os"
+	"runtime"
 	"sort"
 	"sync/atomic"
 	"time"
 )
 
 var gCert []byte
-
-func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
-	defer stopStatsTimer()
-	initServer(serverParam.showUI)
-	showAcceptedIPVersion()
-	l := runControlChannel()
-	defer l.Close()
-	startStatsTimer()
-	for {
-		conn, err := l.Accept()
-		if err != nil {
-			ui.printErr("runServer: error accepting new control connection: %v", err)
-			continue
-		}
-		go handleRequest(conn)
-	}
-}
 
 func initServer(showUI bool) {
 	initServerUI(showUI)
@@ -44,88 +28,122 @@ func finiServer() {
 	logFini()
 }
 
-func runControlChannel() net.Listener {
-	l, err := net.Listen(tcp(ipVer), hostAddr+":"+ctrlPort)
-	if err != nil {
-		finiServer()
-		fmt.Printf("Fatal error listening for TCP connections: %v", err)
-		os.Exit(1)
+func showAcceptedIPVersion() {
+	var ipVerString = "ipv4, ipv6"
+	if ipVer == ethrIPv4 {
+		ipVerString = "ipv4"
+	} else if ipVer == ethrIPv6 {
+		ipVerString = "ipv6"
 	}
-	ui.printMsg("Listening on " + ctrlPort + " for control plane")
-	return l
+	ui.printMsg("Accepting IP version: %s", ipVerString)
 }
 
-func handleRequest(conn net.Conn) {
-	defer conn.Close()
-
-	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
-	ethrUnused(port)
+func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
+	defer stopStatsTimer()
+	initServer(serverParam.showUI)
+	showAcceptedIPVersion()
+	startStatsTimer()
+	srvrRunUDPServer()
+	err := srvrRunTCPServer()
 	if err != nil {
-		ui.printDbg("RemoteAddr: Split host port failed: %v", err)
-		return
+		finiServer()
+		fmt.Printf("Fatal error running TCP server: %v", err)
+		os.Exit(1)
 	}
+}
 
-	test, _ := createOrGetTest(server, TCP, All)
-	if test == nil {
-		return
-	}
-	// ui.printMsg("Test: %v", test)
-	defer func() {
-		time.Sleep(100 * time.Millisecond)
-		safeDeleteTest(test)
-	}()
-
-	//
-	// Always increment CPS count and then check if the test is Bandwidth
-	// etc. and handle those cases as well.
-	//
-	atomic.AddUint64(&test.testResult.cps, 1)
-
-	//
+func handshakeWithClient(test *ethrTest, conn net.Conn) (testParam EthrTestParam, err error) {
 	// Check if there is any control message being sent to indicate type
 	// of test, the client is running.
-	//
 	dec := gob.NewDecoder(conn)
 	enc := gob.NewEncoder(conn)
 	ethrMsg := recvSessionMsg(dec)
 	if ethrMsg.Type != EthrSyn {
+		// For CPS & Connection Latency tests, this function will return here.
+		err = os.ErrInvalid
 		return
 	}
+	testParam = ethrMsg.Syn.TestParam
+	delay := timeToNextTick()
+	ethrMsg = createAckMsg(gCert, delay)
+	err = sendSessionMsg(enc, ethrMsg)
+	if err != nil {
+		ui.printErr("Send session message failed: %v", err)
+	}
+	return
+}
 
-	testParam := ethrMsg.Syn.TestParam
+func srvrRunTCPServer() error {
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+ctrlPort)
+	if err != nil {
+		return err
+	}
+	defer l.Close()
+	ui.printMsg("Listening on " + ctrlPort + " for TCP tests")
+	for {
+		conn, err := l.Accept()
+		if err != nil {
+			ui.printErr("Error accepting new TCP connection: %v", err)
+			continue
+		}
+		go srvrHandleNewTcpConn(conn)
+	}
+}
 
+func srvrHandleNewTcpConn(conn net.Conn) {
+	defer conn.Close()
+
+	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
+	ethrUnused(server, port)
+	if err != nil {
+		ui.printDbg("RemoteAddr: Split host port failed: %v", err)
+		return
+	}
 	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
 	if err != nil {
 		ui.printDbg("LocalAddr: Split host port failed: %v", err)
 		return
 	}
 	ethrUnused(lserver, lport)
+	ui.printDbg("New connection from %v, port %v to %v, port %v", server, port, lserver, lport)
 
-	ui.printMsg("New connection from " + server + ", port " + port)
-	/*
-		ui.printMsg("Starting " + protoToString(testParam.TestID.Protocol) + " " +
-			testToString(testParam.TestID.Type) + " test from " + server)
-	*/
-	ui.emitTestHdr()
-	delay := timeToNextTick()
-	ethrMsg = createAckMsg(gCert, delay)
-	err = sendSessionMsg(enc, ethrMsg)
-	if err != nil {
-		ui.printErr("handleRequest: Send session message failed: %v", err)
+	test, isNew := createOrGetTest(server, TCP, All)
+	if test == nil {
 		return
 	}
-	test.isActive = true
+	if isNew {
+		ui.emitTestHdr()
+	}
+
+	// This defer function is handling CPS & connection latency tests, in which case,
+	// this function will return here. We give 100ms to see if another connection is
+	// made. This prevents repeated creation/deletion of the test and printing of test
+	// header via emitTestHdr call. Similar trick is used in UDP tests as well.
+	defer func() {
+		time.Sleep(100 * time.Millisecond)
+		safeDeleteTest(test)
+	}()
+
+	// Always increment CPS count and then check if the test is Bandwidth
+	// etc. and handle those cases as well.
+	atomic.AddUint64(&test.testResult.cps, 1)
+
+	testParam, err := handshakeWithClient(test, conn)
+	if err != nil {
+		return
+	}
+
 	if testParam.TestID.Protocol == TCP {
 		if testParam.TestID.Type == Bandwidth {
-			runSrvrTCPBandwidthTest(test, testParam, conn)
+			srvrRunTCPBandwidthTest(test, testParam, conn)
 		} else if testParam.TestID.Type == Latency {
 			ui.emitLatencyHdr()
-			runSrvrTCPLatencyTest(test, testParam, conn)
+			srvrRunTCPLatencyTest(test, testParam, conn)
 		}
 	}
 }
 
-func runSrvrTCPBandwidthTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
+func srvrRunTCPBandwidthTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
 	size := testParam.BufferSize
 	buff := make([]byte, size)
 	for i := uint32(0); i < testParam.BufferSize; i++ {
@@ -146,7 +164,7 @@ func runSrvrTCPBandwidthTest(test *ethrTest, testParam EthrTestParam, conn net.C
 	}
 }
 
-func runSrvrTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
+func srvrRunTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
 	bytes := make([]byte, testParam.BufferSize)
 	rttCount := testParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
@@ -205,12 +223,80 @@ func runSrvrTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Con
 	}
 }
 
-func showAcceptedIPVersion() {
-	var ipVerString = "ipv4, ipv6"
-	if ipVer == ethrIPv4 {
-		ipVerString = "ipv4"
-	} else if ipVer == ethrIPv6 {
-		ipVerString = "ipv6"
+func srvrRunUDPServer() error {
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+ctrlPort)
+	if err != nil {
+		ui.printDbg("Unable to resolve UDP address: %v", err)
+		return err
 	}
-	ui.printMsg("Accepting IP version: %s", ipVerString)
+	l, err := net.ListenUDP(udp(ipVer), udpAddr)
+	if err != nil {
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", ctrlPort, err)
+		return err
+	}
+	//
+	// We use NumCPU here instead of NumThreads passed from client. The
+	// reason is that for UDP, there is no connection, so all packets come
+	// on same CPU, so it isn't clear if there are any benefits to running
+	// more threads than NumCPU(). TODO: Evaluate this in future.
+	//
+	for i := 0; i < runtime.NumCPU(); i++ {
+		go srvrRunUDPPacketHandler(l)
+	}
+	return nil
+}
+
+func srvrRunUDPPacketHandler(conn *net.UDPConn) {
+	// This local map aids in efficiency to look up a test based on client's IP
+	// address. This is more efficient than calling createOrGetTest which takes
+	// a global lock.
+	tests := make(map[string]*ethrTest)
+	// For UDP, allocate buffer that can accomodate largest UDP datagram.
+	buffer := make([]byte, 64*1024)
+	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+
+	// This function handles UDP tests that came from clients that are no longer
+	// sending any traffic. This is poor man's garbage collection to ensure the
+	// server doesn't end up printing dormant client related statistics as UDP
+	// has no reliable way to detect if client is _not_ active.
+	go func() {
+		for {
+			time.Sleep(200 * time.Millisecond)
+			for k, v := range tests {
+				ui.printDbg("Found Test from server: %v, time: %v", k, v.lastAccess)
+				if time.Since(v.lastAccess) > (100 * time.Millisecond) {
+					ui.printDbg("Deleting UDP test from server: %v, lastAccess: %v", k, v.lastAccess)
+					safeDeleteTest(v)
+					delete(tests, k)
+				}
+			}
+		}
+	}()
+	for err == nil {
+		n, remoteAddr, err = conn.ReadFromUDP(buffer)
+		if err != nil {
+			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
+			continue
+		}
+		ethrUnused(n)
+		server, port, _ := net.SplitHostPort(remoteAddr.String())
+		test, found := tests[server]
+		if !found {
+			test, isNew := createOrGetTest(server, UDP, All)
+			if test != nil {
+				tests[server] = test
+			}
+			if isNew {
+				ui.printDbg("Creating UDP test from server: %v, lastAccess: %v", server, time.Now())
+				ui.emitTestHdr()
+			}
+		}
+		if test != nil {
+			test.lastAccess = time.Now()
+			atomic.AddUint64(&test.testResult.pps, 1)
+			atomic.AddUint64(&test.testResult.bw, uint64(n))
+		} else {
+			ui.printDbg("Unable to create test for UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
+		}
+	}
 }

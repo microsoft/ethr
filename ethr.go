@@ -56,7 +56,7 @@ func main() {
 	modeStr := flag.String("m", "", "")
 	use4 := flag.Bool("4", false, "")
 	use6 := flag.Bool("6", false, "")
-	gap := flag.Duration("g", 0, "")
+	gap := flag.Duration("g", time.Second, "")
 	reverse := flag.Bool("r", false, "")
 	ncs := flag.Bool("ncs", false, "")
 	ic := flag.Bool("ic", false, "")
@@ -122,21 +122,6 @@ func main() {
 		ipVer = ethrIPv6
 	}
 
-	//Default latency test to 1KB if length is not specified
-	switch *bufLenStr {
-	case "":
-		*bufLenStr = getDefaultBufferLenStr(*testTypePtr)
-	}
-
-	bufLen := unitToNumber(*bufLenStr)
-	if bufLen == 0 {
-		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
-	}
-
-	if *rttCount <= 0 {
-		printUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
-	}
-
 	var testType EthrTestType
 	switch *testTypePtr {
 	case "":
@@ -165,6 +150,30 @@ func main() {
 			"Valid parameters and values are:\n", *testTypePtr))
 	}
 
+	// Default latency test to 1B if length is not specified
+	switch *bufLenStr {
+	case "":
+		*bufLenStr = getDefaultBufferLenStr(*testTypePtr)
+	}
+
+	bufLen := unitToNumber(*bufLenStr)
+	if bufLen == 0 {
+		printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
+	}
+
+	//
+	// For Pkt/s, we always override the buffer size to be just 1 byte.
+	// TODO: Evaluate in future, if we need to support > 1 byte packets for
+	//       Pkt/s testing.
+	//
+	if testType == Pps {
+		bufLen = 1
+	}
+
+	if *rttCount <= 0 {
+		printUsageError(fmt.Sprintf("Invalid RTT count for latency test: %d", *rttCount))
+	}
+
 	p := strings.ToUpper(*protocol)
 	proto := TCP
 	switch p {
@@ -185,15 +194,6 @@ func main() {
 
 	if *thCount <= 0 {
 		*thCount = runtime.NumCPU()
-	}
-
-	//
-	// For Pkt/s, we always override the buffer size to be just 1 byte.
-	// TODO: Evaluate in future, if we need to support > 1 byte packets for
-	//       Pkt/s testing.
-	//
-	if testType == Pps {
-		bufLen = 1
 	}
 
 	testParam := EthrTestParam{EthrTestID{EthrProtocol(proto), testType},

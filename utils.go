@@ -356,3 +356,10 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	tc.SetKeepAlivePeriod(3 * time.Minute)
 	return tc, nil
 }
+
+func SleepUntilNextWholeSecond() {
+	t0 := time.Now()
+	t1 := t0.Add(time.Second)
+	res := t1.Round(time.Second)
+	time.Sleep(time.Until(res))
+}

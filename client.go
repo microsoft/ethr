@@ -26,6 +26,7 @@ import (
 
 	//	"sort"
 	//	"sync/atomic"
+	"syscall"
 	"time"
 )
 
@@ -37,13 +38,9 @@ const (
 	disconnect = 2
 )
 
-// handleInterrupt handles os.Interrupt
-// os.Interrupt guaranteed to be present on all systems
 func handleInterrupt(toStop chan<- int) {
 	sigChan := make(chan os.Signal)
-	// TODO: Handle graceful shutdown in containers as well
-	// by handling syscall.SIGTERM
-	signal.Notify(sigChan, os.Interrupt)
+	signal.Notify(sigChan, os.Interrupt, syscall.SIGTERM)
 	go func() {
 		<-sigChan
 		toStop <- interrupt
@@ -65,70 +62,7 @@ func initClient() {
 	initClientUI()
 }
 
-func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
-	initClient()
-	server = "[" + server + "]"
-	test, err := newTest(server, nil, testParam, nil, nil)
-	if err != nil {
-		ui.printErr("runXClient: failed to create the new test.")
-		return
-	}
-	runTest(test, clientParam.duration, clientParam.gap)
-}
-
-func runTest(test *ethrTest, d, g time.Duration) {
-	startStatsTimer()
-	toStop := make(chan int, 1)
-	if test.testParam.TestID.Protocol == TCP {
-		if test.testParam.TestID.Type == Bandwidth {
-			runBandwidthTest(test, toStop)
-		} else if test.testParam.TestID.Type == Latency {
-			go runTCPLatencyTest(test, toStop)
-		} else if test.testParam.TestID.Type == Cps {
-			go runTCPCpsTest(test)
-		}
-	}
-	test.isActive = true
-	runDurationTimer(d, toStop)
-	handleInterrupt(toStop)
-	reason := <-toStop
-	stopStatsTimer()
-	close(test.done)
-	switch reason {
-	case timeout:
-		ui.printMsg("Ethr done, duration: " + d.String() + ".")
-	case interrupt:
-		ui.printMsg("Ethr done, received interrupt signal.")
-	case disconnect:
-		ui.printMsg("Ethr done, connection terminated.")
-	}
-	return
-}
-
-func runBandwidthTest(test *ethrTest, toStop chan int) {
-	var wg sync.WaitGroup
-	runBandwidthTestThreads(test, &wg)
-	go func(wg *sync.WaitGroup) {
-		wg.Wait()
-		toStop <- disconnect
-	}(&wg)
-}
-
-func runBandwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
-	server := test.session.remoteAddr
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
-		if err != nil {
-			ui.printErr("Error dialing connection: %v", err)
-			return
-		}
-		handshakeBandwidthTest(test, conn)
-		wg.Add(1)
-		go runTCPBandwidthTest(test, conn, wg)
-	}
-}
-
-func handshakeBandwidthTest(test *ethrTest, conn net.Conn) {
+func handshakeWithServer(test *ethrTest, conn net.Conn) {
 	dec := gob.NewDecoder(conn)
 	enc := gob.NewEncoder(conn)
 	ethrMsg := createSynMsg(test.testParam)
@@ -147,10 +81,82 @@ func handshakeBandwidthTest(test *ethrTest, conn net.Conn) {
 	}
 }
 
-func runTCPBandwidthTest(test *ethrTest, conn net.Conn, wg *sync.WaitGroup) {
+func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
+	initClient()
+	server = "[" + server + "]"
+	test, err := newTest(server, nil, testParam, nil, nil)
+	if err != nil {
+		ui.printErr("Failed to create the new test.")
+		return
+	}
+	runTest(test, clientParam.duration, clientParam.gap)
+}
+
+func runTest(test *ethrTest, d, g time.Duration) {
+	startStatsTimer()
+	toStop := make(chan int, 1)
+	test.isActive = true
+	if test.testParam.TestID.Protocol == TCP {
+		if test.testParam.TestID.Type == Bandwidth {
+			runTCPBandwidthTest(test, toStop)
+		} else if test.testParam.TestID.Type == Latency {
+			go runTCPLatencyTest(test, g, toStop)
+		} else if test.testParam.TestID.Type == Cps {
+			go runTCPCpsTest(test)
+		}
+	} else if test.testParam.TestID.Protocol == UDP {
+		if test.testParam.TestID.Type == Bandwidth ||
+			test.testParam.TestID.Type == Pps {
+			runUDPBandwidthAndPpsTest(test)
+		}
+	}
+	runDurationTimer(d, toStop)
+	handleInterrupt(toStop)
+	reason := <-toStop
+	stopStatsTimer()
+	close(test.done)
+	switch reason {
+	case timeout:
+		ui.printMsg("Ethr done, duration: " + d.String() + ".")
+	case interrupt:
+		ui.printMsg("Ethr done, received interrupt signal.")
+	case disconnect:
+		ui.printMsg("Ethr done, connection terminated.")
+	}
+	return
+}
+
+func runTCPBandwidthTest(test *ethrTest, toStop chan int) {
+	var wg sync.WaitGroup
+	runTCPBandwidthTestThreads(test, &wg)
+	go func(wg *sync.WaitGroup) {
+		wg.Wait()
+		toStop <- disconnect
+	}(&wg)
+}
+
+func runTCPBandwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
+		if err != nil {
+			ui.printErr("Error dialing connection: %v", err)
+			return
+		}
+		handshakeWithServer(test, conn)
+		wg.Add(1)
+		go runTCPBandwidthTestHandler(test, conn, wg)
+	}
+}
+
+func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGroup) {
 	defer wg.Done()
 	defer conn.Close()
 	ec := test.newConn(conn)
+	rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+	ui.printMsg("[%3d] local %s port %s connected to %s port %s",
+		ec.fd, lserver, lport, rserver, rport)
 	buff := make([]byte, test.testParam.BufferSize)
 	for i := uint32(0); i < test.testParam.BufferSize; i++ {
 		buff[i] = byte(i)
@@ -173,13 +179,13 @@ ExitForLoop:
 				ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 				break ExitForLoop
 			}
-			atomic.AddUint64(&ec.data, uint64(blen))
-			atomic.AddUint64(&test.testResult.data, uint64(blen))
+			atomic.AddUint64(&ec.bw, uint64(blen))
+			atomic.AddUint64(&test.testResult.bw, uint64(blen))
 		}
 	}
 }
 
-func runTCPLatencyTest(test *ethrTest, toStop chan int) {
+func runTCPLatencyTest(test *ethrTest, g time.Duration, toStop chan int) {
 	server := test.session.remoteAddr
 	conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
 	if err != nil {
@@ -188,7 +194,7 @@ func runTCPLatencyTest(test *ethrTest, toStop chan int) {
 		return
 	}
 	defer conn.Close()
-	handshakeBandwidthTest(test, conn)
+	handshakeWithServer(test, conn)
 	ui.emitLatencyHdr()
 	buffSize := test.testParam.BufferSize
 	buff := make([]byte, buffSize)
@@ -205,6 +211,7 @@ ExitForLoop:
 		case <-test.done:
 			break ExitForLoop
 		default:
+			t0 := time.Now()
 			for i := uint32(0); i < rttCount; i++ {
 				s1 := time.Now()
 				n, err := conn.Write(buff)
@@ -225,8 +232,11 @@ ExitForLoop:
 			// TODO temp code, fix it better, this is to allow server to do
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
-
 			calcLatency(test, rttCount, latencyNumbers)
+			t1 := time.Since(t0)
+			if t1 < g {
+				time.Sleep(g - t1)
+			}
 		}
 	}
 }
@@ -276,7 +286,7 @@ func runTCPCpsTest(test *ethrTest) {
 				default:
 					conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
 					if err == nil {
-						atomic.AddUint64(&test.testResult.data, 1)
+						atomic.AddUint64(&test.testResult.cps, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
 						if ok {
 							tcpconn.SetLinger(0)
@@ -285,6 +295,48 @@ func runTCPCpsTest(test *ethrTest) {
 					} else {
 						ui.printDbg("Error setting connection for CPS test: %v", err)
 					}
+				}
+			}
+		}()
+	}
+}
+
+func runUDPBandwidthAndPpsTest(test *ethrTest) {
+	server := test.session.remoteAddr
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		go func() {
+			buff := make([]byte, test.testParam.BufferSize)
+			conn, err := net.Dial(udp(ipVer), server+":"+ctrlPort)
+			if err != nil {
+				ui.printDbg("Unable to dial UDP, error: %v", err)
+				return
+			}
+			defer conn.Close()
+			ec := test.newConn(conn)
+			rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
+				ec.fd, lserver, lport, rserver, rport)
+			blen := len(buff)
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					break ExitForLoop
+				default:
+					n, err := conn.Write(buff)
+					if err != nil {
+						ui.printDbg("%v", err)
+						continue
+					}
+					if n < blen {
+						ui.printDbg("Partial write: %d", n)
+						continue
+					}
+					atomic.AddUint64(&ec.bw, uint64(n))
+					atomic.AddUint64(&ec.pps, 1)
+					atomic.AddUint64(&test.testResult.bw, uint64(n))
+					atomic.AddUint64(&test.testResult.pps, 1)
 				}
 			}
 		}()

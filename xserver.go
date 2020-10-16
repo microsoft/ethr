@@ -76,7 +76,7 @@ func xserverTCPHandler(conn net.Conn) {
 	server, _, _ := net.SplitHostPort(conn.RemoteAddr().String())
 	cpsTest, isNew := createOrGetTest(server, TCP, Cps)
 	if cpsTest != nil {
-		atomic.AddUint64(&cpsTest.testResult.data, 1)
+		atomic.AddUint64(&cpsTest.testResult.cps, 1)
 	}
 	if isNew {
 		ui.emitTestHdr()
@@ -90,7 +90,7 @@ func xserverTCPHandler(conn net.Conn) {
 			return
 		}
 		if bwTest != nil {
-			atomic.AddUint64(&bwTest.testResult.data, uint64(size))
+			atomic.AddUint64(&bwTest.testResult.bw, uint64(size))
 		}
 	}
 }
