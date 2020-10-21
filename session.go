@@ -189,16 +189,6 @@ type ethrTest struct {
 	lastAccess time.Time
 }
 
-type ethrMode uint32
-
-const (
-	ethrModeInv ethrMode = iota
-	ethrModeServer
-	ethrModeExtServer
-	ethrModeClient
-	ethrModeExtClient
-)
-
 type ethrIPVer uint32
 
 const (
@@ -217,6 +207,7 @@ type ethrServerParam struct {
 }
 
 var ipVer ethrIPVer = ethrIPAny
+var xMode bool
 
 type ethrConn struct {
 	bw      uint64

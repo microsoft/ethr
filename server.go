@@ -41,8 +41,10 @@ func showAcceptedIPVersion() {
 func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
-	showAcceptedIPVersion()
 	startStatsTimer()
+	fmt.Println("-----------------------------------------------------------")
+	showAcceptedIPVersion()
+	ui.printMsg("Listening on port " + ctrlPort + " for TCP & UDP")
 	srvrRunUDPServer()
 	err := srvrRunTCPServer()
 	if err != nil {
@@ -79,7 +81,6 @@ func srvrRunTCPServer() error {
 		return err
 	}
 	defer l.Close()
-	ui.printMsg("Listening on " + ctrlPort + " for TCP tests")
 	for {
 		conn, err := l.Accept()
 		if err != nil {
@@ -115,10 +116,13 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 		ui.emitTestHdr()
 	}
 
-	// This defer function is handling CPS & connection latency tests, in which case,
-	// this function will return here. We give 100ms to see if another connection is
-	// made. This prevents repeated creation/deletion of the test and printing of test
-	// header via emitTestHdr call. Similar trick is used in UDP tests as well.
+	// For CPS and ConnectionLatency tests, there is no deterministic way to know when
+	// the test starts from the client side and when it ends. This defer function ensures
+	// that test is not created/deleted repeatedly by doing a deferred deletion. If another
+	// connection comes with-in 100ms, then another reference would be taken on existing
+	// test object and it won't be deleted by safeDeleteTest call. This also ensures,
+	// test header is not printed repeatedly via emitTestHdr.
+	// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
 	defer func() {
 		time.Sleep(100 * time.Millisecond)
 		safeDeleteTest(test)
@@ -258,7 +262,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	// This function handles UDP tests that came from clients that are no longer
 	// sending any traffic. This is poor man's garbage collection to ensure the
 	// server doesn't end up printing dormant client related statistics as UDP
-	// has no reliable way to detect if client is _not_ active.
+	// has no reliable way to detect if client is active or not.
 	go func() {
 		for {
 			time.Sleep(200 * time.Millisecond)

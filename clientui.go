@@ -51,7 +51,7 @@ func (u *clientUI) emitTestHdr() {
 
 func (u *clientUI) emitLatencyHdr() {
 	s := []string{"Avg", "Min", "50%", "90%", "95%", "99%", "99.9%", "99.99%", "Max"}
-	fmt.Println("-----------------------------------------------------------")
+	fmt.Println("-----------------------------------------------------------------------------------------")
 	fmt.Printf("%9s %9s %9s %9s %9s %9s %9s %9s %9s\n", s[0], s[1], s[2], s[3], s[4], s[5], s[6], s[7], s[8])
 }
 
@@ -82,12 +82,40 @@ func initClientUI() {
 var gInterval uint64
 var gNoConnectionStats bool
 
+func printBwTestDivider(p EthrProtocol) {
+	if p == TCP {
+		ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
+	} else if p == UDP {
+		ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+	}
+}
+
+func printBwTestHeader(p EthrProtocol) {
+	if p == TCP {
+		ui.printMsg("[  ID ]   Protocol    Interval      Bits/s")
+	} else if p == UDP {
+		// Printing packets only makes sense for UDP as it is a datagram protocol.
+		// For TCP, TCP itself decides how to chunk the stream to send as packets.
+		ui.printMsg("[  ID ]   Protocol    Interval      Bits/s    Pkts/s")
+	}
+}
+
+func printBwTestResult(p EthrProtocol, fd string, t0, t1, bw, pps uint64) {
+	if p == TCP {
+		ui.printMsg("[%5s]     %-5s    %03d-%03d sec   %7s", fd,
+			protoToString(p), t0, t1, bytesToRate(bw))
+	} else if p == UDP {
+		ui.printMsg("[%5s]     %-5s    %03d-%03d sec   %7s   %7s", fd,
+			protoToString(p), t0, t1, bytesToRate(bw), ppsToString(pps))
+	}
+}
+
 func printTestResult(test *ethrTest, seconds uint64) {
 	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
 		test.testParam.TestID.Protocol == UDP) {
 		if gInterval == 0 {
-			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - -")
-			ui.printMsg("[  ID ]   Protocol    Interval      Bits/s    Pkts/s")
+			printBwTestDivider(test.testParam.TestID.Protocol)
+			printBwTestHeader(test.testParam.TestID.Protocol)
 		}
 		cbw := uint64(0)
 		cpps := uint64(0)
@@ -97,20 +125,17 @@ func printTestResult(test *ethrTest, seconds uint64) {
 			pps := atomic.SwapUint64(&ec.pps, 0)
 			bw /= seconds
 			if !gNoConnectionStats {
-				ui.printMsg("[%5d]     %-5s    %03d-%03d sec   %7s   %7s", ec.fd,
-					protoToString(test.testParam.TestID.Protocol),
-					gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
+				fd := fmt.Sprintf("%5d", ec.fd)
+				printBwTestResult(test.testParam.TestID.Protocol, fd, gInterval, gInterval+1, bw, pps)
 			}
 			cbw += bw
 			cpps += pps
 			ccount++
 		})
 		if ccount > 1 || gNoConnectionStats {
-			ui.printMsg("[ SUM ]     %-5s    %03d-%03d sec   %7s   %7s",
-				protoToString(test.testParam.TestID.Protocol),
-				gInterval, gInterval+1, bytesToRate(cbw), ppsToString(cpps))
+			printBwTestResult(test.testParam.TestID.Protocol, "SUM", gInterval, gInterval+1, cbw, cpps)
 			if !gNoConnectionStats {
-				ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+				printBwTestDivider(test.testParam.TestID.Protocol)
 			}
 		}
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),

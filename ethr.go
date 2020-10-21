@@ -28,8 +28,12 @@ func main() {
 	// If version is not set via ldflags, then default to UNKNOWN
 	//
 	if gVersion == "" {
-		gVersion = "[VERSION: UNKNOWN]"
+		gVersion = "UNKNOWN"
 	}
+
+	fmt.Println("\nEthr: Comprehensive Network Measurement & Analysis Tool (Version: " + gVersion + ")")
+	fmt.Println("Developed by: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)\n")
+
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
 	// to send network traffic results in timer starvation, as well as unfair
@@ -39,9 +43,10 @@ func main() {
 	//
 	runtime.GOMAXPROCS(1024)
 
-	flag.Usage = func() { ethrUsage(gVersion) }
+	flag.Usage = func() { ethrUsage() }
 	isServer := flag.Bool("s", false, "")
 	clientDest := flag.String("c", "", "")
+	xclientDest := flag.String("x", "", "")
 	testTypePtr := flag.String("t", "", "")
 	thCount := flag.Int("n", 1, "")
 	bufLenStr := flag.String("l", "", "")
@@ -53,7 +58,6 @@ func main() {
 	showUI := flag.Bool("ui", false, "")
 	rttCount := flag.Int("i", 1000, "")
 	portStr := flag.String("ports", "", "")
-	modeStr := flag.String("m", "", "")
 	use4 := flag.Bool("4", false, "")
 	use6 := flag.Bool("6", false, "")
 	gap := flag.Duration("g", time.Second, "")
@@ -83,37 +87,21 @@ func main() {
 		loggingLevel = LogLevelDebug
 	}
 
-	xMode := false
-	switch *modeStr {
-	case "":
-	case "x":
-		xMode = true
-	default:
-		printUsageError("Invalid value for execution mode (-m).")
-	}
-	mode := ethrModeInv
-
+	xMode = false
 	if *isServer {
+		if *clientDest != "" || *xclientDest != "" {
+			printUsageError("Invalid arguments, \"-c\" or \"-x\" cannot be used with \"-s\".")
+		}
+		if *reverse {
+			printUsageError("Invalid arguments, \"-r\" can only be used in client mode (-c or -x).")
+		}
+	} else if *xclientDest != "" {
 		if *clientDest != "" {
-			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
+			printUsageError("Invalid arguments, \"-x\" cannot be used with \"-c\".")
 		}
-		if xMode {
-			mode = ethrModeExtServer
-		} else {
-			mode = ethrModeServer
-		}
-	} else if *clientDest != "" {
-		if xMode {
-			mode = ethrModeExtClient
-		} else {
-			mode = ethrModeClient
-		}
-	} else {
-		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
-	}
-
-	if *reverse && mode != ethrModeClient {
-		printUsageError("Invalid arguments, \"-r\" can only be used in client mode.")
+		xMode = true
+	} else if *clientDest == "" {
+		printUsageError("Invalid arguments, use either \"-s\" or \"-c\" or \"-x\".")
 	}
 
 	if *use4 && !*use6 {
@@ -125,15 +113,14 @@ func main() {
 	var testType EthrTestType
 	switch *testTypePtr {
 	case "":
-		switch mode {
-		case ethrModeServer:
+		if *isServer {
 			testType = All
-		case ethrModeExtServer:
-			testType = All
-		case ethrModeClient:
-			testType = Bandwidth
-		case ethrModeExtClient:
-			testType = ConnLatency
+		} else {
+			if xMode {
+				testType = ConnLatency
+			} else {
+				testType = Bandwidth
+			}
 		}
 	case "b":
 		testType = Bandwidth
@@ -201,22 +188,17 @@ func main() {
 		uint32(bufLen),
 		uint32(*rttCount),
 		*reverse}
-	validateTestParam(mode, testParam)
+	validateTestParam(*isServer, testParam)
 
 	generatePortNumbers(*portStr)
 
 	logFileName := *outputFile
 	if !*noOutput {
 		if logFileName == defaultLogFileName {
-			switch mode {
-			case ethrModeServer:
+			if *isServer {
 				logFileName = "ethrs.log"
-			case ethrModeExtServer:
-				logFileName = "ethrxs.log"
-			case ethrModeClient:
+			} else {
 				logFileName = "ethrc.log"
-			case ethrModeExtClient:
-				logFileName = "ethrxc.log"
 			}
 		}
 		logInit(logFileName)
@@ -225,15 +207,14 @@ func main() {
 	clientParam := ethrClientParam{*duration, *gap}
 	serverParam := ethrServerParam{*showUI}
 
-	switch mode {
-	case ethrModeServer:
+	if *isServer {
 		runServer(testParam, serverParam)
-	case ethrModeExtServer:
-		runXServer(testParam, serverParam)
-	case ethrModeClient:
-		runClient(testParam, clientParam, *clientDest)
-	case ethrModeExtClient:
-		runXClient(testParam, clientParam, *clientDest)
+	} else {
+		rServer := *clientDest
+		if xMode {
+			rServer = *xclientDest
+		}
+		runClient(testParam, clientParam, rServer)
 	}
 }
 
@@ -253,63 +234,63 @@ func printReverseModeError() {
 	printUsageError("Reverse mode (-r) is only supported for TCP Bandwidth tests.")
 }
 
-func validateTestParam(mode ethrMode, testParam EthrTestParam) {
+func validateTestParam(isServer bool, testParam EthrTestParam) {
 	testType := testParam.TestID.Type
 	protocol := testParam.TestID.Protocol
-	if mode == ethrModeServer {
+	if isServer {
 		if testType != All || protocol != TCP {
 			emitUnsupportedTest(testParam)
 		}
-	} else if mode == ethrModeClient {
-		switch protocol {
-		case TCP:
-			if testType != Bandwidth && testType != Cps && testType != Latency {
-				emitUnsupportedTest(testParam)
-			}
-			if testParam.Reverse && testType != Bandwidth {
-				printReverseModeError()
-			}
-		case UDP:
-			if testType != Bandwidth && testType != Pps {
-				emitUnsupportedTest(testParam)
-			}
-			if testType == Bandwidth {
-				if testParam.BufferSize > (64 * 1024) {
-					printUsageError("Maximum supported buffer size for UDP is 64K\n")
+	} else {
+		if !xMode {
+			switch protocol {
+			case TCP:
+				if testType != Bandwidth && testType != Cps && testType != Latency && testType != ConnLatency {
+					emitUnsupportedTest(testParam)
 				}
-			}
-			if testParam.Reverse {
-				printReverseModeError()
-			}
-		case HTTP:
-			if testType != Bandwidth && testType != Latency {
+				if testParam.Reverse && testType != Bandwidth {
+					printReverseModeError()
+				}
+			case UDP:
+				if testType != Bandwidth && testType != Pps {
+					emitUnsupportedTest(testParam)
+				}
+				if testType == Bandwidth {
+					if testParam.BufferSize > (64 * 1024) {
+						printUsageError("Maximum supported buffer size for UDP is 64K\n")
+					}
+				}
+				if testParam.Reverse {
+					printReverseModeError()
+				}
+			case HTTP:
+				if testType != Bandwidth && testType != Latency {
+					emitUnsupportedTest(testParam)
+				}
+				if testParam.Reverse {
+					printReverseModeError()
+				}
+			case HTTPS:
+				if testType != Bandwidth {
+					emitUnsupportedTest(testParam)
+				}
+				if testParam.Reverse {
+					printReverseModeError()
+				}
+			default:
 				emitUnsupportedTest(testParam)
 			}
-			if testParam.Reverse {
-				printReverseModeError()
-			}
-		case HTTPS:
-			if testType != Bandwidth {
+		} else {
+			if (protocol != TCP) || (testType != ConnLatency && testType != Cps) {
 				emitUnsupportedTest(testParam)
 			}
-			if testParam.Reverse {
-				printReverseModeError()
-			}
-		default:
-			emitUnsupportedTest(testParam)
-		}
-	} else if mode == ethrModeExtClient {
-		if (protocol != TCP) || (testType != ConnLatency && testType != Bandwidth && testType != Cps) {
-			emitUnsupportedTest(testParam)
 		}
 	}
 }
 
 // ethrUsage prints the command-line usage text
-func ethrUsage(gVersion string) {
-	fmt.Println("\nEthr - A comprehensive network performance measurement tool.")
-	fmt.Println("Version: " + gVersion)
-	fmt.Println("It supports 4 modes. Usage of each mode is described below:")
+func ethrUsage() {
+	fmt.Println("Ethr supports 4 modes. Usage of each mode is described below:")
 
 	fmt.Println("\nCommon Parameters")
 	fmt.Println("================================================================================")
@@ -485,6 +466,6 @@ func printIgnoreCertUsage() {
 
 func printUsageError(s string) {
 	fmt.Printf("Error: %s\n", s)
-	fmt.Printf("Please use \"ethr -h\" for ethr command line arguments.\n")
+	fmt.Printf("Please use \"ethr -h\" for complete list of command line arguments.\n")
 	os.Exit(1)
 }

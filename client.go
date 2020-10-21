@@ -54,6 +54,8 @@ func runDurationTimer(d time.Duration, toStop chan int) {
 			return
 		}
 		time.Sleep(d)
+		// Sleep extra 200ms to ensure stats print for correct number of seconds.
+		time.Sleep(200 * time.Millisecond)
 		toStop <- timeout
 	}()
 }
@@ -83,7 +85,9 @@ func handshakeWithServer(test *ethrTest, conn net.Conn) {
 
 func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
 	initClient()
-	server = "[" + server + "]"
+	if !xMode {
+		server = "[" + server + "]"
+	}
 	test, err := newTest(server, nil, testParam, nil, nil)
 	if err != nil {
 		ui.printErr("Failed to create the new test.")
@@ -93,8 +97,9 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 }
 
 func runTest(test *ethrTest, d, g time.Duration) {
-	startStatsTimer()
 	toStop := make(chan int, 1)
+	startStatsTimer()
+	runDurationTimer(d, toStop)
 	test.isActive = true
 	if test.testParam.TestID.Protocol == TCP {
 		if test.testParam.TestID.Type == Bandwidth {
@@ -103,6 +108,8 @@ func runTest(test *ethrTest, d, g time.Duration) {
 			go runTCPLatencyTest(test, g, toStop)
 		} else if test.testParam.TestID.Type == Cps {
 			go runTCPCpsTest(test)
+		} else if test.testParam.TestID.Type == ConnLatency {
+			go runTCPConnLatencyTest(test, g)
 		}
 	} else if test.testParam.TestID.Protocol == UDP {
 		if test.testParam.TestID.Type == Bandwidth ||
@@ -110,11 +117,13 @@ func runTest(test *ethrTest, d, g time.Duration) {
 			runUDPBandwidthAndPpsTest(test)
 		}
 	}
-	runDurationTimer(d, toStop)
 	handleInterrupt(toStop)
 	reason := <-toStop
 	stopStatsTimer()
 	close(test.done)
+	if test.testParam.TestID.Type == ConnLatency {
+		time.Sleep(2 * time.Second)
+	}
 	switch reason {
 	case timeout:
 		ui.printMsg("Ethr done, duration: " + d.String() + ".")
@@ -232,7 +241,7 @@ ExitForLoop:
 			// TODO temp code, fix it better, this is to allow server to do
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
-			calcLatency(test, rttCount, latencyNumbers)
+			calcAndPrintLatency(test, rttCount, latencyNumbers)
 			t1 := time.Since(t0)
 			if t1 < g {
 				time.Sleep(g - t1)
@@ -241,7 +250,7 @@ ExitForLoop:
 	}
 }
 
-func calcLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.Duration) {
+func calcAndPrintLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.Duration) {
 	sum := int64(0)
 	for _, d := range latencyNumbers {
 		sum += d.Nanoseconds()
@@ -284,7 +293,11 @@ func runTCPCpsTest(test *ethrTest) {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
+					rserver := server
+					if !xMode {
+						rserver = rserver + ":" + ctrlPort
+					}
+					conn, err := net.Dial(tcp(ipVer), rserver)
 					if err == nil {
 						atomic.AddUint64(&test.testResult.cps, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
@@ -293,12 +306,93 @@ func runTCPCpsTest(test *ethrTest) {
 						}
 						conn.Close()
 					} else {
-						ui.printDbg("Error setting connection for CPS test: %v", err)
+						ui.printDbg("Unable to dial TCP connection to [%s], error: %v", rserver, err)
 					}
 				}
 			}
 		}()
 	}
+}
+
+func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
+	server := test.session.remoteAddr
+	if !xMode {
+		server = server + ":" + ctrlPort
+	}
+	// TODO: Override NumThreads for now, fix it later to support parallel
+	// threads.
+	test.testParam.NumThreads = 1
+	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+		go func() {
+			var sent, rcvd, lost uint32
+			var warmupCount int32 = 1
+			warmupText := "[warmup] "
+			latencyNumbers := make([]time.Duration, 0)
+		ExitForLoop:
+			for {
+				select {
+				case <-test.done:
+					printConnectionLatencyResults(server, test, sent, rcvd, lost, latencyNumbers)
+					break ExitForLoop
+				default:
+					t0 := time.Now()
+					if warmupCount > 0 {
+						warmupCount--
+						dialForConnectionLatency(&server, warmupText)
+					} else {
+						sent++
+						latency, err := dialForConnectionLatency(&server, "")
+						if err == nil {
+							rcvd++
+							latencyNumbers = append(latencyNumbers, latency)
+						} else {
+							lost++
+						}
+					}
+					if rcvd >= 1000 {
+						printConnectionLatencyResults(server, test, sent, rcvd, lost, latencyNumbers)
+						latencyNumbers = make([]time.Duration, 0)
+						sent, rcvd, lost = 0, 0, 0
+					}
+					t1 := time.Since(t0)
+					if t1 < g {
+						time.Sleep(g - t1)
+					}
+				}
+			}
+		}()
+	}
+}
+
+func dialForConnectionLatency(server *string, prefix string) (timeTaken time.Duration, err error) {
+	t0 := time.Now()
+	conn, err := net.Dial(tcp(ipVer), *server)
+	if err != nil {
+		ui.printDbg("Unable to dial TCP connection to [%s], error: %v", server, err)
+		ui.printMsg("[tcp] %sConnection to %s: Timed out", prefix, *server)
+		return
+	}
+	timeTaken = time.Since(t0)
+	rserver, rport, _ := net.SplitHostPort(conn.RemoteAddr().String())
+	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
+	ui.printMsg("[tcp] %sConnection from [%s]:%s to [%s]:%s: %s",
+		prefix, lserver, lport, rserver, rport, durationToString(timeTaken))
+	*server = fmt.Sprintf("[%s]:%s", rserver, rport)
+	tcpconn, ok := conn.(*net.TCPConn)
+	if ok {
+		tcpconn.SetLinger(0)
+	}
+	conn.Close()
+	return
+}
+
+func printConnectionLatencyResults(server string, test *ethrTest, sent, rcvd, lost uint32, latencyNumbers []time.Duration) {
+	fmt.Println("-----------------------------------------------------------------------------------------")
+	ui.printMsg("TCP connect statistics for %s:", server)
+	ui.printMsg("  Sent = %d, Received = %d, Lost = %d", sent, rcvd, lost)
+	ui.emitLatencyHdr()
+	calcAndPrintLatency(test, rcvd, latencyNumbers)
+	fmt.Println("-----------------------------------------------------------------------------------------")
 }
 
 func runUDPBandwidthAndPpsTest(test *ethrTest) {

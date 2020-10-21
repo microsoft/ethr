@@ -97,7 +97,15 @@ func startStatsTimer() {
 	if statsEnabled {
 		return
 	}
+
+	// In an ideal setup, client and server should print stats at the same time.
+	// However, instead of building a whole time synchronization mechanism, a
+	// hack is used that starts stat at a second granularity. This is done on
+	// both client and sever, and as long as both client & server have time
+	// synchronized e.g. with a time server, both would print stats of the running
+	// test at _almost_ the same time.
 	SleepUntilNextWholeSecond()
+
 	lastStatsTime = time.Now()
 	ticker := time.NewTicker(time.Second)
 	statsEnabled = true
