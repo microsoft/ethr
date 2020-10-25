@@ -252,8 +252,7 @@ func srvrRunUDPServer() error {
 
 func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	// This local map aids in efficiency to look up a test based on client's IP
-	// address. This is more efficient than calling createOrGetTest which takes
-	// a global lock.
+	// address. We could use createOrGetTest but that takes a global lock.
 	tests := make(map[string]*ethrTest)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
 	buffer := make([]byte, 64*1024)
