@@ -189,7 +189,7 @@ func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds u
 func (u *serverTui) printTestResults(s []string) {
 	// Log before truncation of remote address.
 	logResults(s)
-	s[0] = truncateString(s[0], 13)
+	s[0] = truncateStringFromStart(s[0], 13)
 	u.results = append(u.results, s)
 }
 
@@ -364,7 +364,7 @@ func (u *serverCli) emitStats(netStats ethrNetStat) {
 
 func (u *serverCli) printTestResults(s []string) {
 	logResults(s)
-	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateString(s[0], 13),
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateStringFromStart(s[0], 13),
 		s[1], s[2], s[3], s[4], s[5])
 }
 

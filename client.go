@@ -11,7 +11,6 @@ import (
 	//	"crypto/x509"
 
 	"bytes"
-	"encoding/binary"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -110,25 +109,27 @@ func runTest(test *ethrTest, d, g time.Duration) {
 	startStatsTimer()
 	runDurationTimer(d, toStop)
 	test.isActive = true
-	/*
-		if test.testParam.TestID.Protocol == TCP {
-			if test.testParam.TestID.Type == Bandwidth {
-				runTCPBandwidthTest(test, toStop)
-			} else if test.testParam.TestID.Type == Latency {
-				go runTCPLatencyTest(test, g, toStop)
-			} else if test.testParam.TestID.Type == Cps {
-				go runTCPCpsTest(test)
-			} else if test.testParam.TestID.Type == ConnLatency {
-				go runTCPConnLatencyTest(test, g)
-			}
-		} else if test.testParam.TestID.Protocol == UDP {
-			if test.testParam.TestID.Type == Bandwidth ||
-				test.testParam.TestID.Type == Pps {
-				runUDPBandwidthAndPpsTest(test)
-			}
+	if test.testParam.TestID.Protocol == TCP {
+		if test.testParam.TestID.Type == Bandwidth {
+			runTCPBandwidthTest(test, toStop)
+		} else if test.testParam.TestID.Type == Latency {
+			go runTCPLatencyTest(test, g, toStop)
+		} else if test.testParam.TestID.Type == Cps {
+			go runTCPCpsTest(test)
+		} else if test.testParam.TestID.Type == ConnLatency {
+			go runTCPConnLatencyTest(test, g)
 		}
-	*/
-	runICMPTraceRoute(test)
+	} else if test.testParam.TestID.Protocol == UDP {
+		if test.testParam.TestID.Type == Bandwidth ||
+			test.testParam.TestID.Type == Pps {
+			runUDPBandwidthAndPpsTest(test)
+		}
+	} else if test.testParam.TestID.Protocol == ICMP {
+		if test.testParam.TestID.Type == TraceRoute {
+			runICMPTraceRoute(test)
+		}
+	}
+
 	handleInterrupt(toStop)
 	reason := <-toStop
 	stopStatsTimer()
@@ -464,35 +465,115 @@ type ethrHopData struct {
 	name  string
 }
 
-var gMaxHops int = 8
-var gHop [64]ethrHopData
+var gMaxHops int = 64
+var gCurHops int
+var gHop []ethrHopData
 
 func runICMPTraceRoute(test *ethrTest) {
-	for i := 0; i < gMaxHops; i++ {
-		go runICMPTraceRouteInternal(test, i)
+	gHop = make([]ethrHopData, gMaxHops)
+	dstIPAddr, err := icmpLookupIP(test.session.remoteAddr)
+	if err != nil {
+		return
+	}
+	icmpDiscoverHops(test, dstIPAddr)
+	for i := 0; i < gCurHops; i++ {
+		if gHop[i].addr != nil {
+			go icmpProbeHop(test, i, dstIPAddr)
+		}
+	}
+}
+
+func icmpLookupIP(server string) (net.IPAddr, error) {
+	var dstIPAddr net.IPAddr
+
+	destIP := net.ParseIP(server)
+	if destIP != nil {
+		dstIPAddr.IP = destIP
+		return dstIPAddr, nil
 	}
 
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		ui.printErr("Failed to looup IP address for the server: %v. Error: %v", server, err)
+		return dstIPAddr, err
+	}
+	for _, ip := range ips {
+		if ip.To4() != nil {
+			dstIPAddr.IP = ip
+			ui.printDbg("Resolved server: %v to IP address: %v\n", server, ip)
+			return dstIPAddr, nil
+		}
+	}
+	ui.printErr("Unable to resolve the given server: %v to an IP address.", server)
+	return dstIPAddr, os.ErrNotExist
+}
+
+func copyInitialHopData(hop int, hopData ethrHopData) {
+	gHop[hop].addr = hopData.addr
+	//gHop[hop].last = hopData.last
+	gHop[hop].best = hopData.last
+	//gHop[hop].worst = hopData.last
+	//gHop[hop].total = hopData.total
+	//gHop[hop].sent = hopData.sent
+	//gHop[hop].lost = hopData.lost
+	//gHop[hop].rcvd = hopData.rcvd
+	gHop[hop].name = hopData.name
+}
+
+func lookupHopName(addr net.Addr) string {
+	name := ""
+	if addr == nil {
+		return name
+	}
+	names, err := net.LookupAddr(addr.String())
+	if err == nil && len(names) > 0 {
+		name = names[0]
+		sz := len(name)
+
+		if sz > 0 && name[sz-1] == '.' {
+			name = name[:sz-1]
+		}
+		name = truncateStringFromEnd(name, 16)
+	}
+	return name
+}
+
+func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) {
+	for i := 0; i < gMaxHops; i++ {
+		var hopData ethrHopData
+		err, isLast := icmpEcho(test, dstIPAddr, "", &hopData, i, 1)
+		if err == nil {
+			hopData.name = lookupHopName(hopData.addr)
+		}
+		copyInitialHopData(i, hopData)
+		if isLast {
+			gCurHops = i + 1
+			break
+		}
+	}
+}
+
+func icmpProbeHop(test *ethrTest, hop int, dstIPAddr net.IPAddr) {
+	seq := 0
 ExitForLoop:
 	for {
 		select {
 		case <-test.done:
 			break ExitForLoop
 		default:
-			printICMPHopData()
+			err, _ := icmpEcho(test, dstIPAddr, gHop[hop].addr.String(), &gHop[hop], hop, 1)
+			if err == nil {
+				timeElapsed := gHop[hop].last
+				if timeElapsed < time.Second {
+					time.Sleep(time.Second - timeElapsed)
+				}
+			}
+			seq++
 		}
 	}
 }
 
-func printICMPHopData() {
-	for i := 0; i < gMaxHops; i++ {
-		hopData := gHop[i]
-		if hopData.addr != nil {
-			ui.printMsg("Hop: %v, Address: %v, Name: %v, Sent: %v, Rcvd: %v, Last: %v", i, hopData.addr, hopData.name, hopData.sent, hopData.rcvd, hopData.last)
-		}
-	}
-	time.Sleep(9 * time.Second)
-}
-
+/*
 func runICMPTraceRouteInternal(test *ethrTest, hop int) {
 	seq := 0
 ExitForLoop:
@@ -501,78 +582,65 @@ ExitForLoop:
 		case <-test.done:
 			break ExitForLoop
 		default:
-			sendICMPEcho(test, &gHop[hop], hop, seq)
-			seq++
-			time.Sleep(9 * time.Second)
+			sendICMPEcho(test, &gHop[hop], hop, hop+seq)
+			//seq++
+			time.Sleep(100 * time.Millisecond)
 		}
 	}
 }
+*/
 
-func sendICMPEcho(test *ethrTest, hopData *ethrHopData, hop, seq int) {
-	server := test.session.remoteAddr
-	peer := ""
-	start := time.Now()
-	localAddr := ""
-	c, err := icmp.ListenPacket("ip4:icmp", "")
+func icmpEcho(test *ethrTest, dstIPAddr net.IPAddr, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
+	localAddr := "" // In future take as input.
+	isLast := false
+
+	c, err := icmp.ListenPacket("ip4:icmp", localAddr)
 	if err != nil {
 		ui.printErr("Failed to listen to local address %v. Msg: %v.", localAddr, err.Error())
-		return
+		return err, isLast
 	}
 	defer c.Close()
-	ui.printMsg("TTL: %v", hop+1)
+
 	err = c.IPv4PacketConn().SetTTL(hop + 1)
 	if err != nil {
-		ui.printErr("%v", err)
-		return
+		ui.printErr("Failed to set TTL. Error: %v", err)
+		return err, isLast
 	}
-	tm := 10 * time.Second
-	err = c.SetDeadline(time.Now().Add(tm))
+
+	icmpTimeout := time.Second
+	err = c.SetDeadline(time.Now().Add(icmpTimeout))
 	if err != nil {
-		ui.printErr("%v", err)
-		return
+		ui.printErr("Failed to set Deadline. Error: %v", err)
+		return err, isLast
 	}
+
 	pid := os.Getpid() & 0xffff
-	bs := make([]byte, 4)
-	binary.LittleEndian.PutUint32(bs, uint32(seq))
 	wm := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
 		Body: &icmp.Echo{
 			ID: pid, Seq: seq,
-			Data: append(bs, 'x'),
+			Data: []byte("Hello: x"),
 		},
 	}
 	wb, err := wm.Marshal(nil)
 	if err != nil {
-		ui.printErr("%v", err)
-		return
+		ui.printErr("Failed to Marshal data. Error: %v", err)
+		return err, isLast
 	}
-	destIP := server
-	ui.printMsg("Server: %v", server)
-	if net.ParseIP(server) == nil {
-		addrs, err := net.LookupHost(server)
-		if err != nil || len(addrs) == 0 {
-			ui.printErr("%v", "Kela")
-			return
-		}
-		ui.printMsg("addrs: %v", addrs)
-		destIP = addrs[0]
-	}
-	ipAddr := net.IPAddr{IP: net.ParseIP(destIP)}
-	ui.printMsg("server: %v, ipAddr: %v", server, ipAddr)
-	if _, err := c.WriteTo(wb, &ipAddr); err != nil {
-		ui.printErr("%v", err)
-		return
+	start := time.Now()
+	if _, err := c.WriteTo(wb, &dstIPAddr); err != nil {
+		ui.printErr("Failed to send ICMP data. Error: %v", err)
+		return err, isLast
 	}
 	hopData.sent++
-	ui.printMsg("Success0")
-	peerAddr, _, err := listenForSpecific4(c, time.Now().Add(tm), peer, append(bs, 'x'), seq, wb)
+	peerAddr, isLast, err := listenForSpecific4(c, time.Now().Add(icmpTimeout), hopIP, []byte("Hello: x"), seq, wb)
 	if err != nil {
 		hopData.lost++
-		ui.printErr("Failure1: %v", err)
-		return
+		ui.printDbg("Failed to receive ICMP reply packet. Error: %v", err)
+		return err, isLast
 	}
-	peer = peerAddr.String()
 	elapsed := time.Since(start)
+
 	hopData.addr = peerAddr
 	hopData.last = elapsed
 	if hopData.best > elapsed {
@@ -583,12 +651,7 @@ func sendICMPEcho(test *ethrTest, hopData *ethrHopData, hop, seq int) {
 	}
 	hopData.total += elapsed
 	hopData.rcvd++
-	names, err := net.LookupAddr(peer)
-	if err == nil && len(names) > 0 {
-		hopData.name = names[0]
-	}
-	ui.printMsg("Success1")
-	return
+	return nil, isLast
 }
 
 const (
@@ -596,16 +659,19 @@ const (
 	ProtocolIPv6ICMP = 58 // ICMP for IPv6
 )
 
-func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer string, neededBody []byte, needSeq int, sent []byte) (net.Addr, []byte, error) {
+func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer string, neededBody []byte, needSeq int, sent []byte) (net.Addr, bool, error) {
+	isLast := false
 	for {
 		b := make([]byte, 1500)
+
 		n, peer, err := conn.ReadFrom(b)
 		if err != nil {
-			ui.printErr("Failure0: %v", err)
+			ui.printErr("Failed to receive ICMP packet. Error: %v", err)
 			if neterr, ok := err.(*net.OpError); ok {
-				return nil, []byte{}, neterr
+				return nil, isLast, neterr
 			}
 		}
+
 		if n == 0 {
 			continue
 		}
@@ -614,22 +680,21 @@ func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer st
 			continue
 		}
 
-		x, err := icmp.ParseMessage(ProtocolICMP, b[:n])
+		icmpMsg, err := icmp.ParseMessage(ProtocolICMP, b[:n])
 		if err != nil {
 			continue
 		}
 
-		if typ, ok := x.Type.(ipv4.ICMPType); ok && typ == ipv4.ICMPTypeTimeExceeded {
-			body := x.Body.(*icmp.TimeExceeded).Data
-
+		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded {
+			body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 			index := bytes.Index(body, sent[:4])
 			if index > 0 {
-				x, _ := icmp.ParseMessage(ProtocolICMP, body[index:])
-				switch x.Body.(type) {
+				innerIcmpMsg, _ := icmp.ParseMessage(ProtocolICMP, body[index:])
+				switch innerIcmpMsg.Body.(type) {
 				case *icmp.Echo:
-					seq := x.Body.(*icmp.Echo).Seq
+					seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
 					if seq == needSeq {
-						return peer, []byte{}, nil
+						return peer, isLast, nil
 					}
 				default:
 					// ignore
@@ -637,12 +702,17 @@ func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer st
 			}
 		}
 
-		if typ, ok := x.Type.(ipv4.ICMPType); ok && typ == ipv4.ICMPTypeEchoReply {
-			b, _ := x.Body.Marshal(1)
+		// 		if typ, ok := icmpMsg.Type.(ipv4.ICMPType); ok && typ == ipv4.ICMPTypeEchoReply {
+
+		if icmpMsg.Type == ipv4.ICMPTypeEchoReply {
+			echo := icmpMsg.Body.(*icmp.Echo)
+			ethrUnused(echo)
+			b, _ := icmpMsg.Body.Marshal(1)
 			if string(b[4:]) != string(neededBody) {
 				continue
 			}
-			return peer, b[4:], nil
+			isLast = true
+			return peer, isLast, nil
 		}
 	}
 }

@@ -300,7 +300,7 @@ func toInt(s string) int {
 	return res
 }
 
-func truncateString(str string, num int) string {
+func truncateStringFromStart(str string, num int) string {
 	s := str
 	l := len(str)
 	if l > num {
@@ -308,6 +308,19 @@ func truncateString(str string, num int) string {
 			s = "..." + str[l-num+3:l]
 		} else {
 			s = str[l-num : l]
+		}
+	}
+	return s
+}
+
+func truncateStringFromEnd(str string, num int) string {
+	s := str
+	l := len(str)
+	if l > num {
+		if num > 3 {
+			s = str[0:num] + "..."
+		} else {
+			s = str[0:num]
 		}
 	}
 	return s

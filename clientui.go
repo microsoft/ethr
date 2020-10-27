@@ -163,13 +163,29 @@ func printTestResult(test *ethrTest, seconds uint64) {
 			gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
 		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(bw), "", ppsToString(pps), ""})
+	} else if test.testParam.TestID.Type == TraceRoute {
+		if gCurHops > 0 {
+			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ")
+			ui.printMsg("Host: %-36s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteAddr)
+		}
+		for i := 0; i < gCurHops; i++ {
+			hopData := gHop[i]
+			if hopData.addr != nil {
+				if hopData.sent > 0 {
+					ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr.String(), hopData.name, hopData.sent, hopData.rcvd,
+						durationToString(hopData.last), durationToString(hopData.total), durationToString(hopData.best), durationToString(hopData.worst))
+				}
+			} else {
+				ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, "???", "", hopData.sent, hopData.rcvd, "0", "0", "0", "0")
+			}
+		}
 	}
 	gInterval++
 }
 
 func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
 	//var data uint64
-	var testList = []EthrTestType{Bandwidth, Cps, Pps}
+	var testList = []EthrTestType{Bandwidth, Cps, Pps, TraceRoute}
 
 	for _, testType := range testList {
 		test, found := s.tests[EthrTestID{proto, testType}]

@@ -32,7 +32,8 @@ func main() {
 	}
 
 	fmt.Println("\nEthr: Comprehensive Network Measurement & Analysis Tool (Version: " + gVersion + ")")
-	fmt.Println("Developed by: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)\n")
+	fmt.Println("Developed by: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)")
+	fmt.Println("")
 
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
@@ -46,7 +47,6 @@ func main() {
 	flag.Usage = func() { ethrUsage() }
 	isServer := flag.Bool("s", false, "")
 	clientDest := flag.String("c", "", "")
-	xclientDest := flag.String("x", "", "")
 	testTypePtr := flag.String("t", "", "")
 	thCount := flag.Int("n", 1, "")
 	bufLenStr := flag.String("l", "", "")
@@ -58,6 +58,7 @@ func main() {
 	showUI := flag.Bool("ui", false, "")
 	rttCount := flag.Int("i", 1000, "")
 	portStr := flag.String("ports", "", "")
+	modeStr := flag.String("m", "", "")
 	use4 := flag.Bool("4", false, "")
 	use6 := flag.Bool("6", false, "")
 	gap := flag.Duration("g", time.Second, "")
@@ -88,20 +89,26 @@ func main() {
 	}
 
 	xMode = false
+	switch *modeStr {
+	case "":
+	case "x":
+		xMode = true
+	default:
+		printUsageError("Invalid value for client mode (-m).")
+	}
+
 	if *isServer {
-		if *clientDest != "" || *xclientDest != "" {
-			printUsageError("Invalid arguments, \"-c\" or \"-x\" cannot be used with \"-s\".")
+		if *clientDest != "" {
+			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
 		}
 		if *reverse {
-			printUsageError("Invalid arguments, \"-r\" can only be used in client mode (-c or -x).")
+			printUsageError("Invalid arguments, \"-r\" can only be used in client (\"-c\") mode.")
 		}
-	} else if *xclientDest != "" {
-		if *clientDest != "" {
-			printUsageError("Invalid arguments, \"-x\" cannot be used with \"-c\".")
+		if xMode {
+			printUsageError("Invalid argument, \"-m\" can only be used in client (\"-c\") mode.")
 		}
-		xMode = true
 	} else if *clientDest == "" {
-		printUsageError("Invalid arguments, use either \"-s\" or \"-c\" or \"-x\".")
+		printUsageError("Invalid arguments, use either \"-s\" or \"-c\".")
 	}
 
 	if *use4 && !*use6 {
@@ -132,6 +139,8 @@ func main() {
 		testType = Latency
 	case "cl":
 		testType = ConnLatency
+	case "tr":
+		testType = TraceRoute
 	default:
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
 			"Valid parameters and values are:\n", *testTypePtr))
@@ -211,9 +220,6 @@ func main() {
 		runServer(testParam, serverParam)
 	} else {
 		rServer := *clientDest
-		if xMode {
-			rServer = *xclientDest
-		}
 		runClient(testParam, clientParam, rServer)
 	}
 }
@@ -262,6 +268,10 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 				}
 				if testParam.Reverse {
 					printReverseModeError()
+				}
+			case ICMP:
+				if testType != TraceRoute {
+					emitUnsupportedTest(testParam)
 				}
 			case HTTP:
 				if testType != Bandwidth && testType != Latency {
@@ -385,18 +395,20 @@ func printExtPortUsage() {
 }
 
 func printTestType() {
-	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", \"p\", or \"l\")",
+	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", \"p\", \"l\", \"cl\" or \"tr\")",
 		"b: Bandwidth",
-		"c: Connections/s or Requests/s",
+		"c: Connections/s",
 		"p: Packets/s",
 		"l: Latency, Loss & Jitter",
+		"cl: TCP Connection Setup Latency",
+		"tr: TraceRoute with Loss & Latency",
 		"Default: b - Bandwidth measurement.")
 }
 
 func printExtTestType() {
 	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\")",
 		"b: Bandwidth",
-		"c: Connections/s or Requests/s",
+		"c: Connections/s",
 		"cl: TCP connection setup latency",
 		"Default: cl - TCP connection setup latency.")
 }

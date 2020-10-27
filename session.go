@@ -36,6 +36,9 @@ const (
 
 	// ConnLatency represents connection setup latency.
 	ConnLatency
+
+	// TraceRoute
+	TraceRoute
 )
 
 // EthrProtocol represents the network protocol.
