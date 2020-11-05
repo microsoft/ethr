@@ -126,7 +126,7 @@ func runTest(test *ethrTest, d, g time.Duration) {
 		}
 	} else if test.testParam.TestID.Protocol == ICMP {
 		if test.testParam.TestID.Type == TraceRoute {
-			runICMPTraceRoute(test)
+			runICMPTraceRoute(test, g, toStop)
 		}
 	}
 
@@ -465,20 +465,27 @@ type ethrHopData struct {
 	name  string
 }
 
-var gMaxHops int = 64
+var gMaxHops int = 32
 var gCurHops int
 var gHop []ethrHopData
 
-func runICMPTraceRoute(test *ethrTest) {
+func runICMPTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 	gHop = make([]ethrHopData, gMaxHops)
 	dstIPAddr, err := icmpLookupIP(test.session.remoteAddr)
 	if err != nil {
+		toStop <- interrupt
 		return
 	}
-	icmpDiscoverHops(test, dstIPAddr)
+	err = icmpDiscoverHops(test, dstIPAddr)
+	if err != nil {
+		ui.printErr("Destination %s is not responding to ICMP Echo.", test.session.remoteAddr)
+		ui.printErr("Terminating tracing...")
+		toStop <- interrupt
+		return
+	}
 	for i := 0; i < gCurHops; i++ {
 		if gHop[i].addr != nil {
-			go icmpProbeHop(test, i, dstIPAddr)
+			go icmpProbeHop(test, gap, i, dstIPAddr)
 		}
 	}
 }
@@ -510,13 +517,7 @@ func icmpLookupIP(server string) (net.IPAddr, error) {
 
 func copyInitialHopData(hop int, hopData ethrHopData) {
 	gHop[hop].addr = hopData.addr
-	//gHop[hop].last = hopData.last
 	gHop[hop].best = hopData.last
-	//gHop[hop].worst = hopData.last
-	//gHop[hop].total = hopData.total
-	//gHop[hop].sent = hopData.sent
-	//gHop[hop].lost = hopData.lost
-	//gHop[hop].rcvd = hopData.rcvd
 	gHop[hop].name = hopData.name
 }
 
@@ -538,22 +539,33 @@ func lookupHopName(addr net.Addr) string {
 	return name
 }
 
-func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) {
+func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) error {
+	if test.session.remoteAddr == dstIPAddr.String() {
+		ui.printMsg("Tracing route to %s over %d hops:", test.session.remoteAddr, gMaxHops)
+	} else {
+		ui.printMsg("Tracing route to %s (%s) over %d hops:", test.session.remoteAddr, dstIPAddr.String(), gMaxHops)
+	}
 	for i := 0; i < gMaxHops; i++ {
 		var hopData ethrHopData
 		err, isLast := icmpEcho(test, dstIPAddr, "", &hopData, i, 1)
 		if err == nil {
 			hopData.name = lookupHopName(hopData.addr)
 		}
+		if hopData.addr != nil {
+			ui.printMsg("%2d.|--%-15s(%-19s)", i+1, hopData.addr.String(), hopData.name)
+		} else {
+			ui.printMsg("%2d.|--%-15s", i+1, "???")
+		}
 		copyInitialHopData(i, hopData)
 		if isLast {
 			gCurHops = i + 1
-			break
+			return nil
 		}
 	}
+	return os.ErrNotExist
 }
 
-func icmpProbeHop(test *ethrTest, hop int, dstIPAddr net.IPAddr) {
+func icmpProbeHop(test *ethrTest, gap time.Duration, hop int, dstIPAddr net.IPAddr) {
 	seq := 0
 ExitForLoop:
 	for {
@@ -561,34 +573,18 @@ ExitForLoop:
 		case <-test.done:
 			break ExitForLoop
 		default:
-			err, _ := icmpEcho(test, dstIPAddr, gHop[hop].addr.String(), &gHop[hop], hop, 1)
+			t0 := time.Now()
+			err, _ := icmpEcho(test, dstIPAddr, gHop[hop].addr.String(), &gHop[hop], hop, seq)
 			if err == nil {
-				timeElapsed := gHop[hop].last
-				if timeElapsed < time.Second {
-					time.Sleep(time.Second - timeElapsed)
-				}
 			}
 			seq++
+			t1 := time.Since(t0)
+			if t1 < gap {
+				time.Sleep(gap - t1)
+			}
 		}
 	}
 }
-
-/*
-func runICMPTraceRouteInternal(test *ethrTest, hop int) {
-	seq := 0
-ExitForLoop:
-	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			sendICMPEcho(test, &gHop[hop], hop, hop+seq)
-			//seq++
-			time.Sleep(100 * time.Millisecond)
-		}
-	}
-}
-*/
 
 func icmpEcho(test *ethrTest, dstIPAddr net.IPAddr, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
 	localAddr := "" // In future take as input.
@@ -666,7 +662,7 @@ func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer st
 
 		n, peer, err := conn.ReadFrom(b)
 		if err != nil {
-			ui.printErr("Failed to receive ICMP packet. Error: %v", err)
+			ui.printDbg("Failed to receive ICMP packet. Error: %v", err)
 			if neterr, ok := err.(*net.OpError); ok {
 				return nil, isLast, neterr
 			}

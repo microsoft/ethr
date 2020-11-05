@@ -172,11 +172,15 @@ func printTestResult(test *ethrTest, seconds uint64) {
 			hopData := gHop[i]
 			if hopData.addr != nil {
 				if hopData.sent > 0 {
+					avg := time.Duration(0)
+					if hopData.rcvd > 0 {
+						avg = time.Duration(hopData.total.Nanoseconds() / int64(hopData.rcvd))
+					}
 					ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr.String(), hopData.name, hopData.sent, hopData.rcvd,
-						durationToString(hopData.last), durationToString(hopData.total), durationToString(hopData.best), durationToString(hopData.worst))
+						durationToString(hopData.last), durationToString(avg), durationToString(hopData.best), durationToString(hopData.worst))
 				}
 			} else {
-				ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, "???", "", hopData.sent, hopData.rcvd, "0", "0", "0", "0")
+				ui.printMsg("%2d.|--%-15s(%-19s)   %5s   %5s   %9s   %9s   %9s   %9s", i+1, "???", "", "-", "-", "-", "-", "-", "-")
 			}
 		}
 	}
