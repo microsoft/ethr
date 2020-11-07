@@ -44,7 +44,7 @@ func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	startStatsTimer()
 	fmt.Println("-----------------------------------------------------------")
 	showAcceptedIPVersion()
-	ui.printMsg("Listening on port " + ctrlPort + " for TCP & UDP")
+	ui.printMsg("Listening on port %d for TCP & UDP", gEthrPort)
 	srvrRunUDPServer()
 	err := srvrRunTCPServer()
 	if err != nil {
@@ -76,7 +76,7 @@ func handshakeWithClient(test *ethrTest, conn net.Conn) (testParam EthrTestParam
 }
 
 func srvrRunTCPServer() error {
-	l, err := net.Listen(tcp(ipVer), hostAddr+":"+ctrlPort)
+	l, err := net.Listen(tcp(ipVer), hostAddr+":"+gEthrPortStr)
 	if err != nil {
 		return err
 	}
@@ -228,14 +228,14 @@ func srvrRunTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Con
 }
 
 func srvrRunUDPServer() error {
-	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+ctrlPort)
+	udpAddr, err := net.ResolveUDPAddr(udp(ipVer), hostAddr+":"+gEthrPortStr)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
 	}
 	l, err := net.ListenUDP(udp(ipVer), udpAddr)
 	if err != nil {
-		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", ctrlPort, err)
+		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", gEthrPortStr, err)
 		return err
 	}
 	//
@@ -299,7 +299,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 			atomic.AddUint64(&test.testResult.pps, 1)
 			atomic.AddUint64(&test.testResult.bw, uint64(n))
 		} else {
-			ui.printDbg("Unable to create test for UDP traffic on port %s from %s port %s", udpPpsPort, server, port)
+			ui.printDbg("Unable to create test for UDP traffic on port %s from %s port %s", gEthrPortStr, server, port)
 		}
 	}
 }

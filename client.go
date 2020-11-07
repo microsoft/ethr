@@ -160,7 +160,7 @@ func runTCPBandwidthTest(test *ethrTest, toStop chan int) {
 func runTCPBandwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
 	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
+		conn, err := net.Dial(tcp(ipVer), server+":"+gEthrPortStr)
 		if err != nil {
 			ui.printErr("Error dialing connection: %v", err)
 			return
@@ -209,7 +209,7 @@ ExitForLoop:
 
 func runTCPLatencyTest(test *ethrTest, g time.Duration, toStop chan int) {
 	server := test.session.remoteAddr
-	conn, err := net.Dial(tcp(ipVer), server+":"+ctrlPort)
+	conn, err := net.Dial(tcp(ipVer), server+":"+gEthrPortStr)
 	if err != nil {
 		ui.printErr("Error dialing the latency connection: %v", err)
 		os.Exit(1)
@@ -308,7 +308,7 @@ func runTCPCpsTest(test *ethrTest) {
 				default:
 					rserver := server
 					if !xMode {
-						rserver = rserver + ":" + ctrlPort
+						rserver = rserver + ":" + gEthrPortStr
 					}
 					conn, err := net.Dial(tcp(ipVer), rserver)
 					if err == nil {
@@ -330,7 +330,7 @@ func runTCPCpsTest(test *ethrTest) {
 func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 	server := test.session.remoteAddr
 	if !xMode {
-		server = server + ":" + ctrlPort
+		server = server + ":" + gEthrPortStr
 	}
 	// TODO: Override NumThreads for now, fix it later to support parallel
 	// threads.
@@ -416,7 +416,7 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
 			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(udp(ipVer), server+":"+ctrlPort)
+			conn, err := net.Dial(udp(ipVer), server+":"+gEthrPortStr)
 			if err != nil {
 				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
@@ -465,7 +465,7 @@ type ethrHopData struct {
 	name  string
 }
 
-var gMaxHops int = 32
+var gMaxHops int = 30
 var gCurHops int
 var gHop []ethrHopData
 

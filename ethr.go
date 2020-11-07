@@ -57,7 +57,7 @@ func main() {
 	duration := flag.Duration("d", 10*time.Second, "")
 	showUI := flag.Bool("ui", false, "")
 	rttCount := flag.Int("i", 1000, "")
-	portStr := flag.String("ports", "", "")
+	port := flag.Int("port", 8888, "")
 	modeStr := flag.String("m", "", "")
 	use4 := flag.Bool("4", false, "")
 	use6 := flag.Bool("6", false, "")
@@ -199,7 +199,8 @@ func main() {
 		*reverse}
 	validateTestParam(*isServer, testParam)
 
-	generatePortNumbers(*portStr)
+	gEthrPort = *port
+	gEthrPortStr = fmt.Sprintf("%d", gEthrPort)
 
 	logFileName := *outputFile
 	if !*noOutput {
@@ -232,7 +233,7 @@ func getDefaultBufferLenStr(testTypePtr string) string {
 }
 
 func emitUnsupportedTest(testParam EthrTestParam) {
-	printUsageError(fmt.Sprintf("\"%s\" test for \"%s\" is not supported.\n",
+	printUsageError(fmt.Sprintf("Test: \"%s\" for Protocol: \"%s\" is not supported.\n",
 		testToString(testParam.TestID.Type), protoToString(testParam.TestID.Protocol)))
 }
 
@@ -291,7 +292,16 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 				emitUnsupportedTest(testParam)
 			}
 		} else {
-			if (protocol != TCP) || (testType != ConnLatency && testType != Cps) {
+			switch protocol {
+			case TCP:
+				if testType != ConnLatency && testType != Cps {
+					emitUnsupportedTest(testParam)
+				}
+			case ICMP:
+				if testType != TraceRoute {
+					emitUnsupportedTest(testParam)
+				}
+			default:
 				emitUnsupportedTest(testParam)
 			}
 		}
@@ -300,7 +310,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 
 // ethrUsage prints the command-line usage text
 func ethrUsage() {
-	fmt.Println("Ethr supports 4 modes. Usage of each mode is described below:")
+	fmt.Println("Ethr supports three modes. Usage of each mode is described below:")
 
 	fmt.Println("\nCommon Parameters")
 	fmt.Println("================================================================================")
@@ -308,50 +318,45 @@ func ethrUsage() {
 	printFlagUsage("no", "", "Disable logging to file. Logging to file is enabled by default.")
 	printFlagUsage("o", "<filename>", "Name of log file. By default, following file names are used:",
 		"Server mode: 'ethrs.log'",
-		"Client mode: 'ethrc.log'",
-		"External server mode: 'ethrxs.log'",
-		"External client mode: 'ethrxc.log'")
+		"Client mode: 'ethrc.log'")
 	printFlagUsage("debug", "", "Enable debug information in logging output.")
 	printFlagUsage("4", "", "Use only IP v4 version")
 	printFlagUsage("6", "", "Use only IP v6 version")
 
 	fmt.Println("\nMode: Server")
 	fmt.Println("================================================================================")
+	fmt.Println("In this mode, Ethr runs as a server, allowing multiple clients to run")
+	fmt.Println("performance tests against it.")
 	printServerUsage()
 	printFlagUsage("ui", "", "Show output in text UI.")
 	printPortUsage()
 
 	fmt.Println("\nMode: Client")
 	fmt.Println("================================================================================")
+	fmt.Println("In this mode, Ethr client can only talk to an Ethr server.")
 	printClientUsage()
-	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
 	printDurationUsage()
-	printThreadUsage()
-	printNoConnStatUsage()
-	printBufLenUsage()
-	printProtocolUsage()
-	printIgnoreCertUsage()
-	printPortUsage()
-	printTestType()
+	printGapUsage()
 	printIterationUsage()
-
-	fmt.Println("\nMode: External Server")
-	fmt.Println("================================================================================")
-	printModeUsage()
-	printServerUsage()
-	printExtPortUsage()
+	printBufLenUsage()
+	printThreadUsage()
+	printProtocolUsage()
+	printPortUsage()
+	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
+	printTestType()
 
 	fmt.Println("\nMode: External Client")
 	fmt.Println("================================================================================")
-	printModeUsage()
+	fmt.Println("In this mode, Ethr client can talk to a non-Ethr server. This mode only supports")
+	fmt.Println("few types of measurements, such as TCP connection latency, connections/s and")
+	fmt.Println("ICMP trace route.")
 	printExtClientUsage()
+	printModeUsage()
 	printDurationUsage()
+	printGapUsage()
 	printThreadUsage()
-	printNoConnStatUsage()
-	printBufLenUsage()
 	printExtProtocolUsage()
 	printExtTestType()
-	printGapUsage()
 }
 
 func printFlagUsage(flag, info string, helptext ...string) {
@@ -372,26 +377,14 @@ func printClientUsage() {
 
 func printExtClientUsage() {
 	printFlagUsage("c", "<destination>", "Run in external client mode and connect to <destination>.",
-		"<destination> is specified using host:port format.",
-		"Example: www.microsoft.com:443 or 10.1.0.4:22 etc.")
+		"<destination> is specified using host:port format for TCP tests and host format for ICMP tests.",
+		"Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22",
+		"         For ICMP - www.microsoft.com or 10.1.0.4")
 }
 
 func printPortUsage() {
-	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
-		"A comma separated list of key=value pair is used.",
-		"Key specifies the protocol, and value specifies base port.",
-		"Ports used for various tests are calculated from base port.",
-		"Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996",
-		"Control is used for control channel communication for ethr.",
-		"Note: Same configuration must be used on both client & server.",
-		"Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'")
-}
-
-func printExtPortUsage() {
-	printFlagUsage("ports", "<k=v,...>", "Use custom port numbers instead of default ones.",
-		"A comma separated list of key=value pair is used.",
-		"Key specifies the protocol, and value specifies the port.",
-		"Default: 'tcp=9999,http=9899,https=9799'")
+	printFlagUsage("port", "<number>", "Use specified port number for TCP & UDP tests.",
+		"Default: 8888")
 }
 
 func printTestType() {
@@ -406,10 +399,10 @@ func printTestType() {
 }
 
 func printExtTestType() {
-	printFlagUsage("t", "<test>", "Test to run (\"b\", \"c\", or \"cl\")",
-		"b: Bandwidth",
-		"c: Connections/s",
+	printFlagUsage("t", "<test>", "Test to run (\"c\", \"cl\", or \"tr\")",
+		"c: TCP Connections/s",
 		"cl: TCP connection setup latency",
+		"tr: ICMP trace route",
 		"Default: cl - TCP connection setup latency.")
 }
 
@@ -429,6 +422,7 @@ func printDurationUsage() {
 func printGapUsage() {
 	printFlagUsage("g", "<gap>",
 		"Time interval between successive measurements (format: <num>[ms | s | m | h]",
+		"Only valid for latency, connection latency and trace route tests.",
 		"0: No gap",
 		"Default: 1s")
 }
@@ -448,13 +442,14 @@ func printProtocolUsage() {
 
 func printExtProtocolUsage() {
 	printFlagUsage("p", "<protocol>",
-		"Protocol (\"tcp\", \"http\", \"https\", or \"icmp\")",
+		"Protocol (\"tcp\", or \"icmp\")",
 		"Default: tcp")
 }
 
 func printIterationUsage() {
 	printFlagUsage("i", "<iterations>",
 		"Number of round trip iterations for each latency measurement.",
+		"Only valid for latency testing.",
 		"Default: 1000")
 }
 
