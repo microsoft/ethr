@@ -137,8 +137,8 @@ func testToString(testType EthrTestType) string {
 		return "Packets/s"
 	case Latency:
 		return "Latency"
-	case ConnLatency:
-		return "Connection Latency"
+	case Ping:
+		return "Ping"
 	case TraceRoute:
 		return "TraceRoute"
 	default:

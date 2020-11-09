@@ -101,10 +101,10 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 		ui.printErr("Failed to create the new test.")
 		return
 	}
-	runTest(test, clientParam.duration, clientParam.gap)
+	runTest(test, clientParam.duration, clientParam.gap, clientParam.warmupCount)
 }
 
-func runTest(test *ethrTest, d, g time.Duration) {
+func runTest(test *ethrTest, d, g time.Duration, warmupCount int) {
 	toStop := make(chan int, 1)
 	startStatsTimer()
 	runDurationTimer(d, toStop)
@@ -115,9 +115,9 @@ func runTest(test *ethrTest, d, g time.Duration) {
 		} else if test.testParam.TestID.Type == Latency {
 			go runTCPLatencyTest(test, g, toStop)
 		} else if test.testParam.TestID.Type == Cps {
-			go runTCPCpsTest(test)
-		} else if test.testParam.TestID.Type == ConnLatency {
-			go runTCPConnLatencyTest(test, g)
+			go tcpRunCpsTest(test)
+		} else if test.testParam.TestID.Type == Ping {
+			go clientRunPingTest(test, g, warmupCount)
 		}
 	} else if test.testParam.TestID.Protocol == UDP {
 		if test.testParam.TestID.Type == Bandwidth ||
@@ -126,7 +126,9 @@ func runTest(test *ethrTest, d, g time.Duration) {
 		}
 	} else if test.testParam.TestID.Protocol == ICMP {
 		if test.testParam.TestID.Type == TraceRoute {
-			runICMPTraceRoute(test, g, toStop)
+			icmpRunTraceRoute(test, g, toStop)
+		} else if test.testParam.TestID.Type == Ping {
+			go clientRunPingTest(test, g, warmupCount)
 		}
 	}
 
@@ -134,7 +136,7 @@ func runTest(test *ethrTest, d, g time.Duration) {
 	reason := <-toStop
 	stopStatsTimer()
 	close(test.done)
-	if test.testParam.TestID.Type == ConnLatency {
+	if test.testParam.TestID.Type == Ping {
 		time.Sleep(2 * time.Second)
 	}
 	switch reason {
@@ -296,7 +298,7 @@ func calcAndPrintLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.
 		avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
-func runTCPCpsTest(test *ethrTest) {
+func tcpRunCpsTest(test *ethrTest) {
 	server := test.session.remoteAddr
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
@@ -327,9 +329,9 @@ func runTCPCpsTest(test *ethrTest) {
 	}
 }
 
-func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
+func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount int) {
 	server := test.session.remoteAddr
-	if !xMode {
+	if !xMode && test.testParam.TestID.Protocol == TCP {
 		server = server + ":" + gEthrPortStr
 	}
 	// TODO: Override NumThreads for now, fix it later to support parallel
@@ -338,7 +340,6 @@ func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 	for th := uint32(0); th < test.testParam.NumThreads; th++ {
 		go func() {
 			var sent, rcvd, lost uint32
-			var warmupCount int32 = 1
 			warmupText := "[warmup] "
 			latencyNumbers := make([]time.Duration, 0)
 		ExitForLoop:
@@ -351,10 +352,10 @@ func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 					t0 := time.Now()
 					if warmupCount > 0 {
 						warmupCount--
-						dialForConnectionLatency(&server, warmupText)
+						clientRunPing(test, &server, warmupText)
 					} else {
 						sent++
-						latency, err := dialForConnectionLatency(&server, "")
+						latency, err := clientRunPing(test, &server, "")
 						if err == nil {
 							rcvd++
 							latencyNumbers = append(latencyNumbers, latency)
@@ -377,7 +378,15 @@ func runTCPConnLatencyTest(test *ethrTest, g time.Duration) {
 	}
 }
 
-func dialForConnectionLatency(server *string, prefix string) (timeTaken time.Duration, err error) {
+func clientRunPing(test *ethrTest, server *string, prefix string) (time.Duration, error) {
+	if test.testParam.TestID.Protocol == TCP {
+		return tcpRunPing(test, server, prefix)
+	} else {
+		return icmpRunPing(test, server, prefix)
+	}
+}
+
+func tcpRunPing(test *ethrTest, server *string, prefix string) (timeTaken time.Duration, err error) {
 	t0 := time.Now()
 	// conn, err := net.DialTimeout(tcp(ipVer), *server, time.Second)
 	conn, err := net.Dial(tcp(ipVer), *server)
@@ -469,7 +478,30 @@ var gMaxHops int = 30
 var gCurHops int
 var gHop []ethrHopData
 
-func runICMPTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
+func icmpRunPing(test *ethrTest, server *string, prefix string) (time.Duration, error) {
+	dstIPAddr, err := icmpLookupIP(test.session.remoteAddr)
+	if err != nil {
+		return time.Second, err
+	}
+	*server = dstIPAddr.String()
+
+	var hopData ethrHopData
+	err, isLast := icmpEcho(test, dstIPAddr, "", &hopData, 254, 255)
+	if err != nil {
+		ui.printMsg("[icmp] %sPing to %s: %v", prefix, *server, err)
+		return time.Second, err
+	}
+	if !isLast {
+		ui.printMsg("[icmp] %sPing to %s: %s",
+			prefix, *server, "Non-EchoReply Received.")
+		return time.Second, os.ErrNotExist
+	}
+	ui.printMsg("[icmp] %sPing to %s: %s",
+		prefix, *server, durationToString(hopData.last))
+	return hopData.last, nil
+}
+
+func icmpRunTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 	gHop = make([]ethrHopData, gMaxHops)
 	dstIPAddr, err := icmpLookupIP(test.session.remoteAddr)
 	if err != nil {
@@ -667,15 +699,12 @@ func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer st
 				return nil, isLast, neterr
 			}
 		}
-
 		if n == 0 {
 			continue
 		}
-
 		if neededPeer != "" && peer.String() != neededPeer {
 			continue
 		}
-
 		icmpMsg, err := icmp.ParseMessage(ProtocolICMP, b[:n])
 		if err != nil {
 			continue
@@ -699,7 +728,6 @@ func listenForSpecific4(conn *icmp.PacketConn, deadline time.Time, neededPeer st
 		}
 
 		// 		if typ, ok := icmpMsg.Type.(ipv4.ICMPType); ok && typ == ipv4.ICMPTypeEchoReply {
-
 		if icmpMsg.Type == ipv4.ICMPTypeEchoReply {
 			echo := icmpMsg.Body.(*icmp.Echo)
 			ethrUnused(echo)

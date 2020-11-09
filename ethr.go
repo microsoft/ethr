@@ -65,6 +65,7 @@ func main() {
 	reverse := flag.Bool("r", false, "")
 	ncs := flag.Bool("ncs", false, "")
 	ic := flag.Bool("ic", false, "")
+	wc := flag.Int("w", 1, "")
 
 	flag.Parse()
 
@@ -124,7 +125,7 @@ func main() {
 			testType = All
 		} else {
 			if xMode {
-				testType = ConnLatency
+				testType = Ping
 			} else {
 				testType = Bandwidth
 			}
@@ -137,8 +138,8 @@ func main() {
 		testType = Pps
 	case "l":
 		testType = Latency
-	case "cl":
-		testType = ConnLatency
+	case "pi":
+		testType = Ping
 	case "tr":
 		testType = TraceRoute
 	default:
@@ -214,7 +215,7 @@ func main() {
 		logInit(logFileName)
 	}
 
-	clientParam := ethrClientParam{*duration, *gap}
+	clientParam := ethrClientParam{*duration, *gap, *wc}
 	serverParam := ethrServerParam{*showUI}
 
 	if *isServer {
@@ -252,7 +253,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		if !xMode {
 			switch protocol {
 			case TCP:
-				if testType != Bandwidth && testType != Cps && testType != Latency && testType != ConnLatency {
+				if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping {
 					emitUnsupportedTest(testParam)
 				}
 				if testParam.Reverse && testType != Bandwidth {
@@ -294,11 +295,11 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		} else {
 			switch protocol {
 			case TCP:
-				if testType != ConnLatency && testType != Cps {
+				if testType != Ping && testType != Cps {
 					emitUnsupportedTest(testParam)
 				}
 			case ICMP:
-				if testType != TraceRoute {
+				if testType != Ping && testType != TraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 			default:
@@ -344,12 +345,12 @@ func ethrUsage() {
 	printPortUsage()
 	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
 	printTestType()
+	printWarmupUsage()
 
 	fmt.Println("\nMode: External Client")
 	fmt.Println("================================================================================")
 	fmt.Println("In this mode, Ethr client can talk to a non-Ethr server. This mode only supports")
-	fmt.Println("few types of measurements, such as TCP connection latency, connections/s and")
-	fmt.Println("ICMP trace route.")
+	fmt.Println("few types of measurements, such as Ping, Connections/s and TraceRoute.")
 	printExtClientUsage()
 	printModeUsage()
 	printDurationUsage()
@@ -357,6 +358,7 @@ func ethrUsage() {
 	printThreadUsage()
 	printExtProtocolUsage()
 	printExtTestType()
+	printWarmupUsage()
 }
 
 func printFlagUsage(flag, info string, helptext ...string) {
@@ -377,7 +379,7 @@ func printClientUsage() {
 
 func printExtClientUsage() {
 	printFlagUsage("c", "<destination>", "Run in external client mode and connect to <destination>.",
-		"<destination> is specified using host:port format for TCP tests and host format for ICMP tests.",
+		"<destination> is specified in <host:port> format for TCP and <host> format for ICMP.",
 		"Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22",
 		"         For ICMP - www.microsoft.com or 10.1.0.4")
 }
@@ -393,17 +395,17 @@ func printTestType() {
 		"c: Connections/s",
 		"p: Packets/s",
 		"l: Latency, Loss & Jitter",
-		"cl: TCP Connection Setup Latency",
+		"pi: Ping Loss & Latency",
 		"tr: TraceRoute with Loss & Latency",
 		"Default: b - Bandwidth measurement.")
 }
 
 func printExtTestType() {
 	printFlagUsage("t", "<test>", "Test to run (\"c\", \"cl\", or \"tr\")",
-		"c: TCP Connections/s",
-		"cl: TCP connection setup latency",
-		"tr: ICMP trace route",
-		"Default: cl - TCP connection setup latency.")
+		"c: Connections/s",
+		"pi: Ping Loss & Latency",
+		"tr: TraceRoute with Loss & Latency",
+		"Default: pi - Ping Loss & Latency.")
 }
 
 func printThreadUsage() {
@@ -422,7 +424,7 @@ func printDurationUsage() {
 func printGapUsage() {
 	printFlagUsage("g", "<gap>",
 		"Time interval between successive measurements (format: <num>[ms | s | m | h]",
-		"Only valid for latency, connection latency and trace route tests.",
+		"Only valid for latency, ping and traceRoute tests.",
 		"0: No gap",
 		"Default: 1s")
 }
@@ -469,6 +471,11 @@ func printIgnoreCertUsage() {
 	printFlagUsage("ic", "",
 		"Ignore Certificate is useful for HTTPS tests, for cases where a",
 		"middle box like a proxy is not able to supply a valid Ethr cert.")
+}
+
+func printWarmupUsage() {
+	printFlagUsage("w", "<number>", "Use specified number of iterations for warmup.",
+		"Default: 1")
 }
 
 func printUsageError(s string) {

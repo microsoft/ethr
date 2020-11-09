@@ -34,8 +34,8 @@ const (
 	// Latency represents the latency test.
 	Latency
 
-	// ConnLatency represents connection setup latency.
-	ConnLatency
+	// Ping test.
+	Ping
 
 	// TraceRoute
 	TraceRoute
@@ -201,8 +201,9 @@ const (
 )
 
 type ethrClientParam struct {
-	duration time.Duration
-	gap      time.Duration
+	duration    time.Duration
+	gap         time.Duration
+	warmupCount int
 }
 
 type ethrServerParam struct {
