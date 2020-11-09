@@ -164,7 +164,7 @@ In this mode, Ethr client can only talk to an Ethr server.
 		Default: 10s
 	-g <gap>
 		Time interval between successive measurements (format: <num>[ms | s | m | h]
-		Only valid for latency, connection latency and trace route tests.
+		Only valid for latency, ping and traceRoute tests.
 		0: No gap
 		Default: 1s
 	-i <iterations>
@@ -193,18 +193,20 @@ In this mode, Ethr client can only talk to an Ethr server.
 		c: Connections/s
 		p: Packets/s
 		l: Latency, Loss & Jitter
-		cl: TCP Connection Setup Latency
+		pi: Ping Loss & Latency
 		tr: TraceRoute with Loss & Latency
 		Default: b - Bandwidth measurement.
+	-w <number>
+		Use specified number of iterations for warmup.
+		Default: 1
 ```
 ### External Client Mode
 ```
 In this mode, Ethr client can talk to a non-Ethr server. This mode only supports
-few types of measurements, such as TCP connection latency, connections/s and
-ICMP trace route.
+few types of measurements, such as Ping, Connections/s and TraceRoute.
 	-c <destination>
 		Run in external client mode and connect to <destination>.
-		<destination> is specified using host:port format for TCP tests and host format for ICMP tests.
+		<destination> is specified in <host:port> format for TCP and <host> format for ICMP.
 		Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22
 		         For ICMP - www.microsoft.com or 10.1.0.4
 	-m <mode>
@@ -215,7 +217,7 @@ ICMP trace route.
 		Default: 10s
 	-g <gap>
 		Time interval between successive measurements (format: <num>[ms | s | m | h]
-		Only valid for latency, connection latency and trace route tests.
+		Only valid for latency, ping and traceRoute tests.
 		0: No gap
 		Default: 1s
 	-n <number>
@@ -227,10 +229,13 @@ ICMP trace route.
 		Default: tcp
 	-t <test>
 		Test to run ("c", "cl", or "tr")
-		c: TCP Connections/s
-		cl: TCP connection setup latency
-		tr: ICMP trace route
-		Default: cl - TCP connection setup latency.
+		c: Connections/s
+		pi: Ping Loss & Latency
+		tr: TraceRoute with Loss & Latency
+		Default: pi - Ping Loss & Latency.
+	-w <number>
+		Use specified number of iterations for warmup.
+		Default: 1
 ```
 
 # Status
