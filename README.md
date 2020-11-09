@@ -240,11 +240,11 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 
 # Status
 
-Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Connection Latency | TraceRoute
-------------- | ------------- | ------------- | ------------- | ------------- | ----------------------- | -------------
+Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Ping | TraceRoute
+------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
 TCP  | Yes | Yes | NA | Yes | Yes | No
 UDP  | Yes | NA | Yes | No | NA | No
-ICMP | No | NA | No | No | NA | Yes
+ICMP | No | NA | No | No | Yes | Yes
 
 # Platform Support
 
