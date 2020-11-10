@@ -133,8 +133,6 @@ ethr -c localhost -t c -n 64
 		Name of log file. By default, following file names are used:
 		Server mode: 'ethrs.log'
 		Client mode: 'ethrc.log'
-		External server mode: 'ethrxs.log'
-		External client mode: 'ethrxc.log'
 	-debug 
 		Enable debug information in logging output.
 	-4 
@@ -144,126 +142,109 @@ ethr -c localhost -t c -n 64
 ```
 ### Server Parameters
 ```
+In this mode, Ethr runs as a server, allowing multiple clients to run
+performance tests against it.
 	-s 
 		Run in server mode.
 	-ui 
 		Show output in text UI.
-	-ports <k=v,...>
-		Use custom port numbers instead of default ones.
-		A comma separated list of key=value pair is used.
-		Key specifies the protocol, and value specifies base port.
-		Ports used for various tests are calculated from base port.
-		Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996
-		Control is used for control channel communication for ethr.
-		Note: Same configuration must be used on both client & server.
-		Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'
+	-port <number>
+		Use specified port number for TCP & UDP tests.
+		Default: 8888
 ```
 ### Client Parameters
 ```
+In this mode, Ethr client can only talk to an Ethr server.
 	-c <server>
 		Run in client mode and connect to <server>.
 		Server is specified using name, FQDN or IP address.
-	-r 
-		For Bandwidth tests, send data from server to client.
 	-d <duration>
 		Duration for the test (format: <num>[ms | s | m | h]
 		0: Run forever
 		Default: 10s
-	-n <number>
-		Number of Parallel Sessions (and Threads).
-		0: Equal to number of CPUs
-		Default: 1
-	-ncs 
-		No Connection Stats would be printed if this flag is specified.
-		This is useful for running with large number of connections as
-		specified by -n option.
+	-g <gap>
+		Time interval between successive measurements (format: <num>[ms | s | m | h]
+		Only valid for latency, ping and traceRoute tests.
+		0: No gap
+		Default: 1s
+	-i <iterations>
+		Number of round trip iterations for each latency measurement.
+		Only valid for latency testing.
+		Default: 1000
 	-l <length>
 		Length of buffer to use (format: <num>[KB | MB | GB])
 		Only valid for Bandwidth tests. Max 1GB.
 		Default: 16KB
+	-n <number>
+		Number of Parallel Sessions (and Threads).
+		0: Equal to number of CPUs
+		Default: 1
 	-p <protocol>
 		Protocol ("tcp", "udp", "http", "https", or "icmp")
 		Default: tcp
-	-ports <k=v,...>
-		Use custom port numbers instead of default ones.
-		A comma separated list of key=value pair is used.
-		Key specifies the protocol, and value specifies base port.
-		Ports used for various tests are calculated from base port.
-		Example: For TCP, Bw: 9999, CPS: 9998, PPS: 9997, Latency: 9996
-		Control is used for control channel communication for ethr.
-		Note: Same configuration must be used on both client & server.
-		Default: 'control=8888,tcp=9999,udp=9999,http=9899,https=9799'
+	-port <number>
+		Use specified port number for TCP & UDP tests.
+		Default: 8888
+	-r 
+		For Bandwidth tests, send data from server to client.
 	-t <test>
-		Test to run ("b", "c", "p", or "l")
+		Test to run ("b", "c", "p", "l", "cl" or "tr")
 		b: Bandwidth
-		c: Connections/s or Requests/s
+		c: Connections/s
 		p: Packets/s
 		l: Latency, Loss & Jitter
+		pi: Ping Loss & Latency
+		tr: TraceRoute with Loss & Latency
 		Default: b - Bandwidth measurement.
-	-i <iterations>
-		Number of round trip iterations for each latency measurement.
-		Default: 1000
-```
-### External Server Parameters
-```
-	-m <mode>
-		'-m x' MUST be specified for external mode.
-	-s 
-		Run in server mode.
-	-ports <k=v,...>
-		Use custom port numbers instead of default ones.
-		A comma separated list of key=value pair is used.
-		Key specifies the protocol, and value specifies the port.
-		Default: 'tcp=9999,http=9899,https=9799'
+	-w <number>
+		Use specified number of iterations for warmup.
+		Default: 1
 ```
 ### External Client Mode
 ```
-	-m <mode>
-		'-m x' MUST be specified for external mode.
+In this mode, Ethr client can talk to a non-Ethr server. This mode only supports
+few types of measurements, such as Ping, Connections/s and TraceRoute.
 	-c <destination>
 		Run in external client mode and connect to <destination>.
-		<destination> is specified using host:port format.
-		Example: www.microsoft.com:443 or 10.1.0.4:22 etc.
+		<destination> is specified in <host:port> format for TCP and <host> format for ICMP.
+		Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22
+		         For ICMP - www.microsoft.com or 10.1.0.4
+	-m <mode>
+		'-m x' MUST be specified for external mode.
 	-d <duration>
 		Duration for the test (format: <num>[ms | s | m | h]
 		0: Run forever
 		Default: 10s
+	-g <gap>
+		Time interval between successive measurements (format: <num>[ms | s | m | h]
+		Only valid for latency, ping and traceRoute tests.
+		0: No gap
+		Default: 1s
 	-n <number>
 		Number of Parallel Sessions (and Threads).
 		0: Equal to number of CPUs
 		Default: 1
-	-ncs 
-		No Connection Stats would be printed if this flag is specified.
-		This is useful for running with large number of connections as
-		specified by -n option.
-	-l <length>
-		Length of buffer to use (format: <num>[KB | MB | GB])
-		Only valid for Bandwidth tests. Max 1GB.
-		Default: 16KB
 	-p <protocol>
-		Protocol ("tcp", "http", "https", or "icmp")
+		Protocol ("tcp", or "icmp")
 		Default: tcp
 	-t <test>
-		Test to run ("b", "c", or "cl")
-		b: Bandwidth
-		c: Connections/s or Requests/s
-		cl: TCP connection setup latency
-		Default: b - Bandwidth measurement.
-	-g <gap>
-		Time interval between successive measurements (format: <num>[ms | s | m | h]
-		0: No gap
-		Default: 1s
+		Test to run ("c", "cl", or "tr")
+		c: Connections/s
+		pi: Ping Loss & Latency
+		tr: TraceRoute with Loss & Latency
+		Default: pi - Ping Loss & Latency.
+	-w <number>
+		Use specified number of iterations for warmup.
+		Default: 1
 ```
 
 # Status
 
-Protocol  | Bandwidth | Connections/s | Packets/s | Latency
-------------- | ------------- | ------------- | ------------- | -------------
-TCP  | Yes | Yes | No | Yes
-UDP  | Yes | NA | Yes | No
-HTTP | Yes | No | No | Yes
-HTTPS | Yes | No | No | No
-ICMP | No | NA | No | No
+Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Ping | TraceRoute
+------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
+TCP  | Yes | Yes | NA | Yes | Yes | No
+UDP  | Yes | NA | Yes | No | NA | No
+ICMP | No | NA | No | No | Yes | Yes
 
 # Platform Support
 

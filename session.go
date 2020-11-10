@@ -34,8 +34,11 @@ const (
 	// Latency represents the latency test.
 	Latency
 
-	// ConnLatency represents connection setup latency.
-	ConnLatency
+	// Ping test.
+	Ping
+
+	// TraceRoute
+	TraceRoute
 )
 
 // EthrProtocol represents the network protocol.
@@ -166,7 +169,12 @@ type EthrTestParam struct {
 }
 
 type ethrTestResult struct {
-	data uint64
+	//data     uint64
+	bw       uint64
+	cps      uint64
+	pps      uint64
+	latency  uint64
+	clatency uint64
 }
 
 type ethrTest struct {
@@ -181,17 +189,8 @@ type ethrTest struct {
 	testResult ethrTestResult
 	done       chan struct{}
 	connList   *list.List
+	lastAccess time.Time
 }
-
-type ethrMode uint32
-
-const (
-	ethrModeInv ethrMode = iota
-	ethrModeServer
-	ethrModeExtServer
-	ethrModeClient
-	ethrModeExtClient
-)
 
 type ethrIPVer uint32
 
@@ -202,8 +201,9 @@ const (
 )
 
 type ethrClientParam struct {
-	duration time.Duration
-	gap      time.Duration
+	duration    time.Duration
+	gap         time.Duration
+	warmupCount int
 }
 
 type ethrServerParam struct {
@@ -211,9 +211,11 @@ type ethrServerParam struct {
 }
 
 var ipVer ethrIPVer = ethrIPAny
+var xMode bool
 
 type ethrConn struct {
-	data    uint64
+	bw      uint64
+	pps     uint64
 	test    *ethrTest
 	conn    net.Conn
 	elem    *list.Element
@@ -274,6 +276,7 @@ func newTestInternal(remoteAddr string, conn net.Conn, testParam EthrTestParam, 
 	test.testParam = testParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
+	test.lastAccess = time.Now()
 	session.tests[testParam.TestID] = test
 
 	return test, nil
