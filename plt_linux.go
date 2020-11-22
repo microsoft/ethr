@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	tm "github.com/nsf/termbox-go"
 )
@@ -152,3 +153,10 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 	return false
 }
 
+func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
+	err = syscall.SetsockoptInt(int(fd), level, opt, val)
+	if err != nil {
+		ui.printErr("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
+	}
+	return
+}

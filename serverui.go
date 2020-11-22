@@ -447,7 +447,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		if latTestOn {
 			latStr = durationToString(time.Duration(latency))
 		}
-		str := []string{s.remoteAddr, protoToString(proto),
+		str := []string{s.remoteIP, protoToString(proto),
 			bwStr, cpsStr, ppsStr, latStr}
 		return str
 	}
@@ -503,7 +503,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		if latTestOn {
 			latStr = durationToString(time.Duration(latency))
 		}
-		str := []string{s.remoteAddr, protoToString(proto),
+		str := []string{s.remoteIP, protoToString(proto),
 			bwStr, cpsStr, ppsStr, latStr}
 		return str
 	}

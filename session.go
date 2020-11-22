@@ -169,7 +169,6 @@ type EthrTestParam struct {
 }
 
 type ethrTestResult struct {
-	//data     uint64
 	bw       uint64
 	cps      uint64
 	pps      uint64
@@ -180,10 +179,12 @@ type ethrTestResult struct {
 type ethrTest struct {
 	isActive   bool
 	session    *ethrSession
+	remoteAddr string
+	remoteIP   string
+	remotePort string
+	dialAddr   string
 	ctrlConn   net.Conn
 	refCount   int32
-	enc        *gob.Encoder
-	dec        *gob.Decoder
 	rcvdMsgs   chan *EthrMsg
 	testParam  EthrTestParam
 	testResult ethrTestResult
@@ -224,9 +225,9 @@ type ethrConn struct {
 }
 
 type ethrSession struct {
-	remoteAddr string
-	testCount  uint32
-	tests      map[EthrTestID]*ethrTest
+	remoteIP  string
+	testCount uint32
+	tests     map[EthrTestID]*ethrTest
 }
 
 var gSessions = make(map[string]*ethrSession)
@@ -244,21 +245,21 @@ func deleteKey(key string) {
 	gSessionKeys = gSessionKeys[:i]
 }
 
-func newTest(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob.Encoder, dec *gob.Decoder) (*ethrTest, error) {
+func newTest(remoteIP string, conn net.Conn, testParam EthrTestParam) (*ethrTest, error) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
-	return newTestInternal(remoteAddr, conn, testParam, enc, dec)
+	return newTestInternal(remoteIP, conn, testParam)
 }
 
-func newTestInternal(remoteAddr string, conn net.Conn, testParam EthrTestParam, enc *gob.Encoder, dec *gob.Decoder) (*ethrTest, error) {
+func newTestInternal(remoteIP string, conn net.Conn, testParam EthrTestParam) (*ethrTest, error) {
 	var session *ethrSession
-	session, found := gSessions[remoteAddr]
+	session, found := gSessions[remoteIP]
 	if !found {
 		session = &ethrSession{}
-		session.remoteAddr = remoteAddr
+		session.remoteIP = remoteIP
 		session.tests = make(map[EthrTestID]*ethrTest)
-		gSessions[remoteAddr] = session
-		gSessionKeys = append(gSessionKeys, remoteAddr)
+		gSessions[remoteIP] = session
+		gSessionKeys = append(gSessionKeys, remoteIP)
 	}
 
 	test, found := session.tests[testParam.TestID]
@@ -270,8 +271,6 @@ func newTestInternal(remoteAddr string, conn net.Conn, testParam EthrTestParam, 
 	test.session = session
 	test.ctrlConn = conn
 	test.refCount = 0
-	test.enc = enc
-	test.dec = dec
 	test.rcvdMsgs = make(chan *EthrMsg)
 	test.testParam = testParam
 	test.done = make(chan struct{})
@@ -310,20 +309,20 @@ func deleteTestInternal(test *ethrTest) {
 	session.testCount--
 
 	if session.testCount == 0 {
-		deleteKey(session.remoteAddr)
-		delete(gSessions, session.remoteAddr)
+		deleteKey(session.remoteIP)
+		delete(gSessions, session.remoteIP)
 	}
 }
 
-func getTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
+func getTest(remoteIP string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
 	gSessionLock.RLock()
 	defer gSessionLock.RUnlock()
-	return getTestInternal(remoteAddr, proto, testType)
+	return getTestInternal(remoteIP, proto, testType)
 }
 
-func getTestInternal(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
+func getTestInternal(remoteIP string, proto EthrProtocol, testType EthrTestType) (test *ethrTest) {
 	test = nil
-	session, found := gSessions[remoteAddr]
+	session, found := gSessions[remoteIP]
 	if !found {
 		return
 	}
@@ -331,15 +330,15 @@ func getTestInternal(remoteAddr string, proto EthrProtocol, testType EthrTestTyp
 	return
 }
 
-func createOrGetTest(remoteAddr string, proto EthrProtocol, testType EthrTestType) (test *ethrTest, isNew bool) {
+func createOrGetTest(remoteIP string, proto EthrProtocol, testType EthrTestType) (test *ethrTest, isNew bool) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
 	isNew = false
-	test = getTestInternal(remoteAddr, proto, testType)
+	test = getTestInternal(remoteIP, proto, testType)
 	if test == nil {
 		isNew = true
 		testParam := EthrTestParam{TestID: EthrTestID{proto, testType}}
-		test, _ = newTestInternal(remoteAddr, nil, testParam, nil, nil)
+		test, _ = newTestInternal(remoteIP, nil, testParam)
 		test.isActive = true
 	}
 	atomic.AddInt32(&test.refCount, 1)
@@ -393,20 +392,6 @@ func (test *ethrTest) connListDo(f func(*ethrConn)) {
 	}
 }
 
-func watchControlChannel(test *ethrTest, waitForChannelStop chan bool) {
-	go func() {
-		for {
-			ethrMsg := recvSessionMsg(test.dec)
-			if ethrMsg.Type == EthrInv {
-				break
-			}
-			test.rcvdMsgs <- ethrMsg
-			ui.printDbg("%v", ethrMsg)
-		}
-		waitForChannelStop <- true
-	}()
-}
-
 func recvSessionMsg(dec *gob.Decoder) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{}
 	err := dec.Decode(ethrMsg)
@@ -433,23 +418,9 @@ func createAckMsg(cert []byte, d time.Duration) (ethrMsg *EthrMsg) {
 	return
 }
 
-func createFinMsg(message string) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{Version: 0, Type: EthrFin}
-	ethrMsg.Fin = &EthrMsgFin{}
-	ethrMsg.Fin.Message = message
-	return
-}
-
 func createSynMsg(testParam EthrTestParam) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyn}
 	ethrMsg.Syn = &EthrMsgSyn{}
 	ethrMsg.Syn.TestParam = testParam
-	return
-}
-
-func createBgnMsg(port string) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{Version: 0, Type: EthrBgn}
-	ethrMsg.Bgn = &EthrMsgBgn{}
-	ethrMsg.Bgn.UDPPort = port
 	return
 }

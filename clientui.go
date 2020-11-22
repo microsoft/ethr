@@ -138,7 +138,7 @@ func printTestResult(test *ethrTest, seconds uint64) {
 				printBwTestDivider(test.testParam.TestID.Protocol)
 			}
 		}
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(cbw), "", ppsToString(cpps), ""})
 	} else if test.testParam.TestID.Type == Cps {
 		if gInterval == 0 {
@@ -149,7 +149,7 @@ func printTestResult(test *ethrTest, seconds uint64) {
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
 			protoToString(test.testParam.TestID.Protocol),
 			gInterval, gInterval+1, cpsToString(cps))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
 			"", cpsToString(cps), "", ""})
 	} else if test.testParam.TestID.Type == Pps {
 		if gInterval == 0 {
@@ -161,12 +161,12 @@ func printTestResult(test *ethrTest, seconds uint64) {
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s   %7s",
 			protoToString(test.testParam.TestID.Protocol),
 			gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
-		logResults([]string{test.session.remoteAddr, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
 			bytesToRate(bw), "", ppsToString(pps), ""})
 	} else if test.testParam.TestID.Type == TraceRoute {
 		if gCurHops > 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ")
-			ui.printMsg("Host: %-36s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteAddr)
+			ui.printMsg("Host: %-36s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteIP)
 		}
 		for i := 0; i < gCurHops; i++ {
 			hopData := gHop[i]

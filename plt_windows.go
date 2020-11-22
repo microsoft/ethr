@@ -43,7 +43,7 @@ func getNetDevStats(stats *ethrNetStat) {
 	}
 
 	for _, ifi := range ifs {
-		if (ifi.Flags & net.FlagUp) == 0 || strings.Contains(ifi.Name, "Pseudo") {
+		if (ifi.Flags&net.FlagUp) == 0 || strings.Contains(ifi.Name, "Pseudo") {
 			continue
 		}
 		row, err := getIfEntry2(uint32(ifi.Index))
@@ -207,3 +207,10 @@ func blockWindowResize() {
 	syscall.Syscall(proc_delete_menu.Addr(), 3, sysMenu, SC_SIZE, MF_BYCOMMAND)
 }
 
+func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
+	err = syscall.SetsockoptInt(syscall.Handle(fd), level, opt, val)
+	if err != nil {
+		ui.printErr("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
+	}
+	return
+}
