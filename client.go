@@ -13,6 +13,7 @@ import (
 	"bytes"
 	"encoding/binary"
 	"encoding/gob"
+	"encoding/hex"
 	"fmt"
 	"io"
 	"net/url"
@@ -462,20 +463,40 @@ func tcpRunTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 		toStop <- interrupt
 		return
 	}
-	/*
-		for i := 0; i < gCurHops; i++ {
-			if gHop[i].addr != nil {
-				go icmpProbeHop(test, gap, i, dstIPAddr)
+	for i := 0; i < gCurHops; i++ {
+		if gHop[i].addr != "" {
+			go tcpProbeHop(test, gap, i)
+		}
+	}
+}
+
+func tcpProbeHop(test *ethrTest, gap time.Duration, hop int) {
+	seq := 0
+ExitForLoop:
+	for {
+		select {
+		case <-test.done:
+			break ExitForLoop
+		default:
+			t0 := time.Now()
+			err, _ := tcpProbe(test, hop+1, gHop[hop].addr, &gHop[hop])
+			if err == nil {
+			}
+			seq++
+			t1 := time.Since(t0)
+			if t1 < gap {
+				time.Sleep(gap - t1)
 			}
 		}
-	*/
+	}
 }
+
 
 func tcpDiscoverHops(test *ethrTest) error {
 	ui.printMsg("Tracing route to %s over %d hops:", test.session.remoteIP, gMaxHops)
 	for i := 0; i < gMaxHops; i++ {
 		var hopData ethrHopData
-		err, isLast := tcpDiscoverHop(test, i+1, &hopData)
+		err, isLast := tcpProbe(test, i+1, "", &hopData)
 		if err == nil {
 			hopData.name = lookupHopName(hopData.addr)
 		}
@@ -493,10 +514,11 @@ func tcpDiscoverHops(test *ethrTest) error {
 	return os.ErrNotExist
 }
 
-func tcpDiscoverHop(test *ethrTest, hop int, hopData *ethrHopData) (error, bool) {
+func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (error, bool) {
 	isLast := false
 	c, err := IcmpNewConn(test.remoteIP)
 	if err != nil {
+		ui.printErr("Failed to create ICMP connection. Error: %v", err)
 		return err, isLast
 	}
 	defer c.Close()
@@ -508,7 +530,7 @@ func tcpDiscoverHop(test *ethrTest, hop int, hopData *ethrHopData) (error, bool)
 	peerAddrChan := make(chan string)
 	endTimeChan := make(chan time.Time)
 	go func() {
-		peerAddr, _, _ := icmpListenForSpecific4(c, TCP, time.Second*5, "", b, nil, 0)
+		peerAddr, _, _ := icmpListenForSpecific4(c, TCP, time.Second*5, hopIP, b, nil, 0)
 		endTimeChan <- time.Now()
 		peerAddrChan <- peerAddr
 	}()
@@ -525,7 +547,7 @@ func tcpDiscoverHop(test *ethrTest, hop int, hopData *ethrHopData) (error, bool)
 		peerAddr = <-peerAddrChan
 	}
 	elapsed := endTime.Sub(startTime)
-	if peerAddr == "" {
+	if peerAddr == "" || (hopIP != "" && peerAddr != hopIP) {
 		hopData.lost++
 		ui.printDbg("Neither connection completed, nor ICMP TTL exceeded received.")
 		return os.ErrNotExist, isLast
@@ -557,7 +579,7 @@ func icmpRunPing(test *ethrTest, prefix string) (time.Duration, error) {
 	}
 
 	var hopData ethrHopData
-	err, isLast := icmpEcho(test, dstIPAddr, time.Second, "", &hopData, 254, 255)
+	err, isLast := icmpProbe(test, dstIPAddr, time.Second, "", &hopData, 254, 255)
 	if err != nil {
 		ui.printMsg("[icmp] %sPing to %s: %v", prefix, test.dialAddr, err)
 		return time.Second, err
@@ -638,7 +660,7 @@ func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) error {
 	}
 	for i := 0; i < gMaxHops; i++ {
 		var hopData ethrHopData
-		err, isLast := icmpEcho(test, dstIPAddr, time.Second*5, "", &hopData, i, 1)
+		err, isLast := icmpProbe(test, dstIPAddr, time.Second*5, "", &hopData, i, 1)
 		if err == nil {
 			hopData.name = lookupHopName(hopData.addr)
 		}
@@ -665,7 +687,7 @@ ExitForLoop:
 			break ExitForLoop
 		default:
 			t0 := time.Now()
-			err, _ := icmpEcho(test, dstIPAddr, time.Second, gHop[hop].addr, &gHop[hop], hop, seq)
+			err, _ := icmpProbe(test, dstIPAddr, time.Second, gHop[hop].addr, &gHop[hop], hop, seq)
 			if err == nil {
 			}
 			seq++
@@ -688,12 +710,13 @@ func icmpNewConn(localAddr string) (*icmp.PacketConn, error) {
 }
 */
 
-func icmpEcho(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
+func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
 	isLast := false
 	echoMsg := fmt.Sprintf("Hello: Ethr - %v", hop)
 
 	c, err := IcmpNewConn(test.remoteIP)
 	if err != nil {
+		ui.printErr("Failed to create ICMP connection. Error: %v", err)
 		return err, isLast
 	}
 	defer c.Close()
@@ -702,7 +725,8 @@ func icmpEcho(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, h
 		return err, isLast
 	}
 	hopData.sent++
-	peerAddr, isLast, err := icmpListenForSpecific4(c, ICMP, icmpTimeout, hopIP, wb, []byte(echoMsg), seq)
+	neededSeq := hop << 8 | seq
+	peerAddr, isLast, err := icmpListenForSpecific4(c, ICMP, icmpTimeout, hopIP, wb[4:8], []byte(echoMsg), neededSeq)
 	if err != nil {
 		hopData.lost++
 		ui.printDbg("Failed to receive ICMP reply packet. Error: %v", err)
@@ -734,10 +758,11 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 	}
 
 	pid := os.Getpid() & 0xffff
+	pid = 9999
 	wm := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
 		Body: &icmp.Echo{
-			ID: pid, Seq: seq,
+			ID: pid, Seq: hop << 8 | seq,
 			Data: []byte(body),
 		},
 	}
@@ -777,8 +802,8 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 		if n == 0 {
 			continue
 		}
-		// fmt.Printf("%s", hex.Dump(b[:n]))
-		// fmt.Printf("%s", hex.Dump(neededSig))
+		ui.printDbg("Packet:\n%s", hex.Dump(b[:n]))
+		ui.printDbg("Finding Pattern\n%v", hex.Dump(neededSig[:4]))
 		peerAddr = peer.String()
 		if neededPeer != "" && peerAddr != neededPeer {
 			continue
@@ -795,7 +820,10 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 				if proto == TCP {
 					return peerAddr, isLast, nil
 				} else if proto == ICMP {
-					innerIcmpMsg, _ := icmp.ParseMessage(ProtocolICMP, body[index:])
+					if index < 4 {
+						continue
+					}
+					innerIcmpMsg, _ := icmp.ParseMessage(ProtocolICMP, body[index-4:])
 					switch innerIcmpMsg.Body.(type) {
 					case *icmp.Echo:
 						seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
@@ -804,8 +832,11 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 						}
 					default:
 						// Ignore as this is not the right ICMP packet.
+						ui.printDbg("Unable to recognize packet.")
 					}
 				}
+			} else {
+				ui.printDbg("Pattern %v not found.", hex.Dump(neededSig[:4]))
 			}
 		}
 

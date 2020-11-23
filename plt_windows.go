@@ -233,7 +233,7 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	// First, get the correct local interface address, as SIO_RCVALL can't be set on a 0.0.0.0 listeners.
 	dialedConn, err := net.Dial("ip4:icmp", address)
 	if err != nil {
-		return nil, fmt.Errorf("failed to dial: %s", err)
+		return nil, err
 	}
 	localAddr := dialedConn.LocalAddr()
 	dialedConn.Close()
@@ -262,7 +262,7 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	size := uint32(unsafe.Sizeof(flag))
 	err = syscall.WSAIoctl(socketHandle, SIO_RCVALL, (*byte)(unsafe.Pointer(&flag)), size, nil, 0, &unused, nil, 0)
 	if err != nil {
-		return nil, fmt.Errorf("failed to set socket to listen to all packests: %s", os.NewSyscallError("WSAIoctl", err))
+		return nil, err
 	}
 
 	return conn, nil
@@ -276,3 +276,4 @@ func IsAdmin() bool {
 	}
 	return true
 }
+
