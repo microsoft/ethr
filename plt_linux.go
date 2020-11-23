@@ -160,3 +160,21 @@ func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
 	}
 	return
 }
+
+func IcmpNewConn(address string) (net.PacketConn, error) {
+	dialedConn, err := net.Dial("ip4:icmp", address)
+	if err != nil {
+		return nil, err
+	}
+	localAddr := dialedConn.LocalAddr()
+	dialedConn.Close()
+	conn, err := net.ListenPacket("ip4:icmp", localAddr.String())
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func IsAdmin() bool {
+	return true
+}

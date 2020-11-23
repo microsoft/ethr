@@ -253,7 +253,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		if !xMode {
 			switch protocol {
 			case TCP:
-				if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping {
+				if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping && testType != TraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 				if testParam.Reverse && testType != Bandwidth {
@@ -295,7 +295,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		} else {
 			switch protocol {
 			case TCP:
-				if testType != Ping && testType != Cps {
+				if testType != Ping && testType != Cps && testType != TraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 			case ICMP:

@@ -170,13 +170,13 @@ func printTestResult(test *ethrTest, seconds uint64) {
 		}
 		for i := 0; i < gCurHops; i++ {
 			hopData := gHop[i]
-			if hopData.addr != nil {
+			if hopData.addr != "" {
 				if hopData.sent > 0 {
 					avg := time.Duration(0)
 					if hopData.rcvd > 0 {
 						avg = time.Duration(hopData.total.Nanoseconds() / int64(hopData.rcvd))
 					}
-					ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr.String(), hopData.name, hopData.sent, hopData.rcvd,
+					ui.printMsg("%2d.|--%-15s(%-19s)   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr, hopData.name, hopData.sent, hopData.rcvd,
 						durationToString(hopData.last), durationToString(avg), durationToString(hopData.best), durationToString(hopData.worst))
 				}
 			} else {

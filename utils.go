@@ -329,7 +329,13 @@ func SleepUntilNextWholeSecond() {
 	time.Sleep(time.Until(res))
 }
 
-func ethrDialWithTTL(network, address string, ttl int) (conn net.Conn, err error) {
+func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (conn net.Conn, err error) {
+	port := fmt.Sprintf(":%v", portNum)
+	la, err := net.ResolveTCPAddr(tcp(ipVer), port)
+	if err != nil {
+		ui.printErr("Unable to resolve TCP address. Error: %v", err)
+		return
+	}
 	dialer := &net.Dialer{
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
@@ -337,7 +343,12 @@ func ethrDialWithTTL(network, address string, ttl int) (conn net.Conn, err error
 			})
 		},
 	}
+	dialer.LocalAddr = la
+	dialer.Timeout = time.Second
 	conn, err = dialer.Dial(network, address)
+	if err != nil {
+		ui.printDbg("ethrDialForTraceRoute Error: %v", err)
+	}
 	return
 }
 
