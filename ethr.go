@@ -32,7 +32,7 @@ func main() {
 	}
 
 	fmt.Println("\nEthr: Comprehensive Network Measurement & Analysis Tool (Version: " + gVersion + ")")
-	fmt.Println("Developed by: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)")
+	fmt.Println("Maintainer: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)")
 	fmt.Println("")
 
 	//
