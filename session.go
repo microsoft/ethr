@@ -39,6 +39,9 @@ const (
 
 	// TraceRoute
 	TraceRoute
+
+	// MyTraceRoute
+	MyTraceRoute
 )
 
 // EthrProtocol represents the network protocol.

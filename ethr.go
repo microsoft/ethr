@@ -142,6 +142,8 @@ func main() {
 		testType = Ping
 	case "tr":
 		testType = TraceRoute
+	case "mtr":
+		testType = MyTraceRoute
 	default:
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
 			"Valid parameters and values are:\n", *testTypePtr))
@@ -253,7 +255,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		if !xMode {
 			switch protocol {
 			case TCP:
-				if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping && testType != TraceRoute {
+				if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 				if testParam.Reverse && testType != Bandwidth {
@@ -272,7 +274,7 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 					printReverseModeError()
 				}
 			case ICMP:
-				if testType != TraceRoute {
+				if testType != TraceRoute && testType != MyTraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 			case HTTP:
@@ -295,11 +297,11 @@ func validateTestParam(isServer bool, testParam EthrTestParam) {
 		} else {
 			switch protocol {
 			case TCP:
-				if testType != Ping && testType != Cps && testType != TraceRoute {
+				if testType != Ping && testType != Cps && testType != TraceRoute && testType != MyTraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 			case ICMP:
-				if testType != Ping && testType != TraceRoute {
+				if testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
 					emitUnsupportedTest(testParam)
 				}
 			default:
@@ -396,7 +398,8 @@ func printTestType() {
 		"p: Packets/s",
 		"l: Latency, Loss & Jitter",
 		"pi: Ping Loss & Latency",
-		"tr: TraceRoute with Loss & Latency",
+		"tr: TraceRoute",
+		"mtr: MyTraceRoute with Loss & Latency",
 		"Default: b - Bandwidth measurement.")
 }
 
@@ -404,7 +407,8 @@ func printExtTestType() {
 	printFlagUsage("t", "<test>", "Test to run (\"c\", \"cl\", or \"tr\")",
 		"c: Connections/s",
 		"pi: Ping Loss & Latency",
-		"tr: TraceRoute with Loss & Latency",
+		"tr: TraceRoute",
+		"mtr: MyTraceRoute with Loss & Latency",
 		"Default: pi - Ping Loss & Latency.")
 }
 

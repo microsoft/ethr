@@ -344,7 +344,7 @@ func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (co
 		},
 	}
 	dialer.LocalAddr = la
-	dialer.Timeout = 4*time.Second
+	dialer.Timeout = time.Second
 	conn, err = dialer.Dial(network, address)
 	if err != nil {
 		ui.printDbg("ethrDialForTraceRoute Error: %v", err)

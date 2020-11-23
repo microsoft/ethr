@@ -41,9 +41,10 @@ import (
 var gIgnoreCert bool
 
 const (
-	timeout    = 0
-	interrupt  = 1
-	disconnect = 2
+	done       = 0
+	timeout    = 1
+	interrupt  = 2
+	disconnect = 3
 )
 
 func handleInterrupt(toStop chan<- int) {
@@ -160,6 +161,8 @@ func runTest(test *ethrTest, d, g time.Duration, warmupCount int) {
 			go clientRunPingTest(test, g, warmupCount)
 		} else if test.testParam.TestID.Type == TraceRoute {
 			tcpRunTraceRoute(test, g, toStop)
+		} else if test.testParam.TestID.Type == MyTraceRoute {
+			tcpRunMyTraceRoute(test, g, toStop)
 		}
 	} else if test.testParam.TestID.Protocol == UDP {
 		if test.testParam.TestID.Type == Bandwidth ||
@@ -167,10 +170,12 @@ func runTest(test *ethrTest, d, g time.Duration, warmupCount int) {
 			runUDPBandwidthAndPpsTest(test)
 		}
 	} else if test.testParam.TestID.Protocol == ICMP {
-		if test.testParam.TestID.Type == TraceRoute {
-			icmpRunTraceRoute(test, g, toStop)
-		} else if test.testParam.TestID.Type == Ping {
+		if test.testParam.TestID.Type == Ping {
 			go clientRunPingTest(test, g, warmupCount)
+		} else if test.testParam.TestID.Type == TraceRoute {
+			icmpRunTraceRoute(test, g, toStop)
+		} else if test.testParam.TestID.Type == MyTraceRoute {
+			icmpRunMyTraceRoute(test, g, toStop)
 		}
 	}
 
@@ -182,6 +187,8 @@ func runTest(test *ethrTest, d, g time.Duration, warmupCount int) {
 		time.Sleep(2 * time.Second)
 	}
 	switch reason {
+	case done:
+		ui.printMsg("Ethr done, measurement complete.")
 	case timeout:
 		ui.printMsg("Ethr done, duration: " + d.String() + ".")
 	case interrupt:
@@ -450,17 +457,29 @@ func printConnectionLatencyResults(server string, test *ethrTest, sent, rcvd, lo
 }
 
 func tcpRunTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
+	tcpRunTraceRouteInternal(test, gap, toStop, false)
+}
+
+func tcpRunMyTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
+	tcpRunTraceRouteInternal(test, gap, toStop, true)
+}
+
+func tcpRunTraceRouteInternal(test *ethrTest, gap time.Duration, toStop chan int, mtrMode bool) {
 	if !IsAdmin() {
 		ui.printErr("For TCP based TraceRoute, running as administrator is required.\n")
 		toStop <- interrupt
 		return
 	}
 	gHop = make([]ethrHopData, gMaxHops)
-	err := tcpDiscoverHops(test)
+	err := tcpDiscoverHops(test, mtrMode)
 	if err != nil {
 		ui.printErr("Destination %s is not responding to TCP connection.", test.session.remoteIP)
 		ui.printErr("Terminating tracing...")
 		toStop <- interrupt
+		return
+	}
+	if !mtrMode {
+		toStop <- done
 		return
 	}
 	for i := 0; i < gCurHops; i++ {
@@ -491,19 +510,22 @@ ExitForLoop:
 	}
 }
 
-
-func tcpDiscoverHops(test *ethrTest) error {
+func tcpDiscoverHops(test *ethrTest, mtrMode bool) error {
 	ui.printMsg("Tracing route to %s over %d hops:", test.session.remoteIP, gMaxHops)
 	for i := 0; i < gMaxHops; i++ {
 		var hopData ethrHopData
 		err, isLast := tcpProbe(test, i+1, "", &hopData)
 		if err == nil {
-			hopData.name = lookupHopName(hopData.addr)
+			hopData.name, hopData.fullName = lookupHopName(hopData.addr)
 		}
 		if hopData.addr != "" {
-			ui.printMsg("%2d.|--%-15s(%-19s)", i+1, hopData.addr, hopData.name)
+			if mtrMode {
+				ui.printMsg("%2d.|--%s", i+1, hopData.addr+" ["+hopData.fullName+"]")
+			} else {
+				ui.printMsg("%2d.|--%-70s %s", i+1, hopData.addr+" ["+hopData.fullName+"]", durationToString(hopData.last))
+			}
 		} else {
-			ui.printMsg("%2d.|--%-15s", i+1, "???")
+			ui.printMsg("%2d.|--%s", i+1, "???")
 		}
 		copyInitialHopData(i, hopData)
 		if isLast {
@@ -530,7 +552,7 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 	peerAddrChan := make(chan string)
 	endTimeChan := make(chan time.Time)
 	go func() {
-		peerAddr, _, _ := icmpListenForSpecific4(c, TCP, time.Second*5, hopIP, b, nil, 0)
+		peerAddr, _, _ := icmpListenForSpecific4(c, TCP, time.Second*2, hopIP, b, nil, 0)
 		endTimeChan <- time.Now()
 		peerAddrChan <- peerAddr
 	}()
@@ -557,15 +579,16 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 }
 
 type ethrHopData struct {
-	addr  string
-	sent  uint32
-	rcvd  uint32
-	lost  uint32
-	last  time.Duration
-	best  time.Duration
-	worst time.Duration
-	total time.Duration
-	name  string
+	addr     string
+	sent     uint32
+	rcvd     uint32
+	lost     uint32
+	last     time.Duration
+	best     time.Duration
+	worst    time.Duration
+	total    time.Duration
+	name     string
+	fullName string
 }
 
 var gMaxHops int = 30
@@ -595,17 +618,29 @@ func icmpRunPing(test *ethrTest, prefix string) (time.Duration, error) {
 }
 
 func icmpRunTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
+	icmpRunTraceRouteInternal(test, gap, toStop, false)
+}
+
+func icmpRunMyTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
+	icmpRunTraceRouteInternal(test, gap, toStop, true)
+}
+
+func icmpRunTraceRouteInternal(test *ethrTest, gap time.Duration, toStop chan int, mtrMode bool) {
 	gHop = make([]ethrHopData, gMaxHops)
 	dstIPAddr, _, err := ethrLookupIP(test.session.remoteIP)
 	if err != nil {
 		toStop <- interrupt
 		return
 	}
-	err = icmpDiscoverHops(test, dstIPAddr)
+	err = icmpDiscoverHops(test, dstIPAddr, mtrMode)
 	if err != nil {
 		ui.printErr("Destination %s is not responding to ICMP Echo.", test.session.remoteIP)
 		ui.printErr("Terminating tracing...")
 		toStop <- interrupt
+		return
+	}
+	if !mtrMode {
+		toStop <- done
 		return
 	}
 	for i := 0; i < gCurHops; i++ {
@@ -619,6 +654,7 @@ func copyInitialHopData(hop int, hopData ethrHopData) {
 	gHop[hop].addr = hopData.addr
 	gHop[hop].best = hopData.last
 	gHop[hop].name = hopData.name
+	gHop[hop].fullName = hopData.fullName
 }
 
 func genHopData(hopData *ethrHopData, peerAddr string, elapsed time.Duration) {
@@ -634,10 +670,11 @@ func genHopData(hopData *ethrHopData, peerAddr string, elapsed time.Duration) {
 	hopData.rcvd++
 }
 
-func lookupHopName(addr string) string {
+func lookupHopName(addr string) (string, string) {
 	name := ""
+	tname := ""
 	if addr == "" {
-		return name
+		return tname, name
 	}
 	names, err := net.LookupAddr(addr)
 	if err == nil && len(names) > 0 {
@@ -647,12 +684,12 @@ func lookupHopName(addr string) string {
 		if sz > 0 && name[sz-1] == '.' {
 			name = name[:sz-1]
 		}
-		name = truncateStringFromEnd(name, 16)
+		tname = truncateStringFromEnd(name, 16)
 	}
-	return name
+	return tname, name
 }
 
-func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) error {
+func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr, mtrMode bool) error {
 	if test.session.remoteIP == dstIPAddr.String() {
 		ui.printMsg("Tracing route to %s over %d hops:", test.session.remoteIP, gMaxHops)
 	} else {
@@ -660,14 +697,18 @@ func icmpDiscoverHops(test *ethrTest, dstIPAddr net.IPAddr) error {
 	}
 	for i := 0; i < gMaxHops; i++ {
 		var hopData ethrHopData
-		err, isLast := icmpProbe(test, dstIPAddr, time.Second*5, "", &hopData, i, 1)
+		err, isLast := icmpProbe(test, dstIPAddr, time.Second*2, "", &hopData, i, 1)
 		if err == nil {
-			hopData.name = lookupHopName(hopData.addr)
+			hopData.name, hopData.fullName = lookupHopName(hopData.addr)
 		}
 		if hopData.addr != "" {
-			ui.printMsg("%2d.|--%-15s(%-19s)", i+1, hopData.addr, hopData.name)
+			if mtrMode {
+				ui.printMsg("%2d.|--%s", i+1, hopData.addr+" ["+hopData.fullName+"]")
+			} else {
+				ui.printMsg("%2d.|--%-70s %s", i+1, hopData.addr+" ["+hopData.fullName+"]", durationToString(hopData.last))
+			}
 		} else {
-			ui.printMsg("%2d.|--%-15s", i+1, "???")
+			ui.printMsg("%2d.|--%s", i+1, "???")
 		}
 		copyInitialHopData(i, hopData)
 		if isLast {
@@ -725,7 +766,7 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 		return err, isLast
 	}
 	hopData.sent++
-	neededSeq := hop << 8 | seq
+	neededSeq := hop<<8 | seq
 	peerAddr, isLast, err := icmpListenForSpecific4(c, ICMP, icmpTimeout, hopIP, wb[4:8], []byte(echoMsg), neededSeq)
 	if err != nil {
 		hopData.lost++
@@ -762,7 +803,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 	wm := icmp.Message{
 		Type: ipv4.ICMPTypeEcho, Code: 0,
 		Body: &icmp.Echo{
-			ID: pid, Seq: hop << 8 | seq,
+			ID: pid, Seq: hop<<8 | seq,
 			Data: []byte(body),
 		},
 	}
