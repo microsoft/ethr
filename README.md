@@ -139,6 +139,20 @@ ethr -c localhost -n 8
 ethr -c localhost -t c -n 64
 ```
 
+## Common Problems
+### Windows
+For ICMP related tests, Ping, TraceRoute, MyTraceRoute, Windows requires ICMP to be allowed via Firewall. This can be done using PowerShell by following commands. However, use this only if security policy of your setup allows that.
+```
+// Allow ICMP packets via Firewall for IPv4
+New-NetFirewallRule -DisplayName "ICMP_Allow_Any" -Direction Inbound -Protocol ICMPv4 -IcmpType Any -Action Allow  -Profile Any -RemotePort Any
+
+// Allow ICMP packets via Firewall for IPv6
+New-NetFirewallRule -DisplayName "ICMPV6_Allow_Any" -Direction Inbound -Protocol ICMPv6 -IcmpType Any -Action Allow  -Profile Any -RemotePort Any
+```
+In addition, for TCP based TraceRoute and MyTraceRoute, Administrator mode is required, otherwise Ethr won't be able to receive ICMP TTL exceeded messages.
+### Linux
+For ICMP Ping, ICMP/TCP TraceRoute and MyTraceRoute, privileged mode is required via sudo.
+
 ## Complete Command Line
 ### Common Parameters
 ```
