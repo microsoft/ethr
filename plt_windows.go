@@ -230,7 +230,7 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	// https://github.com/golang/go/issues/38427
 
 	// First, get the correct local interface address, as SIO_RCVALL can't be set on a 0.0.0.0 listeners.
-	dialedConn, err := net.Dial("ip4:icmp", address)
+	dialedConn, err := net.Dial(Icmp(ipVer), address)
 	if err != nil {
 		return nil, err
 	}
@@ -248,7 +248,7 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	}
 
 	// Bind to interface.
-	conn, err := cfg.ListenPacket(context.Background(), "ip4:icmp", localAddr.String())
+	conn, err := cfg.ListenPacket(context.Background(), Icmp(ipVer), localAddr.String())
 	if err != nil {
 		return nil, err
 	}
@@ -275,4 +275,3 @@ func IsAdmin() bool {
 	}
 	return true
 }
-

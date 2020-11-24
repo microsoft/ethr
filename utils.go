@@ -212,6 +212,22 @@ func udp(ipVer ethrIPVer) string {
 	return "udp"
 }
 
+func Icmp(ipVer ethrIPVer) string {
+	switch ipVer {
+	case ethrIPv6:
+		return "ip6:ipv6-icmp"
+	default:
+		return "ip4:icmp"
+	}
+}
+
+func IcmpProto(ipVer ethrIPVer) int {
+	if ipVer == ethrIPv6 {
+		return Icmpv6
+	}
+	return Icmpv4
+}
+
 func ethrUnused(vals ...interface{}) {
 	for _, val := range vals {
 		_ = val
@@ -331,7 +347,7 @@ func SleepUntilNextWholeSecond() {
 
 func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (conn net.Conn, err error) {
 	port := fmt.Sprintf(":%v", portNum)
-	la, err := net.ResolveTCPAddr(tcp(ipVer), port)
+	la, err := net.ResolveTCPAddr(network, port)
 	if err != nil {
 		ui.printErr("Unable to resolve TCP address. Error: %v", err)
 		return
@@ -339,7 +355,12 @@ func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (co
 	dialer := &net.Dialer{
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+				if ipVer == ethrIPv4 {
+					setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+				} else {
+					setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, ttl)
+
+				}
 			})
 		},
 	}

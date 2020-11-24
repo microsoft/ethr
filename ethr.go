@@ -31,16 +31,15 @@ func main() {
 		gVersion = "UNKNOWN"
 	}
 
-	fmt.Println("\nEthr: Comprehensive Network Measurement & Analysis Tool (Version: " + gVersion + ")")
+	fmt.Println("\nEthr: Comprehensive Network Performance Measurement Tool (Version: " + gVersion + ")")
 	fmt.Println("Maintainer: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)")
 	fmt.Println("")
 
 	//
-	// Set GOMAXPROCS to 1024 as running large number of goroutines in a loop
-	// to send network traffic results in timer starvation, as well as unfair
-	// processing time across goroutines resulting in starvation of many TCP
-	// connections. Using a higher number of threads via GOMAXPROCS solves this
-	// problem.
+	// Set GOMAXPROCS to 1024 as running large number of goroutines that send
+	// data in a tight loop over network is resulting in unfair time allocation
+	// across goroutines causing starvation of many TCP connections. Using a
+	// higher number of threads via GOMAXPROCS solves this problem.
 	//
 	runtime.GOMAXPROCS(1024)
 
@@ -189,6 +188,13 @@ func main() {
 	default:
 		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
 			"Valid parameters and values are:\n", *protocol))
+	}
+
+	// Override ipVer because for ICMP, specific version is required.
+	if proto == ICMP || (testType == TraceRoute || testType == MyTraceRoute) {
+		if ipVer == ethrIPAny {
+			ipVer = ethrIPv4
+		}
 	}
 
 	if *thCount <= 0 {

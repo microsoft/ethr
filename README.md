@@ -12,26 +12,43 @@ Ethr provides more test measurements as compared to other tools, e.g. it provide
 
 Ethr is natively cross platform, thanks to golang, as compared to compiling via an abstraction layer like cygwin that may limit functionality. It hopes to unify performance measurement by combining the functionality of tools like iPerf3, ntttcp, psping, sockperf, and latte and offering a single tool across multiple platforms and multiple protocols.
 
-# Download
+# Installation
+
+## Download
 
 https://github.com/Microsoft/ethr/releases/latest
 
-# Installation
+**Linux**
+```
+wget https://github.com/microsoft/ethr/releases/latest/download/ethr_linux.zip
+unzip ethr_linux.zip
+```
 
-Note: go version 1.11 or higher is required building it from the source.
+**Windows Powershell**
+```
+wget https://github.com/microsoft/ethr/releases/latest/download/ethr_windows.zip -OutFile ethr_windows.zip
+Expand-Archive .\ethr_windows.zip -DestinationPath .
+```
+
+**OSX**
+```
+wget https://github.com/microsoft/ethr/releases/latest/download/ethr_osx.zip
+unzip ethr_osx.zip
+```
 
 ## Building from Source
+
+Note: go version 1.11 or higher is required building it from the source.
 
 We use go-module to manage Ethr dependencies. for more information please check [how to use go-modules!](https://github.com/golang/go/wiki/Modules#how-to-use-modules)
 
 ```
 git clone https://github.com/Microsoft/ethr.git
 cd ethr
-go get ./...
 go build
 ```
 
-If Ethr is cloned inside of the `$GOPATH/src` tree, please make sure you invoke the `go` command with `GO111MODULE=on`!
+If ethr is cloned inside of the `$GOPATH/src` tree, please make sure you invoke the `go` command with `GO111MODULE=on`!
 
 ## Docker
 
@@ -194,7 +211,8 @@ In this mode, Ethr client can only talk to an Ethr server.
 		p: Packets/s
 		l: Latency, Loss & Jitter
 		pi: Ping Loss & Latency
-		tr: TraceRoute with Loss & Latency
+		tr: TraceRoute
+                mtr: MyTraceRoute with Loss & Latency
 		Default: b - Bandwidth measurement.
 	-w <number>
 		Use specified number of iterations for warmup.
@@ -231,7 +249,8 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 		Test to run ("c", "cl", or "tr")
 		c: Connections/s
 		pi: Ping Loss & Latency
-		tr: TraceRoute with Loss & Latency
+		tr: TraceRoute
+                mtr: MyTraceRoute with Loss & Latency
 		Default: pi - Ping Loss & Latency.
 	-w <number>
 		Use specified number of iterations for warmup.
@@ -240,11 +259,11 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 
 # Status
 
-Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Ping | TraceRoute
-------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
-TCP  | Yes | Yes | NA | Yes | Yes | No
-UDP  | Yes | NA | Yes | No | NA | No
-ICMP | No | NA | No | No | Yes | Yes
+Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Ping | TraceRoute | MyTraceRoute
+------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
+TCP  | Yes | Yes | NA | Yes | Yes | Yes | Yes
+UDP  | Yes | NA | Yes | No | NA | No | No
+ICMP | No | NA | No | No | Yes | Yes | Yes
 
 # Platform Support
 

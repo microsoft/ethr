@@ -166,7 +166,7 @@ func printTestResult(test *ethrTest, seconds uint64) {
 	} else if test.testParam.TestID.Type == MyTraceRoute {
 		if gCurHops > 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ")
-			ui.printMsg("Host: %-20s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteIP)
+			ui.printMsg("Host: %-40s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteIP)
 		}
 		for i := 0; i < gCurHops; i++ {
 			hopData := gHop[i]
@@ -176,11 +176,11 @@ func printTestResult(test *ethrTest, seconds uint64) {
 					if hopData.rcvd > 0 {
 						avg = time.Duration(hopData.total.Nanoseconds() / int64(hopData.rcvd))
 					}
-					ui.printMsg("%2d.|--%-20s   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr, hopData.sent, hopData.rcvd,
+					ui.printMsg("%2d.|--%-40s   %5d   %5d   %9s   %9s   %9s   %9s", i+1, hopData.addr, hopData.sent, hopData.rcvd,
 						durationToString(hopData.last), durationToString(avg), durationToString(hopData.best), durationToString(hopData.worst))
 				}
 			} else {
-				ui.printMsg("%2d.|--%-20s   %5s   %5s   %9s   %9s   %9s   %9s", i+1, "???", "-", "-", "-", "-", "-", "-")
+				ui.printMsg("%2d.|--%-40s   %5s   %5s   %9s   %9s   %9s   %9s", i+1, "???", "-", "-", "-", "-", "-", "-")
 			}
 		}
 	}
