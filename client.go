@@ -36,6 +36,7 @@ import (
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 )
 
 var gIgnoreCert bool
@@ -779,14 +780,25 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 }
 
 const (
-	ProtocolICMP     = 1  // ICMP for IPv4
-	ProtocolIPv6ICMP = 58 // ICMP for IPv6
+	Icmpv4 = 1  // ICMP for IPv4
+	Icmpv6 = 58 // ICMP for IPv6
 )
 
+func icmpSetTTL(c net.PacketConn, ttl int) error {
+	err := os.ErrInvalid
+	if ipVer == ethrIPv4 {
+		cIPv4 := ipv4.NewPacketConn(c)
+		err = cIPv4.SetTTL(ttl)
+	} else if ipVer == ethrIPv6 {
+		cIPv6 := ipv6.NewPacketConn(c)
+		err = cIPv6.SetHopLimit(ttl)
+	}
+	return err
+}
+
 func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body string, timeout time.Duration) (time.Time, []byte, error) {
-	cIPv4 := ipv4.NewPacketConn(c)
 	start := time.Now()
-	err := cIPv4.SetTTL(hop + 1)
+	err := icmpSetTTL(c, hop+1)
 	if err != nil {
 		ui.printErr("Failed to set TTL. Error: %v", err)
 		return start, nil, err
@@ -807,6 +819,9 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 			Data: []byte(body),
 		},
 	}
+	if ipVer == ethrIPv6 {
+		wm.Type = ipv6.ICMPTypeEchoRequest
+	}
 	wb, err := wm.Marshal(nil)
 	if err != nil {
 		ui.printErr("Failed to Marshal data. Error: %v", err)
@@ -821,15 +836,15 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 }
 
 func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.Duration, neededPeer string, neededSig []byte, neededIcmpBody []byte, neededIcmpSeq int) (string, bool, error) {
-	cIPv4 := ipv4.NewPacketConn(c)
 	peerAddr := ""
 	isLast := false
-	err := cIPv4.SetDeadline(time.Now().Add(timeout))
+	err := c.SetDeadline(time.Now().Add(timeout))
 	if err != nil {
 		ui.printErr("Failed to set Deadline. Error: %v", err)
 		return peerAddr, isLast, err
 	}
 	for {
+		peerAddr = ""
 		b := make([]byte, 1500)
 		n, peer, err := c.ReadFrom(b)
 		if err != nil {
@@ -849,12 +864,12 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 		if neededPeer != "" && peerAddr != neededPeer {
 			continue
 		}
-		icmpMsg, err := icmp.ParseMessage(ProtocolICMP, b[:n])
+		icmpMsg, err := icmp.ParseMessage(IcmpProto(ipVer), b[:n])
 		if err != nil {
 			continue
 		}
 
-		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded {
+		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
 			body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 			index := bytes.Index(body, neededSig[:4])
 			if index > 0 {
@@ -864,7 +879,7 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 					if index < 4 {
 						continue
 					}
-					innerIcmpMsg, _ := icmp.ParseMessage(ProtocolICMP, body[index-4:])
+					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(ipVer), body[index-4:])
 					switch innerIcmpMsg.Body.(type) {
 					case *icmp.Echo:
 						seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
@@ -881,7 +896,7 @@ func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.D
 			}
 		}
 
-		if proto == ICMP && icmpMsg.Type == ipv4.ICMPTypeEchoReply {
+		if proto == ICMP && (icmpMsg.Type == ipv4.ICMPTypeEchoReply || icmpMsg.Type == ipv6.ICMPTypeEchoReply) {
 			echo := icmpMsg.Body.(*icmp.Echo)
 			ethrUnused(echo)
 			b, _ := icmpMsg.Body.Marshal(1)

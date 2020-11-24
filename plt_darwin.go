@@ -369,13 +369,13 @@ func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
 }
 
 func IcmpNewConn(address string) (net.PacketConn, error) {
-	dialedConn, err := net.Dial("ip4:icmp", address)
+	dialedConn, err := net.Dial(Icmp(ipVer), address)
 	if err != nil {
 		return nil, err
 	}
 	localAddr := dialedConn.LocalAddr()
 	dialedConn.Close()
-	conn, err := net.ListenPacket("ip4:icmp", localAddr.String())
+	conn, err := net.ListenPacket(Icmp(ipVer), localAddr.String())
 	if err != nil {
 		return nil, err
 	}

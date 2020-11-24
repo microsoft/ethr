@@ -191,6 +191,13 @@ func main() {
 			"Valid parameters and values are:\n", *protocol))
 	}
 
+	// Override ipVer because for ICMP, specific version is required.
+	if proto == ICMP || (testType == TraceRoute || testType == MyTraceRoute) {
+		if ipVer == ethrIPAny {
+			ipVer = ethrIPv4
+		}
+	}
+
 	if *thCount <= 0 {
 		*thCount = runtime.NumCPU()
 	}
