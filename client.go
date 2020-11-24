@@ -553,7 +553,7 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 	peerAddrChan := make(chan string)
 	endTimeChan := make(chan time.Time)
 	go func() {
-		peerAddr, _, _ := icmpListenForSpecific4(c, TCP, time.Second*2, hopIP, b, nil, 0)
+		peerAddr, _, _ := icmpRecvMsg(c, TCP, time.Second*2, hopIP, b, nil, 0)
 		endTimeChan <- time.Now()
 		peerAddrChan <- peerAddr
 	}()
@@ -768,7 +768,7 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 	}
 	hopData.sent++
 	neededSeq := hop<<8 | seq
-	peerAddr, isLast, err := icmpListenForSpecific4(c, ICMP, icmpTimeout, hopIP, wb[4:8], []byte(echoMsg), neededSeq)
+	peerAddr, isLast, err := icmpRecvMsg(c, ICMP, icmpTimeout, hopIP, wb[4:8], []byte(echoMsg), neededSeq)
 	if err != nil {
 		hopData.lost++
 		ui.printDbg("Failed to receive ICMP reply packet. Error: %v", err)
@@ -835,7 +835,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 	return start, wb, nil
 }
 
-func icmpListenForSpecific4(c net.PacketConn, proto EthrProtocol, timeout time.Duration, neededPeer string, neededSig []byte, neededIcmpBody []byte, neededIcmpSeq int) (string, bool, error) {
+func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, neededPeer string, neededSig []byte, neededIcmpBody []byte, neededIcmpSeq int) (string, bool, error) {
 	peerAddr := ""
 	isLast := false
 	err := c.SetDeadline(time.Now().Add(timeout))
