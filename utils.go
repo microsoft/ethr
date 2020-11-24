@@ -217,7 +217,7 @@ func Icmp(ipVer ethrIPVer) string {
 	case ethrIPv6:
 		return "ip6:ipv6-icmp"
 	default:
-		return "ip4-icmp"
+		return "ip4:icmp"
 	}
 }
 
@@ -225,7 +225,7 @@ func IcmpProto(ipVer ethrIPVer) int {
 	if ipVer == ethrIPv6 {
 		return Icmpv6
 	}
-	return Icmpv6
+	return Icmpv4
 }
 
 func ethrUnused(vals ...interface{}) {

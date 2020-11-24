@@ -862,13 +862,14 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 		ui.printDbg("Finding Pattern\n%v", hex.Dump(neededSig[:4]))
 		peerAddr = peer.String()
 		if neededPeer != "" && peerAddr != neededPeer {
+			ui.printDbg("Matching peer is not found.")
 			continue
 		}
 		icmpMsg, err := icmp.ParseMessage(IcmpProto(ipVer), b[:n])
 		if err != nil {
+			ui.printDbg("Failed to parse ICMP message: %v", err)
 			continue
 		}
-
 		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
 			body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 			index := bytes.Index(body, neededSig[:4])
@@ -877,6 +878,7 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 					return peerAddr, isLast, nil
 				} else if proto == ICMP {
 					if index < 4 {
+						ui.printDbg("Incorrect length of ICMP message.")
 						continue
 					}
 					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(ipVer), body[index-4:])
