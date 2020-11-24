@@ -8,6 +8,7 @@ package main
 import (
 	"fmt"
 	"net"
+	"os"
 	"regexp"
 	"strconv"
 	"strings"
@@ -326,4 +327,61 @@ func SleepUntilNextWholeSecond() {
 	t1 := t0.Add(time.Second)
 	res := t1.Round(time.Second)
 	time.Sleep(time.Until(res))
+}
+
+func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (conn net.Conn, err error) {
+	port := fmt.Sprintf(":%v", portNum)
+	la, err := net.ResolveTCPAddr(tcp(ipVer), port)
+	if err != nil {
+		ui.printErr("Unable to resolve TCP address. Error: %v", err)
+		return
+	}
+	dialer := &net.Dialer{
+		Control: func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+			})
+		},
+	}
+	dialer.LocalAddr = la
+	dialer.Timeout = time.Second
+	conn, err = dialer.Dial(network, address)
+	if err != nil {
+		ui.printDbg("ethrDialForTraceRoute Error: %v", err)
+	} else {
+		tcpconn, ok := conn.(*net.TCPConn)
+		if ok {
+			tcpconn.SetLinger(0)
+		}
+		conn.Close()
+	}
+	return
+}
+
+func ethrLookupIP(server string) (net.IPAddr, string, error) {
+	var ipAddr net.IPAddr
+	var ipStr string
+
+	ip := net.ParseIP(server)
+	if ip != nil {
+		ipAddr.IP = ip
+		ipStr = server
+		return ipAddr, ipStr, nil
+	}
+
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		ui.printErr("Failed to looup IP address for the server: %v. Error: %v", server, err)
+		return ipAddr, ipStr, err
+	}
+	for _, ip := range ips {
+		if ipVer == ethrIPAny || (ipVer == ethrIPv4 && ip.To4() != nil) || (ipVer == ethrIPv6 && ip.To16() != nil) {
+			ipAddr.IP = ip
+			ipStr = ip.String()
+			ui.printDbg("Resolved server: %v to IP address: %v\n", server, ip)
+			return ipAddr, ipStr, nil
+		}
+	}
+	ui.printErr("Unable to resolve the given server: %v to an IP address.", server)
+	return ipAddr, ipStr, os.ErrNotExist
 }

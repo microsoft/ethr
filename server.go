@@ -221,7 +221,7 @@ func srvrRunTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Con
 		p999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.9)/100)-1)]
 		p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
 		ui.emitLatencyResults(
-			test.session.remoteAddr,
+			test.session.remoteIP,
 			protoToString(test.testParam.TestID.Protocol),
 			avg, min, max, p50, p90, p95, p99, p999, p9999)
 	}
@@ -256,7 +256,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	tests := make(map[string]*ethrTest)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
 	buffer := make([]byte, 64*1024)
-	n, remoteAddr, err := 0, new(net.UDPAddr), error(nil)
+	n, remoteIP, err := 0, new(net.UDPAddr), error(nil)
 
 	// This function handles UDP tests that came from clients that are no longer
 	// sending any traffic. This is poor man's garbage collection to ensure the
@@ -276,13 +276,13 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 		}
 	}()
 	for err == nil {
-		n, remoteAddr, err = conn.ReadFromUDP(buffer)
+		n, remoteIP, err = conn.ReadFromUDP(buffer)
 		if err != nil {
 			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
 			continue
 		}
 		ethrUnused(n)
-		server, port, _ := net.SplitHostPort(remoteAddr.String())
+		server, port, _ := net.SplitHostPort(remoteIP.String())
 		test, found := tests[server]
 		if !found {
 			test, isNew := createOrGetTest(server, UDP, All)

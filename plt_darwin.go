@@ -11,9 +11,10 @@ import (
 	"bytes"
 	"encoding/binary"
 	"net"
+	"syscall"
 
-	"golang.org/x/sys/unix"
 	tm "github.com/nsf/termbox-go"
+	"golang.org/x/sys/unix"
 )
 
 func getNetDevStats(stats *ethrNetStat) {
@@ -24,7 +25,7 @@ func getNetDevStats(stats *ethrNetStat) {
 	}
 
 	for _, iface := range ifs {
-		if iface.Flags & net.FlagUp == 0 {
+		if iface.Flags&net.FlagUp == 0 {
 			continue
 		}
 
@@ -55,7 +56,7 @@ func getTCPStats(stats *ethrNetStat) {
 	binary.Read(buf, binary.LittleEndian, &data)
 
 	// return EthrTCPStat{uint64(data.Sndrexmitpack)}, nil
-	// return the TCP Retransmits	
+	// return the TCP Retransmits
 	stats.tcpStats.segRetrans = uint64(data.Sndrexmitpack)
 	return
 }
@@ -357,4 +358,30 @@ type tcpStat struct {
 	Mptcp_wifi_proxy                 uint32
 	Mptcp_cell_proxy                 uint32
 	_                                [4]byte
+}
+
+func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
+	err = syscall.SetsockoptInt(int(fd), level, opt, val)
+	if err != nil {
+		ui.printErr("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
+	}
+	return
+}
+
+func IcmpNewConn(address string) (net.PacketConn, error) {
+	dialedConn, err := net.Dial("ip4:icmp", address)
+	if err != nil {
+		return nil, err
+	}
+	localAddr := dialedConn.LocalAddr()
+	dialedConn.Close()
+	conn, err := net.ListenPacket("ip4:icmp", localAddr.String())
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func IsAdmin() bool {
+	return true
 }
