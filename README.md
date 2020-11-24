@@ -194,7 +194,8 @@ In this mode, Ethr client can only talk to an Ethr server.
 		p: Packets/s
 		l: Latency, Loss & Jitter
 		pi: Ping Loss & Latency
-		tr: TraceRoute with Loss & Latency
+		tr: TraceRoute
+                mtr: MyTraceRoute with Loss & Latency
 		Default: b - Bandwidth measurement.
 	-w <number>
 		Use specified number of iterations for warmup.
@@ -231,7 +232,8 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 		Test to run ("c", "cl", or "tr")
 		c: Connections/s
 		pi: Ping Loss & Latency
-		tr: TraceRoute with Loss & Latency
+		tr: TraceRoute
+                mtr: MyTraceRoute with Loss & Latency
 		Default: pi - Ping Loss & Latency.
 	-w <number>
 		Use specified number of iterations for warmup.
