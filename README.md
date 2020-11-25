@@ -135,11 +135,27 @@ ethr -c localhost
 // Start bandwidth test using 8 threads
 ethr -c localhost -n 8
 
-// Start connections/s test using 64 threads
-ethr -c localhost -t c -n 64
+// Start connections/s test using 64 threads to server 10.1.0.11
+ethr -c 10.1.0.11 -t c -n 64
+
+// Measure TCP connection setup latency to www.github.com at port 443
+./ethr -c www.github.com:443 -p tcp -t pi -m x -d 0 -4
+
+// Measure TCP connection setup latency to www.github.com at port 443
+// Note: Here port 443 is driven automatically from https
+./ethr -c https://www.github.com -p tcp -t pi -m x -d 0 -4
+
+// Measure ICMP ping latency to www.github.com
+sudo ./ethr -c www.github.com -p icmp -t pi -m x -d 0 -4
+
+// Run measurement similar to mtr on Linux
+sudo ./ethr -c www.github.com -p icmp -t mtr -m x -d 0 -4
+
+// Measure packets/s over UDP by sending small 1-byte packets
+./ethr -c 172.28.192.1 -p udp -t p -d 0
 ```
 
-## Common Problems
+## Known Issues & Requirements
 ### Windows
 For ICMP related tests, Ping, TraceRoute, MyTraceRoute, Windows requires ICMP to be allowed via Firewall. This can be done using PowerShell by following commands. However, use this only if security policy of your setup allows that.
 ```
