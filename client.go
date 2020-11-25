@@ -125,7 +125,7 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 	if err != nil {
 		return
 	}
-	if !xMode && port != "" {
+	if !xMode {
 		// For Ethr to Ethr tests, override the port supplied as part
 		// of the server name/url.
 		port = gEthrPortStr
