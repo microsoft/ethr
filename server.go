@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"encoding/gob"
 	"fmt"
 	"io"
@@ -38,7 +39,7 @@ func showAcceptedIPVersion() {
 	ui.printMsg("Accepting IP version: %s", ipVerString)
 }
 
-func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
+func runServer(serverParam ethrServerParam) {
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
 	startStatsTimer()
@@ -54,12 +55,17 @@ func runServer(testParam EthrTestParam, serverParam ethrServerParam) {
 	}
 }
 
-func handshakeWithClient(test *ethrTest, conn net.Conn) (testParam EthrTestParam, err error) {
-	// Check if there is any control message being sent to indicate type
-	// of test, the client is running.
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
-	ethrMsg := recvSessionMsg(dec)
+func handshakeWithClient(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) (testParam EthrTestParam, err error) {
+	ethrMsg := &EthrMsg{}
+	decoder := gob.NewDecoder(buffer)
+	decoder.Decode(ethrMsg)
+	/*
+		// Check if there is any control message being sent to indicate type
+		// of test, the client is running.
+		dec := gob.NewDecoder(conn)
+		enc := gob.NewEncoder(conn)
+		ethrMsg := recvSessionMsg(dec)
+	*/
 	if ethrMsg.Type != EthrSyn {
 		// For CPS & Connection Latency tests, this function will return here.
 		err = os.ErrInvalid
@@ -68,10 +74,20 @@ func handshakeWithClient(test *ethrTest, conn net.Conn) (testParam EthrTestParam
 	testParam = ethrMsg.Syn.TestParam
 	delay := timeToNextTick()
 	ethrMsg = createAckMsg(gCert, delay)
-	err = sendSessionMsg(enc, ethrMsg)
+	/*
+		err = sendSessionMsg(enc, ethrMsg)
+		if err != nil {
+			ui.printErr("Send session message failed: %v", err)
+		}
+	*/
+	var writeBuffer bytes.Buffer
+	encoder := gob.NewEncoder(&writeBuffer)
+	encoder.Encode(ethrMsg)
+	_, err = conn.Write(writeBuffer.Bytes())
 	if err != nil {
-		ui.printErr("Send session message failed: %v", err)
+		ui.printErr("Failed to send ACK message back to Ethr client: %v", err)
 	}
+	writeBuffer.Reset()
 	return
 }
 
@@ -119,12 +135,12 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	// For CPS and ConnectionLatency tests, there is no deterministic way to know when
 	// the test starts from the client side and when it ends. This defer function ensures
 	// that test is not created/deleted repeatedly by doing a deferred deletion. If another
-	// connection comes with-in 100ms, then another reference would be taken on existing
+	// connection comes with-in 2s, then another reference would be taken on existing
 	// test object and it won't be deleted by safeDeleteTest call. This also ensures,
 	// test header is not printed repeatedly via emitTestHdr.
 	// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
 	defer func() {
-		time.Sleep(100 * time.Millisecond)
+		time.Sleep(2 * time.Second)
 		safeDeleteTest(test)
 	}()
 
@@ -132,7 +148,14 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	// etc. and handle those cases as well.
 	atomic.AddUint64(&test.testResult.cps, 1)
 
-	testParam, err := handshakeWithClient(test, conn)
+	// TODO: Assuming max ethr message size as 1024 sent over gob.
+	bufferBytes := make([]byte, 1024)
+	n, err := conn.Read(bufferBytes)
+	if err != nil {
+		return
+	}
+	buffer := bytes.NewBuffer(bufferBytes[:n])
+	testParam, err := handshakeWithClient(test, conn, buffer)
 	if err != nil {
 		return
 	}
@@ -255,7 +278,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	// address. We could use createOrGetTest but that takes a global lock.
 	tests := make(map[string]*ethrTest)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
-	buffer := make([]byte, 64*1024)
+	readBuffer := make([]byte, 64*1024)
 	n, remoteIP, err := 0, new(net.UDPAddr), error(nil)
 
 	// This function handles UDP tests that came from clients that are no longer
@@ -267,7 +290,14 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 			time.Sleep(200 * time.Millisecond)
 			for k, v := range tests {
 				ui.printDbg("Found Test from server: %v, time: %v", k, v.lastAccess)
-				if time.Since(v.lastAccess) > (100 * time.Millisecond) {
+				// At 200ms of no activity, mark the test in-active so stats stop
+				// printing.
+				if time.Since(v.lastAccess) > (200 * time.Millisecond) {
+					v.isActive = false
+				}
+				// At 2s of no activity, delete the test by assuming that client
+				// has stopped.
+				if time.Since(v.lastAccess) > (2 * time.Second) {
 					ui.printDbg("Deleting UDP test from server: %v, lastAccess: %v", k, v.lastAccess)
 					safeDeleteTest(v)
 					delete(tests, k)
@@ -276,7 +306,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 		}
 	}()
 	for err == nil {
-		n, remoteIP, err = conn.ReadFromUDP(buffer)
+		n, remoteIP, err = conn.ReadFromUDP(readBuffer)
 		if err != nil {
 			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
 			continue
@@ -290,6 +320,11 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 				tests[server] = test
 			}
 			if isNew {
+				buffer := bytes.NewBuffer(readBuffer[:n])
+				testParam, err := handshakeWithClient(test, conn, buffer)
+				if err != nil {
+					return
+				}
 				ui.printDbg("Creating UDP test from server: %v, lastAccess: %v", server, time.Now())
 				ui.emitTestHdr()
 			}

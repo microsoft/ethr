@@ -77,7 +77,7 @@ func initClient() {
 func handshakeWithServer(test *ethrTest, conn net.Conn) {
 	dec := gob.NewDecoder(conn)
 	enc := gob.NewEncoder(conn)
-	ethrMsg := createSynMsg(test.testParam)
+	ethrMsg := createSynMsg(test.clientParam)
 	err := sendSessionMsg(enc, ethrMsg)
 	if err != nil {
 		ui.printErr("Failed to send session message: %v", err)
@@ -125,7 +125,7 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 	if err != nil {
 		return
 	}
-	if !xMode {
+	if !gIsExternalClient {
 		// For Ethr to Ethr tests, override the port supplied as part
 		// of the server name/url.
 		port = gEthrPortStr
@@ -778,11 +778,6 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 	genHopData(hopData, peerAddr, elapsed)
 	return nil, isLast
 }
-
-const (
-	Icmpv4 = 1  // ICMP for IPv4
-	Icmpv6 = 58 // ICMP for IPv6
-)
 
 func icmpSetTTL(c net.PacketConn, ttl int) error {
 	err := os.ErrInvalid

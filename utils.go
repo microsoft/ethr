@@ -192,8 +192,8 @@ func protoToString(proto EthrProtocol) string {
 	return ""
 }
 
-func tcp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Tcp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "tcp4"
 	case ethrIPv6:
@@ -202,8 +202,8 @@ func tcp(ipVer ethrIPVer) string {
 	return "tcp"
 }
 
-func udp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Udp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "udp4"
 	case ethrIPv6:
@@ -212,8 +212,8 @@ func udp(ipVer ethrIPVer) string {
 	return "udp"
 }
 
-func Icmp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Icmp() string {
+	switch gIPVersion {
 	case ethrIPv6:
 		return "ip6:ipv6-icmp"
 	default:
@@ -396,7 +396,7 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 		return ipAddr, ipStr, err
 	}
 	for _, ip := range ips {
-		if ipVer == ethrIPAny || (ipVer == ethrIPv4 && ip.To4() != nil) || (ipVer == ethrIPv6 && ip.To16() != nil) {
+		if gIPVersion == ethrIPAny || (gIPVersion == ethrIPv4 && ip.To4() != nil) || (gIPVersion == ethrIPv6 && ip.To16() != nil) {
 			ipAddr.IP = ip
 			ipStr = ip.String()
 			ui.printDbg("Resolved server: %v to IP address: %v\n", server, ip)
