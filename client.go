@@ -74,7 +74,7 @@ func initClient() {
 	initClientUI()
 }
 
-func handshakeWithServer(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) {
+func handshakeWithServer(test *ethrTest, conn net.Conn) {
 	ethrMsg := createSynMsg(test.testID, test.clientParam)
 	var writeBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&writeBuffer)
@@ -87,19 +87,6 @@ func handshakeWithServer(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) {
 		ui.printErr("Failed to send SYN message to Ethr server: %v", err)
 	}
 	writeBuffer.Reset()
-	err := sendSessionMsg(enc, ethrMsg)
-	if err != nil {
-		ui.printErr("Failed to send session message: %v", err)
-		return
-	}
-	ethrMsg = recvSessionMsg(dec)
-	if ethrMsg.Type != EthrAck {
-		if ethrMsg.Type == EthrFin {
-			err = fmt.Errorf("%s", ethrMsg.Fin.Message)
-		} else {
-			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
-		}
-	}
 }
 
 func getServerIPandPort(server string) (string, string, error) {
@@ -158,9 +145,10 @@ func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
 func runTest(test *ethrTest) {
 	toStop := make(chan int, 1)
 	startStatsTimer()
-	runDurationTimer(test.clientParam.Duration, toStop)
-	test.isActive = true
 	gap := test.clientParam.Gap
+	duration := test.clientParam.Duration
+	runDurationTimer(duration, toStop)
+	test.isActive = true
 	if test.testID.Protocol == TCP {
 		if test.testID.Type == Bandwidth {
 			tcpRunBandwidthTest(test, toStop)
@@ -201,7 +189,7 @@ func runTest(test *ethrTest) {
 	case done:
 		ui.printMsg("Ethr done, measurement complete.")
 	case timeout:
-		ui.printMsg("Ethr done, duration: " + d.String() + ".")
+		ui.printMsg("Ethr done, duration: " + duration.String() + ".")
 	case interrupt:
 		ui.printMsg("Ethr done, received interrupt signal.")
 	case disconnect:
@@ -221,7 +209,7 @@ func tcpRunBandwidthTest(test *ethrTest, toStop chan int) {
 
 func tcpRunBanwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
 	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
-		conn, err := net.Dial(Tcp(), test.dialAddr)
+		conn, err := ethrDialInc(TCP, test.dialAddr, uint16(th))
 		if err != nil {
 			ui.printErr("Error dialing connection: %v", err)
 			return
@@ -240,11 +228,16 @@ func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGrou
 	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 	ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 		ec.fd, lserver, lport, rserver, rport)
-	buff := make([]byte, test.clientParam.BufferSize)
-	for i := uint32(0); i < test.clientParam.BufferSize; i++ {
+	size := test.clientParam.BufferSize
+	if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
+		size = uint32(test.clientParam.BwRate)
+	}
+	buff := make([]byte, size)
+	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	blen := len(buff)
+	start := time.Now()
+	sendRate := uint64(0)
 ExitForLoop:
 	for {
 		select {
@@ -258,18 +251,27 @@ ExitForLoop:
 			} else {
 				n, err = conn.Write(buff)
 			}
-			if err != nil || n < blen {
+			if err != nil || n < int(size) {
 				ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 				break ExitForLoop
 			}
-			atomic.AddUint64(&ec.bw, uint64(blen))
-			atomic.AddUint64(&test.testResult.bw, uint64(blen))
+			atomic.AddUint64(&ec.bw, uint64(size))
+			atomic.AddUint64(&test.testResult.bw, uint64(size))
+			sendRate += uint64(size)
+			if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
+				timeTaken := time.Since(start)
+				if timeTaken < time.Second {
+					time.Sleep(time.Second - timeTaken)
+				}
+				sendRate = 0
+				start = time.Now()
+			}
 		}
 	}
 }
 
 func runTCPLatencyTest(test *ethrTest, g time.Duration, toStop chan int) {
-	conn, err := net.Dial(Tcp(), test.dialAddr)
+	conn, err := ethrDial(TCP, test.dialAddr)
 	if err != nil {
 		ui.printErr("Error dialing the latency connection: %v", err)
 		os.Exit(1)
@@ -358,14 +360,14 @@ func calcAndPrintLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.
 
 func tcpRunCpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
-		go func() {
+		go func(th uint32) {
 		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					conn, err := net.Dial(Tcp(), test.dialAddr)
+					conn, err := ethrDialAll(TCP, test.dialAddr)
 					if err == nil {
 						atomic.AddUint64(&test.testResult.cps, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
@@ -378,11 +380,11 @@ func tcpRunCpsTest(test *ethrTest) {
 					}
 				}
 			}
-		}()
+		}(th)
 	}
 }
 
-func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount int) {
+func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount uint32) {
 	// TODO: Override NumThreads for now, fix it later to support parallel
 	// threads.
 	test.clientParam.NumThreads = 1
@@ -437,8 +439,7 @@ func clientRunPing(test *ethrTest, prefix string) (time.Duration, error) {
 
 func tcpRunPing(test *ethrTest, prefix string) (timeTaken time.Duration, err error) {
 	t0 := time.Now()
-	// conn, err := net.DialTimeout(Tcp(), *server, time.Second)
-	conn, err := net.Dial(Tcp(), test.dialAddr)
+	conn, err := ethrDial(TCP, test.dialAddr)
 	if err != nil {
 		ui.printMsg("[tcp] %sConnection to %s: Timed out (%v)", prefix, test.dialAddr, err)
 		return
@@ -555,7 +556,11 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 		return err, isLast
 	}
 	defer c.Close()
-	localPortNum := uint16(8888 + hop)
+	localPortNum := uint16(8888)
+	if gClientPort != 0 {
+		localPortNum = gClientPort
+	}
+	localPortNum += uint16(hop)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint16(b[0:], localPortNum)
 	remotePortNum, err := strconv.ParseUint(test.remotePort, 10, 16)
@@ -568,7 +573,8 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 		peerAddrChan <- peerAddr
 	}()
 	startTime := time.Now()
-	_, err = ethrDialForTraceRoute(Tcp(), test.dialAddr, localPortNum, hop)
+	conn, err := ethrDialEx(TCP, test.dialAddr, gLocalIP, localPortNum, hop, int(gTOS))
+	conn.Close()
 	hopData.sent++
 	peerAddr := ""
 	endTime := time.Now()
@@ -751,17 +757,6 @@ ExitForLoop:
 	}
 }
 
-/*
-func icmpNewConn(localAddr string) (*icmp.PacketConn, error) {
-	c, err := icmp.ListenPacket("ip4:icmp", localAddr)
-	if err != nil {
-		ui.printErr("Failed to listen for ICMP on local address %v. Msg: %v.", localAddr, err.Error())
-		return nil, err
-	}
-	return c, nil
-}
-*/
-
 func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
 	isLast := false
 	echoMsg := fmt.Sprintf("Hello: Ethr - %v", hop)
@@ -791,10 +786,10 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 
 func icmpSetTTL(c net.PacketConn, ttl int) error {
 	err := os.ErrInvalid
-	if ipVer == ethrIPv4 {
+	if gIPVersion == ethrIPv4 {
 		cIPv4 := ipv4.NewPacketConn(c)
 		err = cIPv4.SetTTL(ttl)
-	} else if ipVer == ethrIPv6 {
+	} else if gIPVersion == ethrIPv6 {
 		cIPv6 := ipv6.NewPacketConn(c)
 		err = cIPv6.SetHopLimit(ttl)
 	}
@@ -824,7 +819,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 			Data: []byte(body),
 		},
 	}
-	if ipVer == ethrIPv6 {
+	if gIPVersion == ethrIPv6 {
 		wm.Type = ipv6.ICMPTypeEchoRequest
 	}
 	wb, err := wm.Marshal(nil)
@@ -870,7 +865,7 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			ui.printDbg("Matching peer is not found.")
 			continue
 		}
-		icmpMsg, err := icmp.ParseMessage(IcmpProto(ipVer), b[:n])
+		icmpMsg, err := icmp.ParseMessage(IcmpProto(), b[:n])
 		if err != nil {
 			ui.printDbg("Failed to parse ICMP message: %v", err)
 			continue
@@ -886,7 +881,7 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 						ui.printDbg("Incorrect length of ICMP message.")
 						continue
 					}
-					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(ipVer), body[index-4:])
+					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(), body[index-4:])
 					switch innerIcmpMsg.Body.(type) {
 					case *icmp.Echo:
 						seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
@@ -918,9 +913,13 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 
 func runUDPBandwidthAndPpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
-		go func() {
-			buff := make([]byte, test.clientParam.BufferSize)
-			conn, err := net.Dial(Udp(), test.dialAddr)
+		go func(th uint32) {
+			size := test.clientParam.BufferSize
+			if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
+				size = uint32(test.clientParam.BwRate)
+			}
+			buff := make([]byte, size)
+			conn, err := ethrDialInc(UDP, test.dialAddr, uint16(th))
 			if err != nil {
 				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
@@ -932,6 +931,8 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 				ec.fd, lserver, lport, rserver, rport)
 			blen := len(buff)
+			start := time.Now()
+			sendRate := uint64(0)
 		ExitForLoop:
 			for {
 				select {
@@ -951,9 +952,18 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 					atomic.AddUint64(&ec.pps, 1)
 					atomic.AddUint64(&test.testResult.bw, uint64(n))
 					atomic.AddUint64(&test.testResult.pps, 1)
+					sendRate += uint64(size)
+					if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
+						timeTaken := time.Since(start)
+						if timeTaken < time.Second {
+							time.Sleep(time.Second - timeTaken)
+						}
+						sendRate = 0
+						start = time.Now()
+					}
 				}
 			}
-		}()
+		}(th)
 	}
 }
 

@@ -111,11 +111,11 @@ func printBwTestResult(p EthrProtocol, fd string, t0, t1, bw, pps uint64) {
 }
 
 func printTestResult(test *ethrTest, seconds uint64) {
-	if test.testParam.TestID.Type == Bandwidth && (test.testParam.TestID.Protocol == TCP ||
-		test.testParam.TestID.Protocol == UDP) {
+	if test.testID.Type == Bandwidth && (test.testID.Protocol == TCP ||
+		test.testID.Protocol == UDP) {
 		if gInterval == 0 {
-			printBwTestDivider(test.testParam.TestID.Protocol)
-			printBwTestHeader(test.testParam.TestID.Protocol)
+			printBwTestDivider(test.testID.Protocol)
+			printBwTestHeader(test.testID.Protocol)
 		}
 		cbw := uint64(0)
 		cpps := uint64(0)
@@ -126,32 +126,32 @@ func printTestResult(test *ethrTest, seconds uint64) {
 			bw /= seconds
 			if !gNoConnectionStats {
 				fd := fmt.Sprintf("%5d", ec.fd)
-				printBwTestResult(test.testParam.TestID.Protocol, fd, gInterval, gInterval+1, bw, pps)
+				printBwTestResult(test.testID.Protocol, fd, gInterval, gInterval+1, bw, pps)
 			}
 			cbw += bw
 			cpps += pps
 			ccount++
 		})
 		if ccount > 1 || gNoConnectionStats {
-			printBwTestResult(test.testParam.TestID.Protocol, "SUM", gInterval, gInterval+1, cbw, cpps)
+			printBwTestResult(test.testID.Protocol, "SUM", gInterval, gInterval+1, cbw, cpps)
 			if !gNoConnectionStats {
-				printBwTestDivider(test.testParam.TestID.Protocol)
+				printBwTestDivider(test.testID.Protocol)
 			}
 		}
-		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
 			bytesToRate(cbw), "", ppsToString(cpps), ""})
-	} else if test.testParam.TestID.Type == Cps {
+	} else if test.testID.Type == Cps {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - ")
 			ui.printMsg("Protocol    Interval      Conn/s")
 		}
 		cps := atomic.SwapUint64(&test.testResult.cps, 0)
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s",
-			protoToString(test.testParam.TestID.Protocol),
+			protoToString(test.testID.Protocol),
 			gInterval, gInterval+1, cpsToString(cps))
-		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
 			"", cpsToString(cps), "", ""})
-	} else if test.testParam.TestID.Type == Pps {
+	} else if test.testID.Type == Pps {
 		if gInterval == 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - -")
 			ui.printMsg("Protocol    Interval      Bits/s    Pkts/s")
@@ -159,11 +159,11 @@ func printTestResult(test *ethrTest, seconds uint64) {
 		bw := atomic.SwapUint64(&test.testResult.bw, 0)
 		pps := atomic.SwapUint64(&test.testResult.pps, 0)
 		ui.printMsg("  %-5s    %03d-%03d sec   %7s   %7s",
-			protoToString(test.testParam.TestID.Protocol),
+			protoToString(test.testID.Protocol),
 			gInterval, gInterval+1, bytesToRate(bw), ppsToString(pps))
-		logResults([]string{test.session.remoteIP, protoToString(test.testParam.TestID.Protocol),
+		logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
 			bytesToRate(bw), "", ppsToString(pps), ""})
-	} else if test.testParam.TestID.Type == MyTraceRoute {
+	} else if test.testID.Type == MyTraceRoute {
 		if gCurHops > 0 {
 			ui.printMsg("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - - ")
 			ui.printMsg("Host: %-40s    Sent    Recv        Last         Avg        Best        Wrst", test.session.remoteIP)

@@ -178,3 +178,7 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 func IsAdmin() bool {
 	return true
 }
+
+func SetTClass(fd uintptr, tos int) {
+	setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, tos)
+}

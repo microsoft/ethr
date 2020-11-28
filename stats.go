@@ -134,13 +134,14 @@ func timeToNextTick() time.Duration {
 
 func emitStats() {
 	d := time.Since(lastStatsTime)
+	ui.printMsg("Time: %v, Duration: %v", lastStatsTime, d)
 	lastStatsTime = time.Now()
 	seconds := int64(d.Seconds())
 	if seconds < 1 {
 		seconds = 1
 	}
 	ui.emitTestResultBegin()
-	// ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
+	ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()
 	ui.emitStats(getNetworkStats())
@@ -154,8 +155,6 @@ func emitTestResults(s uint64) {
 		v := gSessions[k]
 		ui.emitTestResult(v, TCP, s)
 		ui.emitTestResult(v, UDP, s)
-		ui.emitTestResult(v, HTTP, s)
-		ui.emitTestResult(v, HTTPS, s)
 		ui.emitTestResult(v, ICMP, s)
 	}
 }

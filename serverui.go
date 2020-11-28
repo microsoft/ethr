@@ -29,8 +29,6 @@ var gAggregateTestResults = make(map[EthrProtocol]*ethrTestResultAggregate)
 func initServerUI(showUI bool) {
 	gAggregateTestResults[TCP] = &ethrTestResultAggregate{}
 	gAggregateTestResults[UDP] = &ethrTestResultAggregate{}
-	gAggregateTestResults[HTTP] = &ethrTestResultAggregate{}
-	gAggregateTestResults[HTTPS] = &ethrTestResultAggregate{}
 	gAggregateTestResults[ICMP] = &ethrTestResultAggregate{}
 	if !showUI || !initServerTui() {
 		initServerCli()
@@ -369,7 +367,7 @@ func (u *serverCli) printTestResults(s []string) {
 }
 
 func emitAggregateResults() {
-	var protoList = []EthrProtocol{TCP, UDP, HTTP, HTTPS, ICMP}
+	var protoList = []EthrProtocol{TCP, UDP, ICMP}
 	for _, proto := range protoList {
 		emitAggregate(proto)
 	}

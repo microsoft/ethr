@@ -112,7 +112,9 @@ type EthrClientParam struct {
 	Reverse     bool
 	Duration    time.Duration
 	Gap         time.Duration
-	WarmupCount int
+	WarmupCount uint32
+	BwRate      uint64
+	ToS         uint8
 }
 
 type ethrServerParam struct {
@@ -183,7 +185,8 @@ func newTestInternal(remoteIP string, testID EthrTestID, clientParam EthrClientP
 	test.done = make(chan struct{})
 	test.connList = list.New()
 	test.lastAccess = time.Now()
-	session.tests[testParam.TestID] = test
+	test.isActive = true
+	session.tests[testID] = test
 
 	return test, nil
 }
@@ -196,7 +199,7 @@ func deleteTest(test *ethrTest) {
 
 func deleteTestInternal(test *ethrTest) {
 	session := test.session
-	testID := test.testParam.TestID
+	testID := test.testID
 	//
 	// TODO fix this, we need to decide where to close this, inside this
 	// function or by the caller. The reason we may need it to be done by
@@ -245,7 +248,7 @@ func createOrGetTest(remoteIP string, proto EthrProtocol, testType EthrTestType)
 	if test == nil {
 		isNew = true
 		testID := EthrTestID{proto, testType}
-		test, _ = newTestInternal(remoteIP, testID, nil)
+		test, _ = newTestInternal(remoteIP, testID, EthrClientParam{})
 		test.isActive = true
 	}
 	atomic.AddInt32(&test.refCount, 1)
@@ -297,38 +300,6 @@ func (test *ethrTest) connListDo(f func(*ethrConn)) {
 		ec := e.Value.(*ethrConn)
 		f(ec)
 	}
-}
-
-/*
-func recvSessionMsg(dec *gob.Decoder) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{}
-	buffer := bytes.NewBuffer(readBuffer[:n])
-	testParam, err := handshakeWithClient(test, conn, buffer)
-	if err != nil {
-		return
-	}
-	err := dec.Decode(ethrMsg)
-	if err != nil {
-		ui.printDbg("Error receiving message on control channel: %v", err)
-		ethrMsg.Type = EthrInv
-	}
-	return
-}
-
-func sendSessionMsg(enc *gob.Encoder, ethrMsg *EthrMsg) error {
-	err := enc.Encode(ethrMsg)
-	if err != nil {
-		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
-	}
-	return err
-}
-*/
-
-func createAckMsg(d time.Duration) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
-	ethrMsg.Ack = &EthrMsgAck{}
-	ethrMsg.Ack.NapDuration = d
-	return
 }
 
 func createSynMsg(testID EthrTestID, clientParam EthrClientParam) (ethrMsg *EthrMsg) {
