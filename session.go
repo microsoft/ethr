@@ -20,6 +20,7 @@ const (
 	All EthrTestType = iota
 	Bandwidth
 	Cps
+	Pps
 	Latency
 	Ping
 	TraceRoute
@@ -62,6 +63,7 @@ type EthrMsg struct {
 }
 
 type EthrMsgSyn struct {
+	TestID      EthrTestID
 	ClientParam EthrClientParam
 }
 
@@ -329,9 +331,10 @@ func createAckMsg(d time.Duration) (ethrMsg *EthrMsg) {
 	return
 }
 
-func createSynMsg(clientParam EthrClientParam) (ethrMsg *EthrMsg) {
+func createSynMsg(testID EthrTestID, clientParam EthrClientParam) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyn}
 	ethrMsg.Syn = &EthrMsgSyn{}
+	ethrMsg.Syn.TestID = testID
 	ethrMsg.Syn.ClientParam = clientParam
 	return
 }

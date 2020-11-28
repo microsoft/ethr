@@ -55,34 +55,24 @@ func runServer(serverParam ethrServerParam) {
 	}
 }
 
-func handshakeWithClient(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) (testParam EthrTestParam, err error) {
+func handshakeWithClient(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) (testID EthrTestID, clientParam EthrClientParam, err error) {
 	ethrMsg := &EthrMsg{}
 	decoder := gob.NewDecoder(buffer)
-	decoder.Decode(ethrMsg)
-	/*
-		// Check if there is any control message being sent to indicate type
-		// of test, the client is running.
-		dec := gob.NewDecoder(conn)
-		enc := gob.NewEncoder(conn)
-		ethrMsg := recvSessionMsg(dec)
-	*/
-	if ethrMsg.Type != EthrSyn {
-		// For CPS & Connection Latency tests, this function will return here.
+	err = decoder.Decode(ethrMsg)
+	if err != nil || ethrMsg.Type != EthrSyn {
 		err = os.ErrInvalid
 		return
 	}
-	testParam = ethrMsg.Syn.TestParam
+	testID = ethrMsg.Sync.TestID
+	clientParam = ethrMsg.Syn.ClientParam
 	delay := timeToNextTick()
 	ethrMsg = createAckMsg(gCert, delay)
-	/*
-		err = sendSessionMsg(enc, ethrMsg)
-		if err != nil {
-			ui.printErr("Send session message failed: %v", err)
-		}
-	*/
 	var writeBuffer bytes.Buffer
 	encoder := gob.NewEncoder(&writeBuffer)
-	encoder.Encode(ethrMsg)
+	err = encoder.Encode(ethrMsg)
+	if err != nil {
+		ui.printErr("Failed to encode ACK message via Gob: %v", err)
+	}
 	_, err = conn.Write(writeBuffer.Bytes())
 	if err != nil {
 		ui.printErr("Failed to send ACK message back to Ethr client: %v", err)
@@ -155,30 +145,30 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 		return
 	}
 	buffer := bytes.NewBuffer(bufferBytes[:n])
-	testParam, err := handshakeWithClient(test, conn, buffer)
+	testID, clientParam, err := handshakeWithClient(test, conn, buffer)
 	if err != nil {
 		return
 	}
 
-	if testParam.TestID.Protocol == TCP {
-		if testParam.TestID.Type == Bandwidth {
+	if testID.Protocol == TCP {
+		if testID.Type == Bandwidth {
 			srvrRunTCPBandwidthTest(test, testParam, conn)
-		} else if testParam.TestID.Type == Latency {
+		} else if testID.Type == Latency {
 			ui.emitLatencyHdr()
 			srvrRunTCPLatencyTest(test, testParam, conn)
 		}
 	}
 }
 
-func srvrRunTCPBandwidthTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
-	size := testParam.BufferSize
+func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn net.Conn) {
+	size := clientParam.BufferSize
 	buff := make([]byte, size)
-	for i := uint32(0); i < testParam.BufferSize; i++ {
+	for i := uint32(0); i < clientParam.BufferSize; i++ {
 		buff[i] = byte(i)
 	}
 	for {
 		var err error
-		if testParam.Reverse {
+		if clientParam.Reverse {
 			_, err = conn.Write(buff)
 		} else {
 			_, err = io.ReadFull(conn, buff)
@@ -191,9 +181,9 @@ func srvrRunTCPBandwidthTest(test *ethrTest, testParam EthrTestParam, conn net.C
 	}
 }
 
-func srvrRunTCPLatencyTest(test *ethrTest, testParam EthrTestParam, conn net.Conn) {
-	bytes := make([]byte, testParam.BufferSize)
-	rttCount := testParam.RttCount
+func srvrRunTCPLatencyTest(test *ethrTest, clientParam EthrClientParam, conn net.Conn) {
+	bytes := make([]byte, clientParam.BufferSize)
+	rttCount := clientParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
 	for {
 		_, err := io.ReadFull(conn, bytes)

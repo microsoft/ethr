@@ -241,7 +241,7 @@ func main() {
 		validateClientParams(clientParam)
 
 		rServer := *clientDest
-		runClient(clientParam, clientParam, rServer)
+		runClient(testId, clientParam, rServer)
 	}
 }
 
