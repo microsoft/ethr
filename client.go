@@ -12,7 +12,6 @@ import (
 
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -74,19 +73,19 @@ func initClient() {
 	initClientUI()
 }
 
-func handshakeWithServer(test *ethrTest, conn net.Conn) {
+func handshakeWithServer(test *ethrTest, conn net.Conn) (err error) {
 	ethrMsg := createSynMsg(test.testID, test.clientParam)
-	var writeBuffer bytes.Buffer
-	encoder := gob.NewEncoder(&writeBuffer)
-	err := encoder.Encode(ethrMsg)
+	err = sendSessionMsg(conn, ethrMsg)
 	if err != nil {
-		ui.printErr("Failed to encode SYN message via Gob: %v", err)
+		ui.printDbg("Failed to send SYN message to Ethr server. Error: %v", err)
+		return
 	}
-	_, err = conn.Write(writeBuffer.Bytes())
-	if err != nil {
-		ui.printErr("Failed to send SYN message to Ethr server: %v", err)
+	ethrMsg = recvSessionMsg(conn)
+	if ethrMsg.Type != EthrAck {
+		ui.printDbg("Failed to receive ACK message from Ethr server. Error: %v", err)
+		err = os.ErrInvalid
 	}
-	writeBuffer.Reset()
+	return
 }
 
 func getServerIPandPort(server string) (string, string, error) {
@@ -211,9 +210,14 @@ func tcpRunBanwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
 		conn, err := ethrDialInc(TCP, test.dialAddr, uint16(th))
 		if err != nil {
 			ui.printErr("Error dialing connection: %v", err)
-			return
+			continue
 		}
-		handshakeWithServer(test, conn)
+		err = handshakeWithServer(test, conn)
+		if err != nil {
+			ui.printErr("Failed in handshake with the server. Error: %v", err)
+			conn.Close()
+			continue
+		}
 		wg.Add(1)
 		go runTCPBandwidthTestHandler(test, conn, wg)
 	}
@@ -264,14 +268,18 @@ ExitForLoop:
 }
 
 func runTCPLatencyTest(test *ethrTest, g time.Duration, toStop chan int) {
+	ui.printMsg("Running latency test: %v, %v", test.clientParam.RttCount, test.clientParam.BufferSize)
 	conn, err := ethrDial(TCP, test.dialAddr)
 	if err != nil {
 		ui.printErr("Error dialing the latency connection: %v", err)
-		os.Exit(1)
 		return
 	}
 	defer conn.Close()
-	handshakeWithServer(test, conn)
+	err = handshakeWithServer(test, conn)
+	if err != nil {
+		ui.printErr("Failed in handshake with the server. Error: %v", err)
+		return
+	}
 	ui.emitLatencyHdr()
 	buffSize := test.clientParam.BufferSize
 	buff := make([]byte, buffSize)

@@ -6,7 +6,9 @@
 package main
 
 import (
+	"bytes"
 	"container/list"
+	"encoding/gob"
 	"net"
 	"os"
 	"sync"
@@ -68,9 +70,6 @@ type EthrMsgSyn struct {
 }
 
 type EthrMsgAck struct {
-	// This field is used to synchronize test start between
-	// client and server. TODO: Not used anymore.
-	NapDuration time.Duration
 }
 
 type ethrTestResult struct {
@@ -308,5 +307,67 @@ func createSynMsg(testID EthrTestID, clientParam EthrClientParam) (ethrMsg *Ethr
 	ethrMsg.Syn = &EthrMsgSyn{}
 	ethrMsg.Syn.TestID = testID
 	ethrMsg.Syn.ClientParam = clientParam
+	return
+}
+
+func createAckMsg() (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
+	ethrMsg.Ack = &EthrMsgAck{}
+	return
+}
+
+func recvSessionMsg(conn net.Conn) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{}
+	ethrMsg.Type = EthrInv
+	// TODO: Assuming max ethr message size as 4096 sent over gob.
+	msgBytes := make([]byte, 4096)
+	n, err := conn.Read(msgBytes)
+	if err != nil {
+		ui.printDbg("Error receiving message on control channel. Error: %v", err)
+		return
+	}
+	ethrMsg = decodeMsg(msgBytes[:n])
+	return
+}
+
+func recvSessionMsgFromBuffer(msgBytes []byte) (ethrMsg *EthrMsg) {
+	ethrMsg = decodeMsg(msgBytes)
+	return
+}
+
+func sendSessionMsg(conn net.Conn, ethrMsg *EthrMsg) (err error) {
+	msgBytes, err := encodeMsg(ethrMsg)
+	if err != nil {
+		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
+		return
+	}
+	_, err = conn.Write(msgBytes)
+	if err != nil {
+		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
+	}
+	return err
+}
+
+func decodeMsg(msgBytes []byte) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{}
+	buffer := bytes.NewBuffer(msgBytes)
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to decode message using Gob: %v", err)
+		ethrMsg.Type = EthrInv
+	}
+	return
+}
+
+func encodeMsg(ethrMsg *EthrMsg) (msgBytes []byte, err error) {
+	var writeBuffer bytes.Buffer
+	encoder := gob.NewEncoder(&writeBuffer)
+	err = encoder.Encode(ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to encode message using Gob: %v", err)
+		return
+	}
+	msgBytes = writeBuffer.Bytes()
 	return
 }

@@ -6,8 +6,6 @@
 package main
 
 import (
-	"bytes"
-	"encoding/gob"
 	"fmt"
 	"io"
 	"net"
@@ -55,17 +53,17 @@ func runServer(serverParam ethrServerParam) {
 	}
 }
 
-func handshakeWithClient(test *ethrTest, conn net.Conn, buffer *bytes.Buffer) (testID EthrTestID, clientParam EthrClientParam, err error) {
-	ethrMsg := &EthrMsg{}
-	decoder := gob.NewDecoder(buffer)
-	err = decoder.Decode(ethrMsg)
-	if err != nil || ethrMsg.Type != EthrSyn {
-		ui.printErr("Failed to receive SYN message from client. Error: %v", err)
+func handshakeWithClient(test *ethrTest, conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
+	ethrMsg := recvSessionMsg(conn)
+	if ethrMsg.Type != EthrSyn {
+		ui.printDbg("Failed to receive SYN message from client.")
 		err = os.ErrInvalid
 		return
 	}
 	testID = ethrMsg.Syn.TestID
 	clientParam = ethrMsg.Syn.ClientParam
+	ethrMsg = createAckMsg()
+	err = sendSessionMsg(conn, ethrMsg)
 	return
 }
 
@@ -129,15 +127,9 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	// etc. and handle those cases as well.
 	atomic.AddUint64(&test.testResult.cps, 1)
 
-	// TODO: Assuming max ethr message size as 1024 sent over gob.
-	bufferBytes := make([]byte, 1024)
-	n, err := conn.Read(bufferBytes)
+	testID, clientParam, err := handshakeWithClient(test, conn)
 	if err != nil {
-		return
-	}
-	buffer := bytes.NewBuffer(bufferBytes[:n])
-	testID, clientParam, err := handshakeWithClient(test, conn, buffer)
-	if err != nil {
+		ui.printDbg("Failed in handshake with the client. Error: %v", err)
 		return
 	}
 	isCPSorPing = false
