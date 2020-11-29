@@ -8,6 +8,7 @@ package main
 import (
 	"flag"
 	"fmt"
+	"net"
 	"os"
 	"runtime"
 	"strings"
@@ -140,7 +141,16 @@ func main() {
 		gIPVersion = ethrIPv6
 	}
 
-	gLocalIP = *ip
+	if *ip != "" {
+		gLocalIP = *ip
+		ipAddr := net.ParseIP(gLocalIP)
+		if ipAddr == nil {
+			printUsageError(fmt.Sprintf("Invalid IP address: <%s> specified.", *ip))
+		}
+		if (gIPVersion == ethrIPv4 && ipAddr.To4() == nil) || (gIPVersion == ethrIPv6 && ipAddr.To16() == nil) {
+			printUsageError(fmt.Sprintf("Invalid IP address version: <%s> specified.", *ip))
+		}
+	}
 	gEthrPort = uint16(*port)
 	gEthrPortStr = fmt.Sprintf("%d", gEthrPort)
 
@@ -365,22 +375,27 @@ func ethrUsage() {
 	fmt.Println("In this mode, Ethr runs as a server, allowing multiple clients to run")
 	fmt.Println("performance tests against it.")
 	printServerUsage()
-	printFlagUsage("ui", "", "Show output in text UI.")
+	printIPUsage()
 	printPortUsage()
+	printFlagUsage("ui", "", "Show output in text UI.")
 
 	fmt.Println("\nMode: Client")
 	fmt.Println("================================================================================")
 	fmt.Println("In this mode, Ethr client can only talk to an Ethr server.")
 	printClientUsage()
+	printBwRateUsage()
+	printCPortUsage()
 	printDurationUsage()
 	printGapUsage()
 	printIterationUsage()
+	printIPUsage()
 	printBufLenUsage()
 	printThreadUsage()
 	printProtocolUsage()
 	printPortUsage()
 	printFlagUsage("r", "", "For Bandwidth tests, send data from server to client.")
 	printTestType()
+	printToSUsage()
 	printWarmupUsage()
 
 	fmt.Println("\nMode: External Client")
@@ -389,11 +404,14 @@ func ethrUsage() {
 	fmt.Println("few types of measurements, such as Ping, Connections/s and TraceRoute.")
 	printModeUsage()
 	printExtClientUsage()
+	printCPortUsage()
 	printDurationUsage()
 	printGapUsage()
+	printIPUsage()
 	printThreadUsage()
 	printExtProtocolUsage()
 	printExtTestType()
+	printToSUsage()
 	printWarmupUsage()
 }
 
@@ -514,4 +532,27 @@ func printIgnoreCertUsage() {
 func printWarmupUsage() {
 	printFlagUsage("w", "<number>", "Use specified number of iterations for warmup.",
 		"Default: 1")
+}
+
+func printToSUsage() {
+	printFlagUsage("tos", "",
+		"Specifies 8-bit value to use in IPv4 TOS field or IPv6 Traffic Class field.")
+}
+
+func printBwRateUsage() {
+	printFlagUsage("b", "<rate>",
+		"Bytes to send per second (format: <num>[KB | MB | GB])",
+		"Only valid for Bandwidth tests. Default: 0 - Unlimited",
+		"Examples: 100 (100B/s or 800bits/s), 1MB (1MB/s or 8Mbits/s).")
+}
+
+func printCPortUsage() {
+	printFlagUsage("cport", "<number>", "Use specified local port number in client for TCP & UDP tests.",
+		"Default: 0 - Ephemeral Port")
+}
+
+func printIPUsage() {
+	printFlagUsage("ip", "<string>", "Bind to specified local IP address for TCP & UDP tests.",
+		"This must be a valid IPv4 or IPv6 address.",
+		"Default: <empty> - Any IP")
 }

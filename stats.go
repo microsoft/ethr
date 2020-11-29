@@ -134,14 +134,14 @@ func timeToNextTick() time.Duration {
 
 func emitStats() {
 	d := time.Since(lastStatsTime)
-	ui.printMsg("Time: %v, Duration: %v", lastStatsTime, d)
+	// ui.printMsg("Time: %v, Duration: %v", lastStatsTime, d)
 	lastStatsTime = time.Now()
 	seconds := int64(d.Seconds())
 	if seconds < 1 {
 		seconds = 1
 	}
 	ui.emitTestResultBegin()
-	ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
+	// ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()
 	ui.emitStats(getNetworkStats())

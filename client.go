@@ -143,7 +143,7 @@ func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
 }
 
 func runTest(test *ethrTest) {
-	toStop := make(chan int, 1)
+	toStop := make(chan int, 16)
 	startStatsTimer()
 	gap := test.clientParam.Gap
 	duration := test.clientParam.Duration
@@ -159,9 +159,9 @@ func runTest(test *ethrTest) {
 		} else if test.testID.Type == Ping {
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
-			tcpRunTraceRoute(test, gap, toStop)
+			go tcpRunTraceRoute(test, gap, toStop)
 		} else if test.testID.Type == MyTraceRoute {
-			tcpRunMyTraceRoute(test, gap, toStop)
+			go tcpRunMyTraceRoute(test, gap, toStop)
 		}
 	} else if test.testID.Protocol == UDP {
 		if test.testID.Type == Bandwidth ||
@@ -172,12 +172,11 @@ func runTest(test *ethrTest) {
 		if test.testID.Type == Ping {
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
-			icmpRunTraceRoute(test, gap, toStop)
+			go icmpRunTraceRoute(test, gap, toStop)
 		} else if test.testID.Type == MyTraceRoute {
-			icmpRunMyTraceRoute(test, gap, toStop)
+			go icmpRunMyTraceRoute(test, gap, toStop)
 		}
 	}
-
 	handleInterrupt(toStop)
 	reason := <-toStop
 	stopStatsTimer()
@@ -236,8 +235,7 @@ func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGrou
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	start := time.Now()
-	sendRate := uint64(0)
+	start, waitTime, sendRate := beginThrottle()
 ExitForLoop:
 	for {
 		select {
@@ -259,12 +257,7 @@ ExitForLoop:
 			atomic.AddUint64(&test.testResult.bw, uint64(size))
 			sendRate += uint64(size)
 			if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
-				timeTaken := time.Since(start)
-				if timeTaken < time.Second {
-					time.Sleep(time.Second - timeTaken)
-				}
-				sendRate = 0
-				start = time.Now()
+				start, waitTime, sendRate = enforceThrottle(start, waitTime)
 			}
 		}
 	}
@@ -478,9 +471,7 @@ func tcpRunMyTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 
 func tcpRunTraceRouteInternal(test *ethrTest, gap time.Duration, toStop chan int, mtrMode bool) {
 	if !IsAdmin() {
-		ui.printErr("For TCP based TraceRoute, running as administrator is required.\n")
-		toStop <- interrupt
-		return
+		ui.printMsg("Warning: You are not running as administrator. For TCP based TraceRoute,\nrunning as administrator is required, for accurate results.\n")
 	}
 	gHop = make([]ethrHopData, gMaxHops)
 	err := tcpDiscoverHops(test, mtrMode)
@@ -574,7 +565,11 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 	}()
 	startTime := time.Now()
 	conn, err := ethrDialEx(TCP, test.dialAddr, gLocalIP, localPortNum, hop, int(gTOS))
-	conn.Close()
+	if err != nil {
+		ui.printDbg("Failed to Dial the connection. Error: %v", err)
+	} else {
+		conn.Close()
+	}
 	hopData.sent++
 	peerAddr := ""
 	endTime := time.Now()
@@ -796,6 +791,21 @@ func icmpSetTTL(c net.PacketConn, ttl int) error {
 	return err
 }
 
+func icmpSetTOS(c net.PacketConn, tos int) error {
+	if tos == 0 {
+		return nil
+	}
+	err := os.ErrInvalid
+	if gIPVersion == ethrIPv4 {
+		cIPv4 := ipv4.NewPacketConn(c)
+		err = cIPv4.SetTOS(tos)
+	} else if gIPVersion == ethrIPv6 {
+		cIPv6 := ipv6.NewPacketConn(c)
+		err = cIPv6.SetTrafficClass(tos)
+	}
+	return err
+}
+
 func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body string, timeout time.Duration) (time.Time, []byte, error) {
 	start := time.Now()
 	err := icmpSetTTL(c, hop+1)
@@ -803,6 +813,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 		ui.printErr("Failed to set TTL. Error: %v", err)
 		return start, nil, err
 	}
+	icmpSetTOS(c, int(gTOS))
 
 	err = c.SetDeadline(time.Now().Add(timeout))
 	if err != nil {
@@ -875,6 +886,7 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			index := bytes.Index(body, neededSig[:4])
 			if index > 0 {
 				if proto == TCP {
+					ui.printDbg("Found correct ICMP error message. PeerAddr: %v", peerAddr)
 					return peerAddr, isLast, nil
 				} else if proto == ICMP {
 					if index < 4 {
@@ -931,8 +943,7 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 				ec.fd, lserver, lport, rserver, rport)
 			blen := len(buff)
-			start := time.Now()
-			sendRate := uint64(0)
+			start, waitTime, sendRate := beginThrottle()
 		ExitForLoop:
 			for {
 				select {
@@ -954,91 +965,10 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 					atomic.AddUint64(&test.testResult.pps, 1)
 					sendRate += uint64(size)
 					if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
-						timeTaken := time.Since(start)
-						if timeTaken < time.Second {
-							time.Sleep(time.Second - timeTaken)
-						}
-						sendRate = 0
-						start = time.Now()
+						start, waitTime, sendRate = enforceThrottle(start, waitTime)
 					}
 				}
 			}
 		}(th)
 	}
 }
-
-/*
-func runHTTPBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteIP
-	ui.printMsg("uri=%s", uri)
-	uri = "http://" + uri + ":" + httpBandwidthPort
-	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
-		buff := make([]byte, test.clientParam.BufferSize)
-		for i := uint32(0); i < test.clientParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		tr := &http.Transport{DisableCompression: true}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPSBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteIP
-	uri = "https://" + uri + ":" + httpsBandwidthPort
-	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
-		buff := make([]byte, test.clientParam.BufferSize)
-		for i := uint32(0); i < test.clientParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		c, err := x509.ParseCertificate(gCert)
-		if err != nil {
-			ui.printErr("runHTTPSBandwidthTest: failed to parse certificate: %v", err)
-		}
-		clientCertPool := x509.NewCertPool()
-		clientCertPool.AddCert(c)
-
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: gIgnoreCert,
-			// Certificates: []tls.Certificate{cert},
-			RootCAs: clientCertPool,
-		}
-		//tlsConfig.BuildNameToCertificate()
-		tr := &http.Transport{DisableCompression: true, TLSClientConfig: tlsConfig}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPandHTTPSBandwidthTest(test *ethrTest, client *http.Client, uri string, buff []byte) {
-ExitForLoop:
-	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			// response, err := http.Get(uri)
-			response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
-			if err != nil {
-				ui.printDbg("Error in HTTP request: %v", err)
-				continue
-			} else {
-				ui.printDbg("Status received: %v", response.StatusCode)
-				if response.StatusCode != http.StatusOK {
-					ui.printDbg("Error in HTTP request, received status: %v", response.StatusCode)
-					continue
-				}
-				contents, err := ioutil.ReadAll(response.Body)
-				response.Body.Close()
-				if err != nil {
-					ui.printDbg("Error in receving HTTP response: %v", err)
-					continue
-				}
-				ethrUnused(contents)
-				// ui.printDbg("%s", string(contents))
-			}
-			atomic.AddUint64(&test.testResult.data, uint64(test.clientParam.BufferSize))
-		}
-	}
-}
-*/

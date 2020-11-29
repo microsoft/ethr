@@ -83,6 +83,7 @@ type ethrTestResult struct {
 
 type ethrTest struct {
 	isActive    bool
+	isDormant   bool
 	session     *ethrSession
 	remoteAddr  string
 	remoteIP    string
@@ -185,7 +186,7 @@ func newTestInternal(remoteIP string, testID EthrTestID, clientParam EthrClientP
 	test.done = make(chan struct{})
 	test.connList = list.New()
 	test.lastAccess = time.Now()
-	test.isActive = true
+	test.isDormant = true
 	session.tests[testID] = test
 
 	return test, nil

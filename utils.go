@@ -25,19 +25,10 @@ var gTOS = uint8(0)
 var gTTL = uint8(0)
 
 const (
-	// UNO represents 1 unit.
-	UNO = 1
-
-	// KILO represents k.
+	UNO  = 1
 	KILO = 1000
-
-	// MEGA represents m.
 	MEGA = 1000 * 1000
-
-	// GIGA represents g.
 	GIGA = 1000 * 1000 * 1000
-
-	// TERA represents t.
 	TERA = 1000 * 1000 * 1000 * 1000
 )
 
@@ -131,6 +122,8 @@ func testToString(testType EthrTestType) string {
 		return "Ping"
 	case TraceRoute:
 		return "TraceRoute"
+	case MyTraceRoute:
+		return "MyTraceRoute"
 	default:
 		return "Invalid"
 	}
@@ -421,7 +414,7 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 
 	ips, err := net.LookupIP(server)
 	if err != nil {
-		ui.printErr("Failed to looup IP address for the server: %v. Error: %v", server, err)
+		ui.printErr("Failed to lookup IP address for the server: %v. Error: %v", server, err)
 		return ipAddr, ipStr, err
 	}
 	for _, ip := range ips {
@@ -434,4 +427,25 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 	}
 	ui.printErr("Unable to resolve the given server: %v to an IP address.", server)
 	return ipAddr, ipStr, os.ErrNotExist
+}
+
+// This is a workaround to ensure we generate traffic at certain rate
+// and stats are printed correctly. We ensure that current interval lasts
+// 100ms after stats are printed, not perfect but workable.
+func beginThrottle() (start time.Time, waitTime time.Duration, sendRate uint64) {
+	start = time.Now()
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+	sendRate = uint64(0)
+	return
+}
+
+func enforceThrottle(s time.Time, wt time.Duration) (start time.Time, waitTime time.Duration, sendRate uint64) {
+	timeTaken := time.Since(s)
+	if timeTaken < wt {
+		time.Sleep(wt - timeTaken)
+	}
+	start = time.Now()
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+	sendRate = 0
+	return
 }

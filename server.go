@@ -110,15 +110,18 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 		ui.emitTestHdr()
 	}
 
-	// For CPS and ConnectionLatency tests, there is no deterministic way to know when
-	// the test starts from the client side and when it ends. This defer function ensures
-	// that test is not created/deleted repeatedly by doing a deferred deletion. If another
-	// connection comes with-in 2s, then another reference would be taken on existing
-	// test object and it won't be deleted by safeDeleteTest call. This also ensures,
-	// test header is not printed repeatedly via emitTestHdr.
+	isCPSorPing := true
+	// For CPS and Ping tests, there is no deterministic way to know when the test starts
+	// from the client side and when it ends. This defer function ensures that test is not
+	// created/deleted repeatedly by doing a deferred deletion. If another connection
+	// comes with-in 2s, then another reference would be taken on existing test object
+	// and it won't be deleted by safeDeleteTest call. This also ensures, test header is
+	// not printed repeatedly via emitTestHdr.
 	// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
 	defer func() {
-		time.Sleep(2 * time.Second)
+		if isCPSorPing {
+			time.Sleep(2 * time.Second)
+		}
 		safeDeleteTest(test)
 	}()
 
@@ -137,7 +140,7 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	if err != nil {
 		return
 	}
-
+	isCPSorPing = false
 	if testID.Protocol == TCP {
 		if testID.Type == Bandwidth {
 			srvrRunTCPBandwidthTest(test, clientParam, conn)
@@ -157,8 +160,7 @@ func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn n
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	start := time.Now()
-	sendRate := uint64(0)
+	start, waitTime, sendRate := beginThrottle()
 	for {
 		var err error
 		if clientParam.Reverse {
@@ -173,12 +175,7 @@ func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn n
 		sendRate += uint64(size)
 		atomic.AddUint64(&test.testResult.bw, uint64(size))
 		if clientParam.BwRate > 0 && clientParam.Reverse && sendRate >= clientParam.BwRate {
-			timeTaken := time.Since(start)
-			if timeTaken < time.Second {
-				time.Sleep(time.Second - timeTaken)
-			}
-			sendRate = 0
-			start = time.Now()
+			start, waitTime, sendRate = enforceThrottle(start, waitTime)
 		}
 	}
 }
@@ -279,13 +276,13 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	// has no reliable way to detect if client is active or not.
 	go func() {
 		for {
-			time.Sleep(200 * time.Millisecond)
+			time.Sleep(100 * time.Millisecond)
 			for k, v := range tests {
 				ui.printDbg("Found Test from server: %v, time: %v", k, v.lastAccess)
 				// At 200ms of no activity, mark the test in-active so stats stop
 				// printing.
 				if time.Since(v.lastAccess) > (200 * time.Millisecond) {
-					v.isActive = false
+					v.isDormant = true
 				}
 				// At 2s of no activity, delete the test by assuming that client
 				// has stopped.
@@ -312,21 +309,12 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 				tests[server] = test
 			}
 			if isNew {
-				// TODO: Evaluate in future, if we can run reverse direction or bi-direction
-				// test with UDP as well.
-				/*
-					buffer := bytes.NewBuffer(readBuffer[:n])
-					testID, testParam, err := handshakeWithClient(test, conn, buffer)
-					if err != nil {
-						return
-					}
-				*/
 				ui.printDbg("Creating UDP test from server: %v, lastAccess: %v", server, time.Now())
 				ui.emitTestHdr()
 			}
 		}
 		if test != nil {
-			test.isActive = true
+			test.isDormant = false
 			test.lastAccess = time.Now()
 			atomic.AddUint64(&test.testResult.pps, 1)
 			atomic.AddUint64(&test.testResult.bw, uint64(n))

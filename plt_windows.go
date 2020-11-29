@@ -261,18 +261,19 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	size := uint32(unsafe.Sizeof(flag))
 	err = syscall.WSAIoctl(socketHandle, SIO_RCVALL, (*byte)(unsafe.Pointer(&flag)), size, nil, 0, &unused, nil, 0)
 	if err != nil {
-		return nil, err
+		// Ignore the error as for ICMP related TraceRoute, this is not required.
 	}
 
 	return conn, nil
 }
 
 func IsAdmin() bool {
-	_, err := os.Open("\\\\.\\PHYSICALDRIVE0")
+	c, err := os.Open("\\\\.\\PHYSICALDRIVE0")
 	if err != nil {
 		ui.printDbg("Process is not running as admin. Error: %v", err)
 		return false
 	}
+	c.Close()
 	return true
 }
 

@@ -395,7 +395,6 @@ func emitAggregate(proto EthrProtocol) {
 }
 
 func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
-
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
@@ -429,6 +428,10 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 				latTestOn = true
 			}
 		}
+
+		if test.isDormant && !((bwTestOn && bw != 0) || (cpsTestOn && cps != 0) || (ppsTestOn && pps != 0) || (latTestOn && latency != 0)) {
+			return []string{}
+		}
 	}
 
 	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
@@ -452,60 +455,3 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 
 	return []string{}
 }
-
-/*
-func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
-	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
-	var bw, cps, pps, latency uint64
-	aggTestResult, _ := gAggregateTestResults[proto]
-	test, found := s.tests[EthrTestID{proto, Bandwidth}]
-	if found && test.isActive {
-		bwTestOn = true
-		bw = atomic.SwapUint64(&test.testResult.data, 0)
-		bw /= seconds
-		aggTestResult.bw += bw
-		aggTestResult.cbw++
-	}
-	test, found = s.tests[EthrTestID{proto, Cps}]
-	if found && test.isActive {
-		cpsTestOn = true
-		cps = atomic.SwapUint64(&test.testResult.data, 0)
-		cps /= seconds
-		aggTestResult.cps += cps
-		aggTestResult.ccps++
-	}
-	test, found = s.tests[EthrTestID{proto, Pps}]
-	if found && test.isActive {
-		ppsTestOn = true
-		pps = atomic.SwapUint64(&test.testResult.data, 0)
-		pps /= seconds
-		aggTestResult.pps += pps
-		aggTestResult.cpps++
-	}
-	test, found = s.tests[EthrTestID{proto, Latency}]
-	if found && test.isActive {
-		latTestOn = true
-		latency = atomic.LoadUint64(&test.testResult.data)
-	}
-	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
-		var bwStr, cpsStr, ppsStr, latStr string
-		if bwTestOn {
-			bwStr = bytesToRate(bw)
-		}
-		if cpsTestOn {
-			cpsStr = cpsToString(cps)
-		}
-		if ppsTestOn {
-			ppsStr = ppsToString(pps)
-		}
-		if latTestOn {
-			latStr = durationToString(time.Duration(latency))
-		}
-		str := []string{s.remoteIP, protoToString(proto),
-			bwStr, cpsStr, ppsStr, latStr}
-		return str
-	}
-
-	return []string{}
-}
-*/
