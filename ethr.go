@@ -56,7 +56,7 @@ func main() {
 	// Server
 	isServer := flag.Bool("s", false, "")
 	showUI := flag.Bool("ui", false, "")
-	// Client
+	// Client & External Client
 	clientDest := flag.String("c", "", "")
 	bufLenStr := flag.String("l", "", "")
 	bwRateStr := flag.String("b", "", "")
@@ -64,7 +64,6 @@ func main() {
 	duration := flag.Duration("d", 10*time.Second, "")
 	gap := flag.Duration("g", time.Second, "")
 	iterCount := flag.Int("i", 1000, "")
-	mode := flag.Bool("x", false, "")
 	ncs := flag.Bool("ncs", false, "")
 	protocol := flag.String("p", "tcp", "")
 	reverse := flag.Bool("r", false, "")
@@ -72,12 +71,16 @@ func main() {
 	tos := flag.Int("tos", 0, "")
 	thCount := flag.Int("n", 1, "")
 	wc := flag.Int("w", 1, "")
+	xClientDest := flag.String("x", "", "")
 
 	flag.Parse()
 
 	if *isServer {
 		if *clientDest != "" {
 			printUsageError("Invalid arguments, \"-c\" cannot be used with \"-s\".")
+		}
+		if *xClientDest != "" {
+			printUsageError("Invalid arguments, \"-x\" cannot be used with \"-s\".")
 		}
 		if *bufLenStr != "" {
 			printServerModeArgError("l")
@@ -96,9 +99,6 @@ func main() {
 		}
 		if *iterCount != 1000 {
 			printServerModeArgError("i")
-		}
-		if *mode {
-			printServerModeArgError("x")
 		}
 		if *ncs {
 			printServerModeArgError("ncs")
@@ -121,7 +121,10 @@ func main() {
 		if *wc != 1 {
 			printServerModeArgError("wc")
 		}
-	} else if *clientDest != "" {
+	} else if *clientDest != "" || *xClientDest != "" {
+		if *clientDest != "" && *xClientDest != "" {
+			printUsageError("Invalid argument, both \"-c\" and \"-x\" cannot be specified at the same time.")
+		}
 		if *showUI {
 			printUsageError(fmt.Sprintf("Invalid argument, \"-%s\" can only be used in server (\"-s\") mode.", "ui"))
 		}
@@ -167,41 +170,27 @@ func main() {
 	}
 
 	var testType EthrTestType
-
+	var destination string
 	if *isServer {
 		// Server side parameter processing.
 		testType = All
 		serverParam := ethrServerParam{*showUI}
 		runServer(serverParam)
 	} else {
-		gIsExternalClient = *mode
-		gNoConnectionStats = *ncs
-		switch *testTypePtr {
-		case "":
-			if gIsExternalClient {
-				testType = Ping
-			} else {
-				testType = Bandwidth
-			}
-		case "b":
-			testType = Bandwidth
-		case "c":
-			testType = Cps
-		case "p":
-			testType = Pps
-		case "l":
-			testType = Latency
-		case "pi":
-			testType = Ping
-		case "tr":
-			testType = TraceRoute
-		case "mtr":
-			testType = MyTraceRoute
-		default:
-			printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
-				"Valid parameters and values are:\n", *testTypePtr))
+		gIsExternalClient = false
+		destination = *clientDest
+		if *xClientDest != "" {
+			gIsExternalClient = true
+			destination = *xClientDest
 		}
+		gNoConnectionStats = *ncs
+		testType = getTestType(*testTypePtr)
+		proto := getProtocol(*protocol)
 
+		if proto == ICMP {
+			fmt.Println("Warning: Implicit usage of external mode (-x) as ICMP is only supported in that mode.")
+			gIsExternalClient = true
+		}
 		// Default latency test to 1B if length is not specified
 		switch *bufLenStr {
 		case "":
@@ -231,23 +220,10 @@ func main() {
 			printUsageError(fmt.Sprintf("Invalid iteration count for latency test: %d", *iterCount))
 		}
 
-		p := strings.ToUpper(*protocol)
-		proto := TCP
-		switch p {
-		case "TCP":
-			proto = TCP
-		case "UDP":
-			proto = UDP
-		case "ICMP":
-			proto = ICMP
-		default:
-			printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
-				"Valid parameters and values are:\n", *protocol))
-		}
-
 		// Override ipVer because for ICMP, specific version is required.
 		if proto == ICMP || (testType == TraceRoute || testType == MyTraceRoute) {
 			if gIPVersion == ethrIPAny {
+				fmt.Println("Warning: Implicit usage of IPv4 as ICMP based tests require specific IP version.")
 				gIPVersion = ethrIPv4
 			}
 		}
@@ -271,9 +247,55 @@ func main() {
 			uint8(*tos)}
 		validateClientParams(testId, clientParam)
 
-		rServer := *clientDest
+		rServer := destination
 		runClient(testId, clientParam, rServer)
 	}
+}
+
+func getProtocol(protoStr string) (proto EthrProtocol) {
+	p := strings.ToUpper(protoStr)
+	proto = TCP
+	switch p {
+	case "TCP":
+		proto = TCP
+	case "UDP":
+		proto = UDP
+	case "ICMP":
+		proto = ICMP
+	default:
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-p\".\n"+
+			"Valid parameters and values are:\n", protoStr))
+	}
+	return
+}
+
+func getTestType(testTypeStr string) (testType EthrTestType) {
+	switch testTypeStr {
+	case "":
+		if gIsExternalClient {
+			testType = Ping
+		} else {
+			testType = Bandwidth
+		}
+	case "b":
+		testType = Bandwidth
+	case "c":
+		testType = Cps
+	case "p":
+		testType = Pps
+	case "l":
+		testType = Latency
+	case "pi":
+		testType = Ping
+	case "tr":
+		testType = TraceRoute
+	case "mtr":
+		testType = MyTraceRoute
+	default:
+		printUsageError(fmt.Sprintf("Invalid value \"%s\" specified for parameter \"-t\".\n"+
+			"Valid parameters and values are:\n", testTypeStr))
+	}
+	return
 }
 
 func getDefaultBufferLenStr(testTypePtr string) string {
@@ -284,55 +306,61 @@ func getDefaultBufferLenStr(testTypePtr string) string {
 }
 
 func validateClientParams(testID EthrTestID, clientParam EthrClientParam) {
+	if !gIsExternalClient {
+		validateClientTest(testID, clientParam)
+	} else {
+		validateExtModeClientTest(testID)
+	}
+}
+
+func validateClientTest(testID EthrTestID, clientParam EthrClientParam) {
 	testType := testID.Type
 	protocol := testID.Protocol
-	if !gIsExternalClient {
-		switch protocol {
-		case TCP:
-			if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
-				emitUnsupportedTest(testID)
-			}
-			if clientParam.Reverse && testType != Bandwidth {
-				printReverseModeError()
-			}
-			if clientParam.BufferSize > 2*GIGA {
-				printUsageError("Maximum allowed value for \"-l\" for TCP is 2GB.")
-			}
-		case UDP:
-			if testType != Bandwidth && testType != Pps {
-				emitUnsupportedTest(testID)
-			}
-			if testType == Bandwidth {
-				if clientParam.BufferSize > (64 * 1024) {
-					printUsageError("Maximum supported buffer size for UDP is 64K\n")
-				}
-			}
-			if clientParam.Reverse {
-				printReverseModeError()
-			}
-			if clientParam.BufferSize > 64*KILO {
-				printUsageError("Maximum allowed value for \"-l\" for TCP is 64KB.")
-			}
-		case ICMP:
-			if testType != TraceRoute && testType != MyTraceRoute {
-				emitUnsupportedTest(testID)
-			}
-		default:
+	switch protocol {
+	case TCP:
+		if testType != Bandwidth && testType != Cps && testType != Latency && testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
 			emitUnsupportedTest(testID)
 		}
-	} else {
-		switch protocol {
-		case TCP:
-			if testType != Ping && testType != Cps && testType != TraceRoute && testType != MyTraceRoute {
-				emitUnsupportedTest(testID)
-			}
-		case ICMP:
-			if testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
-				emitUnsupportedTest(testID)
-			}
-		default:
+		if clientParam.Reverse && testType != Bandwidth {
+			printReverseModeError()
+		}
+		if clientParam.BufferSize > 2*GIGA {
+			printUsageError("Maximum allowed value for \"-l\" for TCP is 2GB.")
+		}
+	case UDP:
+		if testType != Bandwidth && testType != Pps {
 			emitUnsupportedTest(testID)
 		}
+		if testType == Bandwidth {
+			if clientParam.BufferSize > (64 * 1024) {
+				printUsageError("Maximum supported buffer size for UDP is 64K\n")
+			}
+		}
+		if clientParam.Reverse {
+			printReverseModeError()
+		}
+		if clientParam.BufferSize > 64*KILO {
+			printUsageError("Maximum allowed value for \"-l\" for TCP is 64KB.")
+		}
+	default:
+		emitUnsupportedTest(testID)
+	}
+}
+
+func validateExtModeClientTest(testID EthrTestID) {
+	testType := testID.Type
+	protocol := testID.Protocol
+	switch protocol {
+	case TCP:
+		if testType != Ping && testType != Cps && testType != TraceRoute && testType != MyTraceRoute {
+			emitUnsupportedTest(testID)
+		}
+	case ICMP:
+		if testType != Ping && testType != TraceRoute && testType != MyTraceRoute {
+			emitUnsupportedTest(testID)
+		}
+	default:
+		emitUnsupportedTest(testID)
 	}
 }
 
@@ -398,11 +426,10 @@ func ethrUsage() {
 	printToSUsage()
 	printWarmupUsage()
 
-	fmt.Println("\nMode: External Client")
+	fmt.Println("\nMode: External")
 	fmt.Println("================================================================================")
-	fmt.Println("In this mode, Ethr client can talk to a non-Ethr server. This mode only supports")
+	fmt.Println("In this mode, Ethr talks to a non-Ethr server. This mode supports only a")
 	fmt.Println("few types of measurements, such as Ping, Connections/s and TraceRoute.")
-	printModeUsage()
 	printExtClientUsage()
 	printCPortUsage()
 	printDurationUsage()
@@ -432,9 +459,10 @@ func printClientUsage() {
 }
 
 func printExtClientUsage() {
-	printFlagUsage("c", "<destination>", "Run in external client mode and connect to <destination>.",
-		"<destination> is specified in <host:port> format for TCP and <host> format for ICMP.",
-		"Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22",
+	printFlagUsage("x", "<destination>", "Run in external client mode and connect to <destination>.",
+		"<destination> is specified in URL or Host:Port format.",
+		"For URL, if port is not specified, it is assumed to be 80 for http and 443 for https.",
+		"Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22 or https://www.github.com",
 		"         For ICMP - www.microsoft.com or 10.1.0.4")
 }
 
@@ -509,11 +537,6 @@ func printIterationUsage() {
 		"Number of round trip iterations for each latency measurement.",
 		"Only valid for latency testing.",
 		"Default: 1000")
-}
-
-func printModeUsage() {
-	printFlagUsage("x", "",
-		"'-x' enables Ethr client to talk to non-Ethr server.")
 }
 
 func printNoConnStatUsage() {

@@ -88,7 +88,7 @@ func handshakeWithServer(test *ethrTest, conn net.Conn) (err error) {
 	return
 }
 
-func getServerIPandPort(server string) (string, string, error) {
+func getServerIPandPort(server string) (string, string, string, error) {
 	hostName := ""
 	hostIP := ""
 	port := ""
@@ -98,10 +98,13 @@ func getServerIPandPort(server string) (string, string, error) {
 		if u.Port() != "" {
 			port = u.Port()
 		} else {
-			if u.Scheme == "http" {
-				port = "80"
-			} else if u.Scheme == "https" {
-				port = "443"
+			// Only implicitly derive port in External client mode.
+			if gIsExternalClient {
+				if u.Scheme == "http" {
+					port = "80"
+				} else if u.Scheme == "https" {
+					port = "443"
+				}
 			}
 		}
 	} else {
@@ -111,20 +114,29 @@ func getServerIPandPort(server string) (string, string, error) {
 		}
 	}
 	_, hostIP, err = ethrLookupIP(hostName)
-	return hostIP, port, err
+	return hostName, hostIP, port, err
 }
 
 func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
 	initClient()
-	hostIP, port, err := getServerIPandPort(server)
+	hostName, hostIP, port, err := getServerIPandPort(server)
 	if err != nil {
 		return
 	}
-	if !gIsExternalClient {
-		// For Ethr to Ethr tests, override the port supplied as part
-		// of the server name/url.
+	if gIsExternalClient {
+		if testID.Protocol != ICMP && port == "" {
+			ui.printErr("In external mode, port cannot be empty for TCP tests.")
+			return
+		}
+	} else {
+		if port != "" {
+			ui.printErr("In client mode, port (%s) cannot be specified in destination (%s).", port, server)
+			ui.printMsg("Hint: Use external mode (-x).")
+			return
+		}
 		port = gEthrPortStr
 	}
+	ui.printMsg("Using destination: %s, ip: %s, port: %s", hostName, hostIP, port)
 	test, err := newTest(hostIP, testID, clientParam)
 	if err != nil {
 		ui.printErr("Failed to create the new test.")
@@ -188,6 +200,7 @@ func runTest(test *ethrTest) {
 		ui.printMsg("Ethr done, measurement complete.")
 	case timeout:
 		ui.printMsg("Ethr done, duration: " + duration.String() + ".")
+		ui.printMsg("Hint: Use -d parameter to change duration of the test.")
 	case interrupt:
 		ui.printMsg("Ethr done, received interrupt signal.")
 	case disconnect:

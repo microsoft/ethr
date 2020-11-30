@@ -396,7 +396,6 @@ func ethrDialEx(p EthrProtocol, dialAddr, localIP string, localPortNum uint16, t
 		tcpconn, ok := conn.(*net.TCPConn)
 		if ok {
 			tcpconn.SetLinger(0)
-			tcpconn.SetNoDelay(true)
 		}
 	}
 	return

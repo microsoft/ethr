@@ -48,7 +48,7 @@ func runServer(serverParam ethrServerParam) {
 	err := srvrRunTCPServer()
 	if err != nil {
 		finiServer()
-		fmt.Printf("Fatal error running TCP server: %v", err)
+		fmt.Printf("Fatal error running TCP server: %v\n", err)
 		os.Exit(1)
 	}
 }
