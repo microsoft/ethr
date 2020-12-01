@@ -511,7 +511,7 @@ func printGapUsage() {
 
 func printBufLenUsage() {
 	printFlagUsage("l", "<length>",
-		"Length of buffer to use (format: <num>[KB | MB | GB])",
+		"Length of buffer (in Bytes) to use (format: <num>[KB | MB | GB])",
 		"Only valid for Bandwidth tests. Max 1GB.",
 		"Default: 16KB")
 }
@@ -560,9 +560,9 @@ func printToSUsage() {
 
 func printBwRateUsage() {
 	printFlagUsage("b", "<rate>",
-		"Transmit only Bits per second (format: <num>[KB | MB | GB])",
+		"Transmit only Bits per second (format: <num>[K | M | G])",
 		"Only valid for Bandwidth tests. Default: 0 - Unlimited",
-		"Examples: 100 (100bits/s), 1MB (1Mbits/s).")
+		"Examples: 100 (100bits/s), 1M (1Mbits/s).")
 }
 
 func printCPortUsage() {
