@@ -175,8 +175,19 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	return conn, nil
 }
 
+func VerifyPermissionForTest(testID EthrTestID) {
+	if testID.Protocol == ICMP || (testID.Protocol == TCP &&
+		(testID.Type == TraceRoute || testID.Type == MyTraceRoute)) {
+		if !IsAdmin() {
+			ui.printMsg("Warning: You are not running as administrator. For %s based %s",
+				protoToString(testID.Protocol), testToString(testID.Type))
+			ui.printMsg("test, running as administrator is required.\n")
+		}
+	}
+}
+
 func IsAdmin() bool {
-	return true
+	return os.Geteuid() == 0
 }
 
 func SetTClass(fd uintptr, tos int) {

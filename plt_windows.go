@@ -267,6 +267,17 @@ func IcmpNewConn(address string) (net.PacketConn, error) {
 	return conn, nil
 }
 
+func VerifyPermissionForTest(testID EthrTestID) {
+	if (testID.Type == TraceRoute || testID.Type == MyTraceRoute) &&
+		(testID.Protocol == TCP) {
+		if !IsAdmin() {
+			ui.printMsg("Warning: You are not running as administrator. For %s based %s",
+				protoToString(testID.Protocol), testToString(testID.Type))
+			ui.printMsg("test, running as administrator is required.\n")
+		}
+	}
+}
+
 func IsAdmin() bool {
 	c, err := os.Open("\\\\.\\PHYSICALDRIVE0")
 	if err != nil {

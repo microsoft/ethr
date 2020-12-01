@@ -170,8 +170,10 @@ func runTest(test *ethrTest) {
 		} else if test.testID.Type == Ping {
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
+			VerifyPermissionForTest(test.testID)
 			go tcpRunTraceRoute(test, gap, toStop)
 		} else if test.testID.Type == MyTraceRoute {
+			VerifyPermissionForTest(test.testID)
 			go tcpRunMyTraceRoute(test, gap, toStop)
 		}
 	} else if test.testID.Protocol == UDP {
@@ -180,6 +182,7 @@ func runTest(test *ethrTest) {
 			runUDPBandwidthAndPpsTest(test)
 		}
 	} else if test.testID.Protocol == ICMP {
+		VerifyPermissionForTest(test.testID)
 		if test.testID.Type == Ping {
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
@@ -491,9 +494,6 @@ func tcpRunMyTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 }
 
 func tcpRunTraceRouteInternal(test *ethrTest, gap time.Duration, toStop chan int, mtrMode bool) {
-	if !IsAdmin() {
-		ui.printMsg("Warning: You are not running as administrator. For TCP based TraceRoute,\nrunning as administrator is required, for accurate results.\n")
-	}
 	gHop = make([]ethrHopData, gMaxHops)
 	err := tcpDiscoverHops(test, mtrMode)
 	if err != nil {
