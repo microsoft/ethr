@@ -204,6 +204,13 @@ func main() {
 			bwRate /= 8
 		}
 
+		// Adjust the numbers so that data can be transfered in equal units.
+		if bwRate > 0 {
+			factor := (bwRate + bufLen - 1) / bufLen
+			bufLen = bwRate / factor
+			bwRate = bufLen * factor
+		}
+
 		//
 		// For Pkt/s, we always override the buffer size to be just 1 byte.
 		// TODO: Evaluate in future, if we need to support > 1 byte packets for

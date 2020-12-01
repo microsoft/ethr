@@ -259,9 +259,6 @@ func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGrou
 	ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 		ec.fd, lserver, lport, rserver, rport)
 	size := test.clientParam.BufferSize
-	if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
-		size = uint32(test.clientParam.BwRate)
-	}
 	buff := make([]byte, size)
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
@@ -959,9 +956,6 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
 		go func(th uint32) {
 			size := test.clientParam.BufferSize
-			if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
-				size = uint32(test.clientParam.BwRate)
-			}
 			buff := make([]byte, size)
 			conn, err := ethrDialInc(UDP, test.dialAddr, uint16(th))
 			if err != nil {
