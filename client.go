@@ -123,6 +123,17 @@ func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
 	if err != nil {
 		return
 	}
+	ip := net.ParseIP(hostIP)
+	if ip != nil {
+		if ip.To4() != nil {
+			gIPVersion = ethrIPv4
+		} else {
+			gIPVersion = ethrIPv6
+		}
+	} else {
+		return
+	}
+
 	if gIsExternalClient {
 		if testID.Protocol != ICMP && port == "" {
 			ui.printErr("In external mode, port cannot be empty for TCP tests.")

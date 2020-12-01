@@ -187,10 +187,6 @@ func main() {
 		testType = getTestType(*testTypePtr)
 		proto := getProtocol(*protocol)
 
-		if proto == ICMP {
-			fmt.Println("Warning: Implicit usage of external mode (-x) as ICMP is only supported in that mode.")
-			gIsExternalClient = true
-		}
 		// Default latency test to 1B if length is not specified
 		switch *bufLenStr {
 		case "":
@@ -218,14 +214,6 @@ func main() {
 
 		if *iterCount <= 0 {
 			printUsageError(fmt.Sprintf("Invalid iteration count for latency test: %d", *iterCount))
-		}
-
-		// Override ipVer because for ICMP, specific version is required.
-		if proto == ICMP || (testType == TraceRoute || testType == MyTraceRoute) {
-			if gIPVersion == ethrIPAny {
-				fmt.Println("Warning: Implicit usage of IPv4 as ICMP based tests require specific IP version.")
-				gIPVersion = ethrIPv4
-			}
 		}
 
 		if *thCount <= 0 {
