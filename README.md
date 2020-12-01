@@ -138,18 +138,25 @@ ethr -c localhost -n 8
 // Start connections/s test using 64 threads to server 10.1.0.11
 ethr -c 10.1.0.11 -t c -n 64
 
+// Run Ethr server on port 9999
+./ethr -s -port 9999
+
+// Measure TCP connection setup latency to ethr server on port 9999
+// Assuming Ethr server is running on server with IP address: 10.1.1.100
+./ethr -c 10.1.1.100 -p tcp -t pi -d 0 -4 -port 9999
+
 // Measure TCP connection setup latency to www.github.com at port 443
-./ethr -c www.github.com:443 -p tcp -t pi -m x -d 0 -4
+./ethr -x www.github.com:443 -p tcp -t pi -d 0 -4
 
 // Measure TCP connection setup latency to www.github.com at port 443
 // Note: Here port 443 is driven automatically from https
-./ethr -c https://www.github.com -p tcp -t pi -m x -d 0 -4
+./ethr -x https://www.github.com -p tcp -t pi -d 0 -4
 
 // Measure ICMP ping latency to www.github.com
-sudo ./ethr -c www.github.com -p icmp -t pi -m x -d 0 -4
+sudo ./ethr -x www.github.com -p icmp -t pi -d 0 -4
 
 // Run measurement similar to mtr on Linux
-sudo ./ethr -c www.github.com -p icmp -t mtr -m x -d 0 -4
+sudo ./ethr -x www.github.com -p icmp -t mtr -d 0 -4
 
 // Measure packets/s over UDP by sending small 1-byte packets
 ./ethr -c 172.28.192.1 -p udp -t p -d 0
@@ -187,24 +194,35 @@ For ICMP Ping, ICMP/TCP TraceRoute and MyTraceRoute, privileged mode is required
 	-6 
 		Use only IP v6 version
 ```
-### Server Parameters
+### Server Mode Parameters
 ```
 In this mode, Ethr runs as a server, allowing multiple clients to run
 performance tests against it.
 	-s 
 		Run in server mode.
-	-ui 
-		Show output in text UI.
+	-ip <string>
+		Bind to specified local IP address for TCP & UDP tests.
+		This must be a valid IPv4 or IPv6 address.
+		Default: <empty> - Any IP
 	-port <number>
 		Use specified port number for TCP & UDP tests.
 		Default: 8888
+	-ui 
+		Show output in text UI.
 ```
-### Client Parameters
+### Client Mode Parameters
 ```
 In this mode, Ethr client can only talk to an Ethr server.
 	-c <server>
 		Run in client mode and connect to <server>.
 		Server is specified using name, FQDN or IP address.
+	-b <rate>
+		Bytes to send per second (format: <num>[KB | MB | GB])
+		Only valid for Bandwidth tests. Default: 0 - Unlimited
+		Examples: 100 (100B/s or 800bits/s), 1MB (1MB/s or 8Mbits/s).
+	-cport <number>
+		Use specified local port number in client for TCP & UDP tests.
+		Default: 0 - Ephemeral Port
 	-d <duration>
 		Duration for the test (format: <num>[ms | s | m | h]
 		0: Run forever
@@ -218,6 +236,10 @@ In this mode, Ethr client can only talk to an Ethr server.
 		Number of round trip iterations for each latency measurement.
 		Only valid for latency testing.
 		Default: 1000
+	-ip <string>
+		Bind to specified local IP address for TCP & UDP tests.
+		This must be a valid IPv4 or IPv6 address.
+		Default: <empty> - Any IP
 	-l <length>
 		Length of buffer to use (format: <num>[KB | MB | GB])
 		Only valid for Bandwidth tests. Max 1GB.
@@ -242,23 +264,27 @@ In this mode, Ethr client can only talk to an Ethr server.
 		l: Latency, Loss & Jitter
 		pi: Ping Loss & Latency
 		tr: TraceRoute
-                mtr: MyTraceRoute with Loss & Latency
+		mtr: MyTraceRoute with Loss & Latency
 		Default: b - Bandwidth measurement.
+	-tos 
+		Specifies 8-bit value to use in IPv4 TOS field or IPv6 Traffic Class field.
 	-w <number>
 		Use specified number of iterations for warmup.
 		Default: 1
 ```
-### External Client Mode
+### External Mode Parameters
 ```
-In this mode, Ethr client can talk to a non-Ethr server. This mode only supports
+In this mode, Ethr talks to a non-Ethr server. This mode supports only a
 few types of measurements, such as Ping, Connections/s and TraceRoute.
-	-c <destination>
+	-x <destination>
 		Run in external client mode and connect to <destination>.
-		<destination> is specified in <host:port> format for TCP and <host> format for ICMP.
-		Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22
+		<destination> is specified in URL or Host:Port format.
+		For URL, if port is not specified, it is assumed to be 80 for http and 443 for https.
+		Example: For TCP - www.microsoft.com:443 or 10.1.0.4:22 or https://www.github.com
 		         For ICMP - www.microsoft.com or 10.1.0.4
-	-m <mode>
-		'-m x' MUST be specified for external mode.
+	-cport <number>
+		Use specified local port number in client for TCP & UDP tests.
+		Default: 0 - Ephemeral Port
 	-d <duration>
 		Duration for the test (format: <num>[ms | s | m | h]
 		0: Run forever
@@ -268,6 +294,10 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 		Only valid for latency, ping and traceRoute tests.
 		0: No gap
 		Default: 1s
+	-ip <string>
+		Bind to specified local IP address for TCP & UDP tests.
+		This must be a valid IPv4 or IPv6 address.
+		Default: <empty> - Any IP
 	-n <number>
 		Number of Parallel Sessions (and Threads).
 		0: Equal to number of CPUs
@@ -280,8 +310,10 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 		c: Connections/s
 		pi: Ping Loss & Latency
 		tr: TraceRoute
-                mtr: MyTraceRoute with Loss & Latency
+		mtr: MyTraceRoute with Loss & Latency
 		Default: pi - Ping Loss & Latency.
+	-tos 
+		Specifies 8-bit value to use in IPv4 TOS field or IPv6 Traffic Class field.
 	-w <number>
 		Use specified number of iterations for warmup.
 		Default: 1
@@ -293,7 +325,7 @@ Protocol  | Bandwidth | Connections/s | Packets/s | Latency | Ping | TraceRoute 
 ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | ------------- | -------------
 TCP  | Yes | Yes | NA | Yes | Yes | Yes | Yes
 UDP  | Yes | NA | Yes | No | NA | No | No
-ICMP | No | NA | No | No | Yes | Yes | Yes
+ICMP | No | NA | NA | NA | Yes | Yes | Yes
 
 # Platform Support
 
@@ -322,10 +354,7 @@ No other platforms are tested at this time
 Todo list work items are shown below. Contributions are most welcome for these work items or any other features and bugfixes.
 
 * Test Ethr on other Windows versions, other Linux versions, FreeBSD and other OS
-* Support for UDP bandwidth & latency testing
-* Support for HTTPS bandwidth, latency, requests/s
-* Support for HTTP latency and requests/s
-* Support for ICMP bandwidth, latency and packets/s
+* Support for UDP latency, TraceRoute and MyTraceRoute
 
 # Contributing
 
