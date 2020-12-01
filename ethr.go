@@ -201,6 +201,7 @@ func main() {
 		bwRate := uint64(0)
 		if *bwRateStr != "" {
 			bwRate = unitToNumber(*bwRateStr)
+			bwRate /= 8
 		}
 
 		//
@@ -552,9 +553,9 @@ func printToSUsage() {
 
 func printBwRateUsage() {
 	printFlagUsage("b", "<rate>",
-		"Bytes to send per second (format: <num>[KB | MB | GB])",
+		"Transmit only Bits per second (format: <num>[KB | MB | GB])",
 		"Only valid for Bandwidth tests. Default: 0 - Unlimited",
-		"Examples: 100 (100B/s or 800bits/s), 1MB (1MB/s or 8Mbits/s).")
+		"Examples: 100 (100bits/s), 1MB (1Mbits/s).")
 }
 
 func printCPortUsage() {
