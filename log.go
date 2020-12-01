@@ -64,7 +64,7 @@ func logInit(fileName string) {
 	}
 	logFile, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
-		fmt.Printf("Unable to open the log file %s, Error: %v", fileName, err)
+		fmt.Printf("Unable to open the log file %s, Error: %v\n", fileName, err)
 		return
 	}
 	log.SetFlags(0)

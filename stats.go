@@ -140,7 +140,6 @@ func emitStats() {
 		seconds = 1
 	}
 	ui.emitTestResultBegin()
-	// ui.printMsg("Time: %v, Seconds: %v", lastStatsTime, seconds)
 	emitTestResults(uint64(seconds))
 	ui.emitTestResultEnd()
 	ui.emitStats(getNetworkStats())
@@ -154,8 +153,6 @@ func emitTestResults(s uint64) {
 		v := gSessions[k]
 		ui.emitTestResult(v, TCP, s)
 		ui.emitTestResult(v, UDP, s)
-		ui.emitTestResult(v, HTTP, s)
-		ui.emitTestResult(v, HTTPS, s)
 		ui.emitTestResult(v, ICMP, s)
 	}
 }

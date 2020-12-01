@@ -12,7 +12,6 @@ import (
 
 	"bytes"
 	"encoding/binary"
-	"encoding/gob"
 	"encoding/hex"
 	"fmt"
 	"io"
@@ -74,26 +73,22 @@ func initClient() {
 	initClientUI()
 }
 
-func handshakeWithServer(test *ethrTest, conn net.Conn) {
-	dec := gob.NewDecoder(conn)
-	enc := gob.NewEncoder(conn)
-	ethrMsg := createSynMsg(test.testParam)
-	err := sendSessionMsg(enc, ethrMsg)
+func handshakeWithServer(test *ethrTest, conn net.Conn) (err error) {
+	ethrMsg := createSynMsg(test.testID, test.clientParam)
+	err = sendSessionMsg(conn, ethrMsg)
 	if err != nil {
-		ui.printErr("Failed to send session message: %v", err)
+		ui.printDbg("Failed to send SYN message to Ethr server. Error: %v", err)
 		return
 	}
-	ethrMsg = recvSessionMsg(dec)
+	ethrMsg = recvSessionMsg(conn)
 	if ethrMsg.Type != EthrAck {
-		if ethrMsg.Type == EthrFin {
-			err = fmt.Errorf("%s", ethrMsg.Fin.Message)
-		} else {
-			err = fmt.Errorf("Unexpected control message received. %v", ethrMsg)
-		}
+		ui.printDbg("Failed to receive ACK message from Ethr server. Error: %v", err)
+		err = os.ErrInvalid
 	}
+	return
 }
 
-func getServerIPandPort(server string) (string, string, error) {
+func getServerIPandPort(server string) (string, string, string, error) {
 	hostName := ""
 	hostIP := ""
 	port := ""
@@ -103,10 +98,13 @@ func getServerIPandPort(server string) (string, string, error) {
 		if u.Port() != "" {
 			port = u.Port()
 		} else {
-			if u.Scheme == "http" {
-				port = "80"
-			} else if u.Scheme == "https" {
-				port = "443"
+			// Only implicitly derive port in External client mode.
+			if gIsExternalClient {
+				if u.Scheme == "http" {
+					port = "80"
+				} else if u.Scheme == "https" {
+					port = "443"
+				}
 			}
 		}
 	} else {
@@ -116,21 +114,41 @@ func getServerIPandPort(server string) (string, string, error) {
 		}
 	}
 	_, hostIP, err = ethrLookupIP(hostName)
-	return hostIP, port, err
+	return hostName, hostIP, port, err
 }
 
-func runClient(testParam EthrTestParam, clientParam ethrClientParam, server string) {
+func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
 	initClient()
-	hostIP, port, err := getServerIPandPort(server)
+	hostName, hostIP, port, err := getServerIPandPort(server)
 	if err != nil {
 		return
 	}
-	if !xMode {
-		// For Ethr to Ethr tests, override the port supplied as part
-		// of the server name/url.
+	ip := net.ParseIP(hostIP)
+	if ip != nil {
+		if ip.To4() != nil {
+			gIPVersion = ethrIPv4
+		} else {
+			gIPVersion = ethrIPv6
+		}
+	} else {
+		return
+	}
+
+	if gIsExternalClient {
+		if testID.Protocol != ICMP && port == "" {
+			ui.printErr("In external mode, port cannot be empty for TCP tests.")
+			return
+		}
+	} else {
+		if port != "" {
+			ui.printErr("In client mode, port (%s) cannot be specified in destination (%s).", port, server)
+			ui.printMsg("Hint: Use external mode (-x).")
+			return
+		}
 		port = gEthrPortStr
 	}
-	test, err := newTest(hostIP, nil, testParam)
+	ui.printMsg("Using destination: %s, ip: %s, port: %s", hostName, hostIP, port)
+	test, err := newTest(hostIP, testID, clientParam)
 	if err != nil {
 		ui.printErr("Failed to create the new test.")
 		return
@@ -138,60 +156,65 @@ func runClient(testParam EthrTestParam, clientParam ethrClientParam, server stri
 	test.remoteAddr = server
 	test.remoteIP = hostIP
 	test.remotePort = port
-	if testParam.TestID.Protocol == ICMP {
+	if testID.Protocol == ICMP {
 		test.dialAddr = hostIP
 	} else {
 		test.dialAddr = fmt.Sprintf("[%s]:%s", hostIP, port)
 	}
-	runTest(test, clientParam.duration, clientParam.gap, clientParam.warmupCount)
+	runTest(test)
 }
 
-func runTest(test *ethrTest, d, g time.Duration, warmupCount int) {
-	toStop := make(chan int, 1)
+func runTest(test *ethrTest) {
+	toStop := make(chan int, 16)
 	startStatsTimer()
-	runDurationTimer(d, toStop)
+	gap := test.clientParam.Gap
+	duration := test.clientParam.Duration
+	runDurationTimer(duration, toStop)
 	test.isActive = true
-	if test.testParam.TestID.Protocol == TCP {
-		if test.testParam.TestID.Type == Bandwidth {
+	if test.testID.Protocol == TCP {
+		if test.testID.Type == Bandwidth {
 			tcpRunBandwidthTest(test, toStop)
-		} else if test.testParam.TestID.Type == Latency {
-			go runTCPLatencyTest(test, g, toStop)
-		} else if test.testParam.TestID.Type == Cps {
+		} else if test.testID.Type == Latency {
+			go runTCPLatencyTest(test, gap, toStop)
+		} else if test.testID.Type == Cps {
 			go tcpRunCpsTest(test)
-		} else if test.testParam.TestID.Type == Ping {
-			go clientRunPingTest(test, g, warmupCount)
-		} else if test.testParam.TestID.Type == TraceRoute {
-			tcpRunTraceRoute(test, g, toStop)
-		} else if test.testParam.TestID.Type == MyTraceRoute {
-			tcpRunMyTraceRoute(test, g, toStop)
+		} else if test.testID.Type == Ping {
+			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
+		} else if test.testID.Type == TraceRoute {
+			VerifyPermissionForTest(test.testID)
+			go tcpRunTraceRoute(test, gap, toStop)
+		} else if test.testID.Type == MyTraceRoute {
+			VerifyPermissionForTest(test.testID)
+			go tcpRunMyTraceRoute(test, gap, toStop)
 		}
-	} else if test.testParam.TestID.Protocol == UDP {
-		if test.testParam.TestID.Type == Bandwidth ||
-			test.testParam.TestID.Type == Pps {
+	} else if test.testID.Protocol == UDP {
+		if test.testID.Type == Bandwidth ||
+			test.testID.Type == Pps {
 			runUDPBandwidthAndPpsTest(test)
 		}
-	} else if test.testParam.TestID.Protocol == ICMP {
-		if test.testParam.TestID.Type == Ping {
-			go clientRunPingTest(test, g, warmupCount)
-		} else if test.testParam.TestID.Type == TraceRoute {
-			icmpRunTraceRoute(test, g, toStop)
-		} else if test.testParam.TestID.Type == MyTraceRoute {
-			icmpRunMyTraceRoute(test, g, toStop)
+	} else if test.testID.Protocol == ICMP {
+		VerifyPermissionForTest(test.testID)
+		if test.testID.Type == Ping {
+			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
+		} else if test.testID.Type == TraceRoute {
+			go icmpRunTraceRoute(test, gap, toStop)
+		} else if test.testID.Type == MyTraceRoute {
+			go icmpRunMyTraceRoute(test, gap, toStop)
 		}
 	}
-
 	handleInterrupt(toStop)
 	reason := <-toStop
 	stopStatsTimer()
 	close(test.done)
-	if test.testParam.TestID.Type == Ping {
+	if test.testID.Type == Ping {
 		time.Sleep(2 * time.Second)
 	}
 	switch reason {
 	case done:
 		ui.printMsg("Ethr done, measurement complete.")
 	case timeout:
-		ui.printMsg("Ethr done, duration: " + d.String() + ".")
+		ui.printMsg("Ethr done, duration: " + duration.String() + ".")
+		ui.printMsg("Hint: Use -d parameter to change duration of the test.")
 	case interrupt:
 		ui.printMsg("Ethr done, received interrupt signal.")
 	case disconnect:
@@ -210,13 +233,18 @@ func tcpRunBandwidthTest(test *ethrTest, toStop chan int) {
 }
 
 func tcpRunBanwidthTestThreads(test *ethrTest, wg *sync.WaitGroup) {
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		conn, err := net.Dial(tcp(ipVer), test.dialAddr)
+	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
+		conn, err := ethrDialInc(TCP, test.dialAddr, uint16(th))
 		if err != nil {
 			ui.printErr("Error dialing connection: %v", err)
-			return
+			continue
 		}
-		handshakeWithServer(test, conn)
+		err = handshakeWithServer(test, conn)
+		if err != nil {
+			ui.printErr("Failed in handshake with the server. Error: %v", err)
+			conn.Close()
+			continue
+		}
 		wg.Add(1)
 		go runTCPBandwidthTestHandler(test, conn, wg)
 	}
@@ -230,11 +258,15 @@ func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGrou
 	lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 	ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 		ec.fd, lserver, lport, rserver, rport)
-	buff := make([]byte, test.testParam.BufferSize)
-	for i := uint32(0); i < test.testParam.BufferSize; i++ {
+	size := test.clientParam.BufferSize
+	if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
+		size = uint32(test.clientParam.BwRate)
+	}
+	buff := make([]byte, size)
+	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	blen := len(buff)
+	start, waitTime, sendRate := beginThrottle()
 ExitForLoop:
 	for {
 		select {
@@ -243,38 +275,46 @@ ExitForLoop:
 		default:
 			n := 0
 			var err error = nil
-			if test.testParam.Reverse {
+			if test.clientParam.Reverse {
 				n, err = io.ReadFull(conn, buff)
 			} else {
 				n, err = conn.Write(buff)
 			}
-			if err != nil || n < blen {
+			if err != nil || n < int(size) {
 				ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 				break ExitForLoop
 			}
-			atomic.AddUint64(&ec.bw, uint64(blen))
-			atomic.AddUint64(&test.testResult.bw, uint64(blen))
+			atomic.AddUint64(&ec.bw, uint64(size))
+			atomic.AddUint64(&test.testResult.bw, uint64(size))
+			sendRate += uint64(size)
+			if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
+				start, waitTime, sendRate = enforceThrottle(start, waitTime)
+			}
 		}
 	}
 }
 
 func runTCPLatencyTest(test *ethrTest, g time.Duration, toStop chan int) {
-	conn, err := net.Dial(tcp(ipVer), test.dialAddr)
+	ui.printMsg("Running latency test: %v, %v", test.clientParam.RttCount, test.clientParam.BufferSize)
+	conn, err := ethrDial(TCP, test.dialAddr)
 	if err != nil {
 		ui.printErr("Error dialing the latency connection: %v", err)
-		os.Exit(1)
 		return
 	}
 	defer conn.Close()
-	handshakeWithServer(test, conn)
+	err = handshakeWithServer(test, conn)
+	if err != nil {
+		ui.printErr("Failed in handshake with the server. Error: %v", err)
+		return
+	}
 	ui.emitLatencyHdr()
-	buffSize := test.testParam.BufferSize
+	buffSize := test.clientParam.BufferSize
 	buff := make([]byte, buffSize)
 	for i := uint32(0); i < buffSize; i++ {
 		buff[i] = byte(i)
 	}
 	blen := len(buff)
-	rttCount := test.testParam.RttCount
+	rttCount := test.clientParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
 ExitForLoop:
 	for {
@@ -342,20 +382,20 @@ func calcAndPrintLatency(test *ethrTest, rttCount uint32, latencyNumbers []time.
 	p9999 := latencyNumbers[uint64(((float64(rttCountFixed)*99.99)/100)-1)]
 	ui.emitLatencyResults(
 		test.session.remoteIP,
-		protoToString(test.testParam.TestID.Protocol),
+		protoToString(test.testID.Protocol),
 		avg, min, max, p50, p90, p95, p99, p999, p9999)
 }
 
 func tcpRunCpsTest(test *ethrTest) {
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		go func() {
+	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
+		go func(th uint32) {
 		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					conn, err := net.Dial(tcp(ipVer), test.dialAddr)
+					conn, err := ethrDialAll(TCP, test.dialAddr)
 					if err == nil {
 						atomic.AddUint64(&test.testResult.cps, 1)
 						tcpconn, ok := conn.(*net.TCPConn)
@@ -368,15 +408,15 @@ func tcpRunCpsTest(test *ethrTest) {
 					}
 				}
 			}
-		}()
+		}(th)
 	}
 }
 
-func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount int) {
+func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount uint32) {
 	// TODO: Override NumThreads for now, fix it later to support parallel
 	// threads.
-	test.testParam.NumThreads = 1
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
+	test.clientParam.NumThreads = 1
+	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
 		go func() {
 			var sent, rcvd, lost uint32
 			warmupText := "[warmup] "
@@ -418,7 +458,7 @@ func clientRunPingTest(test *ethrTest, g time.Duration, warmupCount int) {
 }
 
 func clientRunPing(test *ethrTest, prefix string) (time.Duration, error) {
-	if test.testParam.TestID.Protocol == TCP {
+	if test.testID.Protocol == TCP {
 		return tcpRunPing(test, prefix)
 	} else {
 		return icmpRunPing(test, prefix)
@@ -427,8 +467,7 @@ func clientRunPing(test *ethrTest, prefix string) (time.Duration, error) {
 
 func tcpRunPing(test *ethrTest, prefix string) (timeTaken time.Duration, err error) {
 	t0 := time.Now()
-	// conn, err := net.DialTimeout(tcp(ipVer), *server, time.Second)
-	conn, err := net.Dial(tcp(ipVer), test.dialAddr)
+	conn, err := ethrDial(TCP, test.dialAddr)
 	if err != nil {
 		ui.printMsg("[tcp] %sConnection to %s: Timed out (%v)", prefix, test.dialAddr, err)
 		return
@@ -466,11 +505,6 @@ func tcpRunMyTraceRoute(test *ethrTest, gap time.Duration, toStop chan int) {
 }
 
 func tcpRunTraceRouteInternal(test *ethrTest, gap time.Duration, toStop chan int, mtrMode bool) {
-	if !IsAdmin() {
-		ui.printErr("For TCP based TraceRoute, running as administrator is required.\n")
-		toStop <- interrupt
-		return
-	}
 	gHop = make([]ethrHopData, gMaxHops)
 	err := tcpDiscoverHops(test, mtrMode)
 	if err != nil {
@@ -545,7 +579,11 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 		return err, isLast
 	}
 	defer c.Close()
-	localPortNum := uint16(8888 + hop)
+	localPortNum := uint16(8888)
+	if gClientPort != 0 {
+		localPortNum = gClientPort
+	}
+	localPortNum += uint16(hop)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint16(b[0:], localPortNum)
 	remotePortNum, err := strconv.ParseUint(test.remotePort, 10, 16)
@@ -558,7 +596,12 @@ func tcpProbe(test *ethrTest, hop int, hopIP string, hopData *ethrHopData) (erro
 		peerAddrChan <- peerAddr
 	}()
 	startTime := time.Now()
-	_, err = ethrDialForTraceRoute(tcp(ipVer), test.dialAddr, localPortNum, hop)
+	conn, err := ethrDialEx(TCP, test.dialAddr, gLocalIP, localPortNum, hop, int(gTOS))
+	if err != nil {
+		ui.printDbg("Failed to Dial the connection. Error: %v", err)
+	} else {
+		conn.Close()
+	}
 	hopData.sent++
 	peerAddr := ""
 	endTime := time.Now()
@@ -741,17 +784,6 @@ ExitForLoop:
 	}
 }
 
-/*
-func icmpNewConn(localAddr string) (*icmp.PacketConn, error) {
-	c, err := icmp.ListenPacket("ip4:icmp", localAddr)
-	if err != nil {
-		ui.printErr("Failed to listen for ICMP on local address %v. Msg: %v.", localAddr, err.Error())
-		return nil, err
-	}
-	return c, nil
-}
-*/
-
 func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, hopIP string, hopData *ethrHopData, hop, seq int) (error, bool) {
 	isLast := false
 	echoMsg := fmt.Sprintf("Hello: Ethr - %v", hop)
@@ -779,19 +811,29 @@ func icmpProbe(test *ethrTest, dstIPAddr net.IPAddr, icmpTimeout time.Duration, 
 	return nil, isLast
 }
 
-const (
-	Icmpv4 = 1  // ICMP for IPv4
-	Icmpv6 = 58 // ICMP for IPv6
-)
-
 func icmpSetTTL(c net.PacketConn, ttl int) error {
 	err := os.ErrInvalid
-	if ipVer == ethrIPv4 {
+	if gIPVersion == ethrIPv4 {
 		cIPv4 := ipv4.NewPacketConn(c)
 		err = cIPv4.SetTTL(ttl)
-	} else if ipVer == ethrIPv6 {
+	} else if gIPVersion == ethrIPv6 {
 		cIPv6 := ipv6.NewPacketConn(c)
 		err = cIPv6.SetHopLimit(ttl)
+	}
+	return err
+}
+
+func icmpSetTOS(c net.PacketConn, tos int) error {
+	if tos == 0 {
+		return nil
+	}
+	err := os.ErrInvalid
+	if gIPVersion == ethrIPv4 {
+		cIPv4 := ipv4.NewPacketConn(c)
+		err = cIPv4.SetTOS(tos)
+	} else if gIPVersion == ethrIPv6 {
+		cIPv6 := ipv6.NewPacketConn(c)
+		err = cIPv6.SetTrafficClass(tos)
 	}
 	return err
 }
@@ -803,6 +845,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 		ui.printErr("Failed to set TTL. Error: %v", err)
 		return start, nil, err
 	}
+	icmpSetTOS(c, int(gTOS))
 
 	err = c.SetDeadline(time.Now().Add(timeout))
 	if err != nil {
@@ -819,7 +862,7 @@ func icmpSendMsg(c net.PacketConn, dstIPAddr net.IPAddr, hop, seq int, body stri
 			Data: []byte(body),
 		},
 	}
-	if ipVer == ethrIPv6 {
+	if gIPVersion == ethrIPv6 {
 		wm.Type = ipv6.ICMPTypeEchoRequest
 	}
 	wb, err := wm.Marshal(nil)
@@ -865,7 +908,7 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			ui.printDbg("Matching peer is not found.")
 			continue
 		}
-		icmpMsg, err := icmp.ParseMessage(IcmpProto(ipVer), b[:n])
+		icmpMsg, err := icmp.ParseMessage(IcmpProto(), b[:n])
 		if err != nil {
 			ui.printDbg("Failed to parse ICMP message: %v", err)
 			continue
@@ -875,13 +918,14 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			index := bytes.Index(body, neededSig[:4])
 			if index > 0 {
 				if proto == TCP {
+					ui.printDbg("Found correct ICMP error message. PeerAddr: %v", peerAddr)
 					return peerAddr, isLast, nil
 				} else if proto == ICMP {
 					if index < 4 {
 						ui.printDbg("Incorrect length of ICMP message.")
 						continue
 					}
-					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(ipVer), body[index-4:])
+					innerIcmpMsg, _ := icmp.ParseMessage(IcmpProto(), body[index-4:])
 					switch innerIcmpMsg.Body.(type) {
 					case *icmp.Echo:
 						seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
@@ -912,10 +956,14 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 }
 
 func runUDPBandwidthAndPpsTest(test *ethrTest) {
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		go func() {
-			buff := make([]byte, test.testParam.BufferSize)
-			conn, err := net.Dial(udp(ipVer), test.dialAddr)
+	for th := uint32(0); th < test.clientParam.NumThreads; th++ {
+		go func(th uint32) {
+			size := test.clientParam.BufferSize
+			if test.clientParam.BwRate > 0 && uint64(size) > test.clientParam.BwRate {
+				size = uint32(test.clientParam.BwRate)
+			}
+			buff := make([]byte, size)
+			conn, err := ethrDialInc(UDP, test.dialAddr, uint16(th))
 			if err != nil {
 				ui.printDbg("Unable to dial UDP, error: %v", err)
 				return
@@ -927,6 +975,7 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 				ec.fd, lserver, lport, rserver, rport)
 			blen := len(buff)
+			start, waitTime, sendRate := beginThrottle()
 		ExitForLoop:
 			for {
 				select {
@@ -946,84 +995,12 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 					atomic.AddUint64(&ec.pps, 1)
 					atomic.AddUint64(&test.testResult.bw, uint64(n))
 					atomic.AddUint64(&test.testResult.pps, 1)
+					sendRate += uint64(size)
+					if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
+						start, waitTime, sendRate = enforceThrottle(start, waitTime)
+					}
 				}
 			}
-		}()
+		}(th)
 	}
 }
-
-/*
-func runHTTPBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteIP
-	ui.printMsg("uri=%s", uri)
-	uri = "http://" + uri + ":" + httpBandwidthPort
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		buff := make([]byte, test.testParam.BufferSize)
-		for i := uint32(0); i < test.testParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		tr := &http.Transport{DisableCompression: true}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPSBandwidthTest(test *ethrTest) {
-	uri := test.session.remoteIP
-	uri = "https://" + uri + ":" + httpsBandwidthPort
-	for th := uint32(0); th < test.testParam.NumThreads; th++ {
-		buff := make([]byte, test.testParam.BufferSize)
-		for i := uint32(0); i < test.testParam.BufferSize; i++ {
-			buff[i] = 'x'
-		}
-		c, err := x509.ParseCertificate(gCert)
-		if err != nil {
-			ui.printErr("runHTTPSBandwidthTest: failed to parse certificate: %v", err)
-		}
-		clientCertPool := x509.NewCertPool()
-		clientCertPool.AddCert(c)
-
-		tlsConfig := &tls.Config{
-			InsecureSkipVerify: gIgnoreCert,
-			// Certificates: []tls.Certificate{cert},
-			RootCAs: clientCertPool,
-		}
-		//tlsConfig.BuildNameToCertificate()
-		tr := &http.Transport{DisableCompression: true, TLSClientConfig: tlsConfig}
-		client := &http.Client{Transport: tr}
-		go runHTTPandHTTPSBandwidthTest(test, client, uri, buff)
-	}
-}
-
-func runHTTPandHTTPSBandwidthTest(test *ethrTest, client *http.Client, uri string, buff []byte) {
-ExitForLoop:
-	for {
-		select {
-		case <-test.done:
-			break ExitForLoop
-		default:
-			// response, err := http.Get(uri)
-			response, err := client.Post(uri, "text/plain", bytes.NewBuffer(buff))
-			if err != nil {
-				ui.printDbg("Error in HTTP request: %v", err)
-				continue
-			} else {
-				ui.printDbg("Status received: %v", response.StatusCode)
-				if response.StatusCode != http.StatusOK {
-					ui.printDbg("Error in HTTP request, received status: %v", response.StatusCode)
-					continue
-				}
-				contents, err := ioutil.ReadAll(response.Body)
-				response.Body.Close()
-				if err != nil {
-					ui.printDbg("Error in receving HTTP response: %v", err)
-					continue
-				}
-				ethrUnused(contents)
-				// ui.printDbg("%s", string(contents))
-			}
-			atomic.AddUint64(&test.testResult.data, uint64(test.testParam.BufferSize))
-		}
-	}
-}
-*/

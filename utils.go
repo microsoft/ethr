@@ -9,7 +9,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"regexp"
 	"strconv"
 	"strings"
 	"syscall"
@@ -18,37 +17,18 @@ import (
 	"unicode/utf8"
 )
 
-//
-// Regular expression to parse input for custom ports.
-//
-var customPortRegex = regexp.MustCompile("(\\w+)=([0-9]+)")
-
-//
-// TODO: Use a better way to define ports. The core logic is:
-// Find a base port, such as 9999, and the Bandwidth is: base - 0,
-// Cps is base - 1, Pps is base - 2 and Latency is base - 3
-//
-const (
-	hostAddr = ""
-)
-
-var gEthrPort = 8888
+var gLocalIP = ""
+var gEthrPort = uint16(8888)
 var gEthrPortStr = ""
+var gClientPort = uint16(0)
+var gTOS = uint8(0)
+var gTTL = uint8(0)
 
 const (
-	// UNO represents 1 unit.
-	UNO = 1
-
-	// KILO represents k.
+	UNO  = 1
 	KILO = 1000
-
-	// MEGA represents m.
 	MEGA = 1000 * 1000
-
-	// GIGA represents g.
 	GIGA = 1000 * 1000 * 1000
-
-	// TERA represents t.
 	TERA = 1000 * 1000 * 1000 * 1000
 )
 
@@ -142,6 +122,8 @@ func testToString(testType EthrTestType) string {
 		return "Ping"
 	case TraceRoute:
 		return "TraceRoute"
+	case MyTraceRoute:
+		return "MyTraceRoute"
 	default:
 		return "Invalid"
 	}
@@ -182,18 +164,14 @@ func protoToString(proto EthrProtocol) string {
 		return "TCP"
 	case UDP:
 		return "UDP"
-	case HTTP:
-		return "HTTP"
-	case HTTPS:
-		return "HTTPS"
 	case ICMP:
 		return "ICMP"
 	}
 	return ""
 }
 
-func tcp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Tcp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "tcp4"
 	case ethrIPv6:
@@ -202,8 +180,8 @@ func tcp(ipVer ethrIPVer) string {
 	return "tcp"
 }
 
-func udp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Udp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "udp4"
 	case ethrIPv6:
@@ -212,8 +190,8 @@ func udp(ipVer ethrIPVer) string {
 	return "udp"
 }
 
-func Icmp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Icmp() string {
+	switch gIPVersion {
 	case ethrIPv6:
 		return "ip6:ipv6-icmp"
 	default:
@@ -221,11 +199,11 @@ func Icmp(ipVer ethrIPVer) string {
 	}
 }
 
-func IcmpProto(ipVer ethrIPVer) int {
-	if ipVer == ethrIPv6 {
-		return Icmpv6
+func IcmpProto() int {
+	if gIPVersion == ethrIPv6 {
+		return ICMPv6
 	}
-	return Icmpv4
+	return ICMPv4
 }
 
 func ethrUnused(vals ...interface{}) {
@@ -345,36 +323,80 @@ func SleepUntilNextWholeSecond() {
 	time.Sleep(time.Until(res))
 }
 
-func ethrDialForTraceRoute(network, address string, portNum uint16, ttl int) (conn net.Conn, err error) {
-	port := fmt.Sprintf(":%v", portNum)
-	la, err := net.ResolveTCPAddr(network, port)
+func ethrSetTTL(fd uintptr, ttl int) {
+	if ttl == 0 {
+		return
+	}
+	if gIPVersion == ethrIPv4 {
+		setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+	} else {
+		setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, ttl)
+	}
+}
+
+func ethrSetTOS(fd uintptr, tos int) {
+	if tos == 0 {
+		return
+	}
+	if gIPVersion == ethrIPv4 {
+		setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TOS, tos)
+	} else {
+		SetTClass(fd, tos)
+	}
+}
+
+func ethrDial(p EthrProtocol, dialAddr string) (conn net.Conn, err error) {
+	return ethrDialEx(p, dialAddr, gLocalIP, gClientPort, int(gTTL), int(gTOS))
+}
+
+func ethrDialInc(p EthrProtocol, dialAddr string, inc uint16) (conn net.Conn, err error) {
+	if gClientPort != 0 {
+		return ethrDialEx(p, dialAddr, gLocalIP, gClientPort+inc, int(gTTL), int(gTOS))
+	} else {
+		return ethrDial(p, dialAddr)
+	}
+}
+
+func ethrDialAll(p EthrProtocol, dialAddr string) (conn net.Conn, err error) {
+	return ethrDialEx(p, dialAddr, gLocalIP, 0, int(gTTL), int(gTOS))
+}
+
+func ethrDialEx(p EthrProtocol, dialAddr, localIP string, localPortNum uint16, ttl int, tos int) (conn net.Conn, err error) {
+	localAddr := fmt.Sprintf("%v:%v", localIP, localPortNum)
+	var la net.Addr
+	network := Tcp()
+	if p == TCP {
+		la, err = net.ResolveTCPAddr(network, localAddr)
+	} else if p == UDP {
+		network = Udp()
+		la, err = net.ResolveUDPAddr(network, localAddr)
+	} else {
+		ui.printDbg("Only TCP or UDP are allowed in ethrDial")
+		err = os.ErrInvalid
+		return
+	}
 	if err != nil {
-		ui.printErr("Unable to resolve TCP address. Error: %v", err)
+		ui.printErr("Unable to resolve TCP or UDP address. Error: %v", err)
 		return
 	}
 	dialer := &net.Dialer{
 		Control: func(network, address string, c syscall.RawConn) error {
 			return c.Control(func(fd uintptr) {
-				if ipVer == ethrIPv4 {
-					setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
-				} else {
-					setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, ttl)
-
-				}
+				ethrSetTTL(fd, ttl)
+				ethrSetTOS(fd, tos)
 			})
 		},
 	}
 	dialer.LocalAddr = la
 	dialer.Timeout = time.Second
-	conn, err = dialer.Dial(network, address)
+	conn, err = dialer.Dial(network, dialAddr)
 	if err != nil {
-		ui.printDbg("ethrDialForTraceRoute Error: %v", err)
+		ui.printDbg("ethrTCPDial Error: %v", err)
 	} else {
 		tcpconn, ok := conn.(*net.TCPConn)
 		if ok {
 			tcpconn.SetLinger(0)
 		}
-		conn.Close()
 	}
 	return
 }
@@ -392,11 +414,11 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 
 	ips, err := net.LookupIP(server)
 	if err != nil {
-		ui.printErr("Failed to looup IP address for the server: %v. Error: %v", server, err)
+		ui.printErr("Failed to lookup IP address for the server: %v. Error: %v", server, err)
 		return ipAddr, ipStr, err
 	}
 	for _, ip := range ips {
-		if ipVer == ethrIPAny || (ipVer == ethrIPv4 && ip.To4() != nil) || (ipVer == ethrIPv6 && ip.To16() != nil) {
+		if gIPVersion == ethrIPAny || (gIPVersion == ethrIPv4 && ip.To4() != nil) || (gIPVersion == ethrIPv6 && ip.To16() != nil) {
 			ipAddr.IP = ip
 			ipStr = ip.String()
 			ui.printDbg("Resolved server: %v to IP address: %v\n", server, ip)
@@ -405,4 +427,25 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 	}
 	ui.printErr("Unable to resolve the given server: %v to an IP address.", server)
 	return ipAddr, ipStr, os.ErrNotExist
+}
+
+// This is a workaround to ensure we generate traffic at certain rate
+// and stats are printed correctly. We ensure that current interval lasts
+// 100ms after stats are printed, not perfect but workable.
+func beginThrottle() (start time.Time, waitTime time.Duration, sendRate uint64) {
+	start = time.Now()
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+	sendRate = uint64(0)
+	return
+}
+
+func enforceThrottle(s time.Time, wt time.Duration) (start time.Time, waitTime time.Duration, sendRate uint64) {
+	timeTaken := time.Since(s)
+	if timeTaken < wt {
+		time.Sleep(wt - timeTaken)
+	}
+	start = time.Now()
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+	sendRate = 0
+	return
 }

@@ -6,6 +6,7 @@
 package main
 
 import (
+	"bytes"
 	"container/list"
 	"encoding/gob"
 	"net"
@@ -15,185 +16,85 @@ import (
 	"time"
 )
 
-// EthrTestType represents the test type.
 type EthrTestType uint32
 
 const (
-	// All represents all tests - For now only applicable for servers
 	All EthrTestType = iota
-
-	// Bandwidth represents the bandwidth test.
 	Bandwidth
-
-	// Cps represents connections/s test.
 	Cps
-
-	// Pps represents packets/s test.
 	Pps
-
-	// Latency represents the latency test.
 	Latency
-
-	// Ping test.
 	Ping
-
-	// TraceRoute
 	TraceRoute
-
-	// MyTraceRoute
 	MyTraceRoute
 )
 
-// EthrProtocol represents the network protocol.
 type EthrProtocol uint32
 
 const (
-	// TCP represents the tcp protocol.
 	TCP EthrProtocol = iota
-
-	// UDP represents the udp protocol.
 	UDP
-
-	// HTTP represents using http protocol.
-	HTTP
-
-	// HTTPS represents using https protocol.
-	HTTPS
-
-	// ICMP represents the icmp protocol.
 	ICMP
 )
 
-// EthrTestID represents the test id.
-type EthrTestID struct {
-	// Protocol represents the protocol this test uses.
-	Protocol EthrProtocol
+const (
+	ICMPv4 = 1  // ICMP for IPv4
+	ICMPv6 = 58 // ICMP for IPv6
+)
 
-	// Type represents the test type this test uses.
-	Type EthrTestType
+type EthrTestID struct {
+	Protocol EthrProtocol
+	Type     EthrTestType
 }
 
-// EthrMsgType represents the message type.
 type EthrMsgType uint32
 
 const (
-	// EthrInv represents the Inv message.
 	EthrInv EthrMsgType = iota
-
-	// EthrSyn represents the Syn message.
 	EthrSyn
-
-	// EthrAck represents the Ack message.
 	EthrAck
-
-	// EthrFin represents the Fin message.
-	EthrFin
-
-	// EthrBgn represents the Bgn message.
-	EthrBgn
-
-	// EthrEnd represents the End message.
-	EthrEnd
 )
 
-// EthrMsgVer represents the message version.
 type EthrMsgVer uint32
 
-// EthrMsg represents the message entity.
 type EthrMsg struct {
-	// Version represents the message version.
 	Version EthrMsgVer
-
-	// Type represents the message type.
-	Type EthrMsgType
-
-	// Syn represents the Syn value.
-	Syn *EthrMsgSyn
-
-	// Ack represents the Ack value.
-	Ack *EthrMsgAck
-
-	// Fin represents the Fin value.
-	Fin *EthrMsgFin
-
-	// Bgn represents the Bgn value.
-	Bgn *EthrMsgBgn
-
-	// End represents the End value.
-	End *EthrMsgEnd
+	Type    EthrMsgType
+	Syn     *EthrMsgSyn
+	Ack     *EthrMsgAck
 }
 
-// EthrMsgSyn represents the Syn entity.
 type EthrMsgSyn struct {
-	// TestParam represents the test parameters.
-	TestParam EthrTestParam
+	TestID      EthrTestID
+	ClientParam EthrClientParam
 }
 
-// EthrMsgAck represents the Ack entity.
 type EthrMsgAck struct {
-	Cert        []byte
-	NapDuration time.Duration
-}
-
-// EthrMsgFin represents the Fin entity.
-type EthrMsgFin struct {
-	// Message represents the message body.
-	Message string
-}
-
-// EthrMsgBgn represents the Bgn entity.
-type EthrMsgBgn struct {
-	// UDPPort represents the udp port.
-	UDPPort string
-}
-
-// EthrMsgEnd represents the End entity.
-type EthrMsgEnd struct {
-	// Message represents the message body.
-	Message string
-}
-
-// EthrTestParam represents the parameters used for the test.
-type EthrTestParam struct {
-	// TestID represents the test id of this test.
-	TestID EthrTestID
-
-	// NumThreads represents how many threads are used for the test.
-	NumThreads uint32
-
-	// BufferSize represents the buffer size.
-	BufferSize uint32
-
-	// RttCount represents the rtt count.
-	RttCount uint32
-
-	// Reverse mode for bandwidth tests.
-	Reverse bool
 }
 
 type ethrTestResult struct {
-	bw       uint64
-	cps      uint64
-	pps      uint64
-	latency  uint64
-	clatency uint64
+	bw      uint64
+	cps     uint64
+	pps     uint64
+	latency uint64
+	// clatency uint64
 }
 
 type ethrTest struct {
-	isActive   bool
-	session    *ethrSession
-	remoteAddr string
-	remoteIP   string
-	remotePort string
-	dialAddr   string
-	ctrlConn   net.Conn
-	refCount   int32
-	rcvdMsgs   chan *EthrMsg
-	testParam  EthrTestParam
-	testResult ethrTestResult
-	done       chan struct{}
-	connList   *list.List
-	lastAccess time.Time
+	isActive    bool
+	isDormant   bool
+	session     *ethrSession
+	remoteAddr  string
+	remoteIP    string
+	remotePort  string
+	dialAddr    string
+	refCount    int32
+	testID      EthrTestID
+	clientParam EthrClientParam
+	testResult  ethrTestResult
+	done        chan struct{}
+	connList    *list.List
+	lastAccess  time.Time
 }
 
 type ethrIPVer uint32
@@ -204,18 +105,24 @@ const (
 	ethrIPv6
 )
 
-type ethrClientParam struct {
-	duration    time.Duration
-	gap         time.Duration
-	warmupCount int
+type EthrClientParam struct {
+	NumThreads  uint32
+	BufferSize  uint32
+	RttCount    uint32
+	Reverse     bool
+	Duration    time.Duration
+	Gap         time.Duration
+	WarmupCount uint32
+	BwRate      uint64
+	ToS         uint8
 }
 
 type ethrServerParam struct {
 	showUI bool
 }
 
-var ipVer ethrIPVer = ethrIPAny
-var xMode bool
+var gIPVersion ethrIPVer = ethrIPAny
+var gIsExternalClient bool
 
 type ethrConn struct {
 	bw      uint64
@@ -248,13 +155,13 @@ func deleteKey(key string) {
 	gSessionKeys = gSessionKeys[:i]
 }
 
-func newTest(remoteIP string, conn net.Conn, testParam EthrTestParam) (*ethrTest, error) {
+func newTest(remoteIP string, testID EthrTestID, clientParam EthrClientParam) (*ethrTest, error) {
 	gSessionLock.Lock()
 	defer gSessionLock.Unlock()
-	return newTestInternal(remoteIP, conn, testParam)
+	return newTestInternal(remoteIP, testID, clientParam)
 }
 
-func newTestInternal(remoteIP string, conn net.Conn, testParam EthrTestParam) (*ethrTest, error) {
+func newTestInternal(remoteIP string, testID EthrTestID, clientParam EthrClientParam) (*ethrTest, error) {
 	var session *ethrSession
 	session, found := gSessions[remoteIP]
 	if !found {
@@ -265,21 +172,21 @@ func newTestInternal(remoteIP string, conn net.Conn, testParam EthrTestParam) (*
 		gSessionKeys = append(gSessionKeys, remoteIP)
 	}
 
-	test, found := session.tests[testParam.TestID]
+	test, found := session.tests[testID]
 	if found {
 		return test, os.ErrExist
 	}
 	session.testCount++
 	test = &ethrTest{}
 	test.session = session
-	test.ctrlConn = conn
 	test.refCount = 0
-	test.rcvdMsgs = make(chan *EthrMsg)
-	test.testParam = testParam
+	test.testID = testID
+	test.clientParam = clientParam
 	test.done = make(chan struct{})
 	test.connList = list.New()
 	test.lastAccess = time.Now()
-	session.tests[testParam.TestID] = test
+	test.isDormant = true
+	session.tests[testID] = test
 
 	return test, nil
 }
@@ -292,7 +199,7 @@ func deleteTest(test *ethrTest) {
 
 func deleteTestInternal(test *ethrTest) {
 	session := test.session
-	testID := test.testParam.TestID
+	testID := test.testID
 	//
 	// TODO fix this, we need to decide where to close this, inside this
 	// function or by the caller. The reason we may need it to be done by
@@ -340,8 +247,8 @@ func createOrGetTest(remoteIP string, proto EthrProtocol, testType EthrTestType)
 	test = getTestInternal(remoteIP, proto, testType)
 	if test == nil {
 		isNew = true
-		testParam := EthrTestParam{TestID: EthrTestID{proto, testType}}
-		test, _ = newTestInternal(remoteIP, nil, testParam)
+		testID := EthrTestID{proto, testType}
+		test, _ = newTestInternal(remoteIP, testID, EthrClientParam{})
 		test.isActive = true
 	}
 	atomic.AddInt32(&test.refCount, 1)
@@ -395,35 +302,72 @@ func (test *ethrTest) connListDo(f func(*ethrConn)) {
 	}
 }
 
-func recvSessionMsg(dec *gob.Decoder) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{}
-	err := dec.Decode(ethrMsg)
-	if err != nil {
-		ui.printDbg("Error receiving message on control channel: %v", err)
-		ethrMsg.Type = EthrInv
-	}
+func createSynMsg(testID EthrTestID, clientParam EthrClientParam) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyn}
+	ethrMsg.Syn = &EthrMsgSyn{}
+	ethrMsg.Syn.TestID = testID
+	ethrMsg.Syn.ClientParam = clientParam
 	return
 }
 
-func sendSessionMsg(enc *gob.Encoder, ethrMsg *EthrMsg) error {
-	err := enc.Encode(ethrMsg)
+func createAckMsg() (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
+	ethrMsg.Ack = &EthrMsgAck{}
+	return
+}
+
+func recvSessionMsg(conn net.Conn) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{}
+	ethrMsg.Type = EthrInv
+	// TODO: Assuming max ethr message size as 4096 sent over gob.
+	msgBytes := make([]byte, 4096)
+	n, err := conn.Read(msgBytes)
+	if err != nil {
+		ui.printDbg("Error receiving message on control channel. Error: %v", err)
+		return
+	}
+	ethrMsg = decodeMsg(msgBytes[:n])
+	return
+}
+
+func recvSessionMsgFromBuffer(msgBytes []byte) (ethrMsg *EthrMsg) {
+	ethrMsg = decodeMsg(msgBytes)
+	return
+}
+
+func sendSessionMsg(conn net.Conn, ethrMsg *EthrMsg) (err error) {
+	msgBytes, err := encodeMsg(ethrMsg)
+	if err != nil {
+		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
+		return
+	}
+	_, err = conn.Write(msgBytes)
 	if err != nil {
 		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
 	}
 	return err
 }
 
-func createAckMsg(cert []byte, d time.Duration) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
-	ethrMsg.Ack = &EthrMsgAck{}
-	ethrMsg.Ack.Cert = cert
-	ethrMsg.Ack.NapDuration = d
+func decodeMsg(msgBytes []byte) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{}
+	buffer := bytes.NewBuffer(msgBytes)
+	decoder := gob.NewDecoder(buffer)
+	err := decoder.Decode(ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to decode message using Gob: %v", err)
+		ethrMsg.Type = EthrInv
+	}
 	return
 }
 
-func createSynMsg(testParam EthrTestParam) (ethrMsg *EthrMsg) {
-	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyn}
-	ethrMsg.Syn = &EthrMsgSyn{}
-	ethrMsg.Syn.TestParam = testParam
+func encodeMsg(ethrMsg *EthrMsg) (msgBytes []byte, err error) {
+	var writeBuffer bytes.Buffer
+	encoder := gob.NewEncoder(&writeBuffer)
+	err = encoder.Encode(ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to encode message using Gob: %v", err)
+		return
+	}
+	msgBytes = writeBuffer.Bytes()
 	return
 }
