@@ -145,9 +145,6 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 
 func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn net.Conn) {
 	size := clientParam.BufferSize
-	if clientParam.BwRate > 0 && uint64(size) > clientParam.BwRate {
-		size = uint32(clientParam.BwRate)
-	}
 	buff := make([]byte, size)
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)

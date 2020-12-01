@@ -201,6 +201,14 @@ func main() {
 		bwRate := uint64(0)
 		if *bwRateStr != "" {
 			bwRate = unitToNumber(*bwRateStr)
+			bwRate /= 8
+		}
+
+		// Adjust the numbers so that data can be transfered in equal units.
+		if bwRate > 0 {
+			factor := (bwRate + bufLen - 1) / bufLen
+			bufLen = bwRate / factor
+			bwRate = bufLen * factor
 		}
 
 		//
@@ -503,7 +511,7 @@ func printGapUsage() {
 
 func printBufLenUsage() {
 	printFlagUsage("l", "<length>",
-		"Length of buffer to use (format: <num>[KB | MB | GB])",
+		"Length of buffer (in Bytes) to use (format: <num>[KB | MB | GB])",
 		"Only valid for Bandwidth tests. Max 1GB.",
 		"Default: 16KB")
 }
@@ -552,9 +560,9 @@ func printToSUsage() {
 
 func printBwRateUsage() {
 	printFlagUsage("b", "<rate>",
-		"Bytes to send per second (format: <num>[KB | MB | GB])",
+		"Transmit only Bits per second (format: <num>[K | M | G])",
 		"Only valid for Bandwidth tests. Default: 0 - Unlimited",
-		"Examples: 100 (100B/s or 800bits/s), 1MB (1MB/s or 8Mbits/s).")
+		"Examples: 100 (100bits/s), 1M (1Mbits/s).")
 }
 
 func printCPortUsage() {
