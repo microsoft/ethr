@@ -217,9 +217,9 @@ In this mode, Ethr client can only talk to an Ethr server.
 		Run in client mode and connect to <server>.
 		Server is specified using name, FQDN or IP address.
 	-b <rate>
-		Transmit only Bits per second (format: <num>[KB | MB | GB])
+		Transmit only Bits per second (format: <num>[K | M | G])
 		Only valid for Bandwidth tests. Default: 0 - Unlimited
-		Examples: 100 (100bits/s), 1MB (1Mbits/s).
+		Examples: 100 (100bits/s), 1M (1Mbits/s).
 	-cport <number>
 		Use specified local port number in client for TCP & UDP tests.
 		Default: 0 - Ephemeral Port
