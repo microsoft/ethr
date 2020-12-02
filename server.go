@@ -123,8 +123,8 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 		safeDeleteTest(test)
 	}()
 
-	// Always increment CPS count and then check if the test is Bandwidth
-	// etc. and handle those cases as well.
+	// Always increment CPS count and then check if the test is Bandwidth etc. and handle
+	// those cases as well.
 	atomic.AddUint64(&test.testResult.cps, 1)
 
 	testID, clientParam, err := handshakeWithClient(test, conn)

@@ -69,6 +69,7 @@ func main() {
 	reverse := flag.Bool("r", false, "")
 	testTypePtr := flag.String("t", "", "")
 	tos := flag.Int("tos", 0, "")
+	title := flag.String("T", "", "")
 	thCount := flag.Int("n", 1, "")
 	wc := flag.Int("w", 1, "")
 	xClientDest := flag.String("x", "", "")
@@ -120,6 +121,9 @@ func main() {
 		}
 		if *wc != 1 {
 			printServerModeArgError("wc")
+		}
+		if *title != "" {
+			printServerModeArgError("T")
 		}
 	} else if *clientDest != "" || *xClientDest != "" {
 		if *clientDest != "" && *xClientDest != "" {
@@ -244,7 +248,7 @@ func main() {
 		validateClientParams(testId, clientParam)
 
 		rServer := destination
-		runClient(testId, clientParam, rServer)
+		runClient(testId, *title, clientParam, rServer)
 	}
 }
 
@@ -421,6 +425,7 @@ func ethrUsage() {
 	printTestType()
 	printToSUsage()
 	printWarmupUsage()
+	printTitleUsage()
 
 	fmt.Println("\nMode: External")
 	fmt.Println("================================================================================")
@@ -436,6 +441,7 @@ func ethrUsage() {
 	printExtTestType()
 	printToSUsage()
 	printWarmupUsage()
+	printTitleUsage()
 }
 
 func printFlagUsage(flag, info string, helptext ...string) {
@@ -574,4 +580,10 @@ func printIPUsage() {
 	printFlagUsage("ip", "<string>", "Bind to specified local IP address for TCP & UDP tests.",
 		"This must be a valid IPv4 or IPv6 address.",
 		"Default: <empty> - Any IP")
+}
+
+func printTitleUsage() {
+	printFlagUsage("T", "<string>",
+		"Use the given title in log files for logging results.",
+		"Default: <empty>")
 }

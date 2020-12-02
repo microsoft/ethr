@@ -69,8 +69,8 @@ func runDurationTimer(d time.Duration, toStop chan int) {
 	}()
 }
 
-func initClient() {
-	initClientUI()
+func initClient(title string) {
+	initClientUI(title)
 }
 
 func handshakeWithServer(test *ethrTest, conn net.Conn) (err error) {
@@ -117,8 +117,8 @@ func getServerIPandPort(server string) (string, string, string, error) {
 	return hostName, hostIP, port, err
 }
 
-func runClient(testID EthrTestID, clientParam EthrClientParam, server string) {
-	initClient()
+func runClient(testID EthrTestID, title string, clientParam EthrClientParam, server string) {
+	initClient(title)
 	hostName, hostIP, port, err := getServerIPandPort(server)
 	if err != nil {
 		return

@@ -141,6 +141,10 @@ func (u *serverTui) fini() {
 	tm.Close()
 }
 
+func (u *serverTui) getTitle() string {
+	return ""
+}
+
 func (u *serverTui) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	logInfo(s)
@@ -298,6 +302,10 @@ func initServerCli() {
 }
 
 func (u *serverCli) fini() {
+}
+
+func (u *serverCli) getTitle() string {
+	return ""
 }
 
 func (u *serverCli) printMsg(format string, a ...interface{}) {

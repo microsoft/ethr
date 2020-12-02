@@ -8,7 +8,9 @@ package main
 import (
 	"bytes"
 	"container/list"
+	"encoding/binary"
 	"encoding/gob"
+	"io"
 	"net"
 	"os"
 	"sync"
@@ -319,14 +321,24 @@ func createAckMsg() (ethrMsg *EthrMsg) {
 func recvSessionMsg(conn net.Conn) (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{}
 	ethrMsg.Type = EthrInv
-	// TODO: Assuming max ethr message size as 4096 sent over gob.
-	msgBytes := make([]byte, 4096)
-	n, err := conn.Read(msgBytes)
+	msgBytes := make([]byte, 4)
+	_, err := io.ReadFull(conn, msgBytes)
 	if err != nil {
 		ui.printDbg("Error receiving message on control channel. Error: %v", err)
 		return
 	}
-	ethrMsg = decodeMsg(msgBytes[:n])
+	msgSize := binary.BigEndian.Uint32(msgBytes[0:])
+	// TODO: Assuming max ethr message size as 16K sent over gob.
+	if msgSize > 16384 {
+		return
+	}
+	msgBytes = make([]byte, msgSize)
+	_, err = io.ReadFull(conn, msgBytes)
+	if err != nil {
+		ui.printDbg("Error receiving message on control channel. Error: %v", err)
+		return
+	}
+	ethrMsg = decodeMsg(msgBytes)
 	return
 }
 
@@ -340,6 +352,13 @@ func sendSessionMsg(conn net.Conn, ethrMsg *EthrMsg) (err error) {
 	if err != nil {
 		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
 		return
+	}
+	msgSize := len(msgBytes)
+	tempBuf := make([]byte, 4)
+	binary.BigEndian.PutUint32(tempBuf[0:], uint32(msgSize))
+	_, err = conn.Write(tempBuf)
+	if err != nil {
+		ui.printDbg("Error sending message on control channel. Message: %v, Error: %v", ethrMsg, err)
 	}
 	_, err = conn.Write(msgBytes)
 	if err != nil {

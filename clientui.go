@@ -12,9 +12,14 @@ import (
 )
 
 type clientUI struct {
+	title string
 }
 
 func (u *clientUI) fini() {
+}
+
+func (u *clientUI) getTitle() string {
+	return u.title
 }
 
 func (u *clientUI) printMsg(format string, a ...interface{}) {
@@ -74,8 +79,8 @@ func (u *clientUI) emitStats(netStats ethrNetStat) {
 func (u *clientUI) printTestResults(s []string) {
 }
 
-func initClientUI() {
-	cli := &clientUI{}
+func initClientUI(title string) {
+	cli := &clientUI{title}
 	ui = cli
 }
 

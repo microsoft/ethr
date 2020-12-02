@@ -211,6 +211,7 @@ func printDivider2() {
 
 type ethrUI interface {
 	fini()
+	getTitle() string
 	printMsg(format string, a ...interface{})
 	printErr(format string, a ...interface{})
 	printDbg(format string, a ...interface{})
