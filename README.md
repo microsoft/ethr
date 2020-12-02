@@ -271,6 +271,9 @@ In this mode, Ethr client can only talk to an Ethr server.
 	-w <number>
 		Use specified number of iterations for warmup.
 		Default: 1
+	-T <string>
+		Use the given title in log files for logging results.
+		Default: <empty>		
 ```
 ### External Mode Parameters
 ```
@@ -317,6 +320,9 @@ few types of measurements, such as Ping, Connections/s and TraceRoute.
 	-w <number>
 		Use specified number of iterations for warmup.
 		Default: 1
+	-T <string>
+		Use the given title in log files for logging results.
+		Default: <empty>		
 ```
 
 # Status
