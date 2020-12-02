@@ -24,12 +24,14 @@ const (
 
 type logMessage struct {
 	Time    string
+	Title   string
 	Type    string
 	Message string
 }
 
 type logLatencyData struct {
 	Time       string
+	Title      string
 	Type       string
 	RemoteAddr string
 	Protocol   string
@@ -46,6 +48,7 @@ type logLatencyData struct {
 
 type logTestResults struct {
 	Time                 string
+	Title                string
 	Type                 string
 	RemoteAddr           string
 	Protocol             string
@@ -89,6 +92,7 @@ func logMsg(prefix, msg string) {
 	if loggingActive {
 		logData := logMessage{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = prefix
 		logData.Message = msg
 		logJSON, _ := json.Marshal(logData)
@@ -112,6 +116,7 @@ func logResults(s []string) {
 	if loggingActive {
 		logData := logTestResults{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = "TestResult"
 		logData.RemoteAddr = s[0]
 		logData.Protocol = s[1]
@@ -128,6 +133,7 @@ func logLatency(remoteIP, proto string, avg, min, p50, p90, p95, p99, p999, p999
 	if loggingActive {
 		logData := logLatencyData{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = "LatencyResult"
 		logData.RemoteAddr = remoteIP
 		logData.Protocol = proto
