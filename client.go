@@ -263,7 +263,10 @@ func runTCPBandwidthTestHandler(test *ethrTest, conn net.Conn, wg *sync.WaitGrou
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	start, waitTime, sendRate := beginThrottle()
+	bufferLen := len(buff)
+	totalBytesToSend := test.clientParam.BwRate
+	sentBytes := uint64(0)
+	start, waitTime, bytesToSend := beginThrottle(totalBytesToSend, bufferLen)
 ExitForLoop:
 	for {
 		select {
@@ -273,19 +276,19 @@ ExitForLoop:
 			n := 0
 			var err error = nil
 			if test.clientParam.Reverse {
-				n, err = io.ReadFull(conn, buff)
+				n, err = conn.Read(buff)
 			} else {
-				n, err = conn.Write(buff)
+				n, err = conn.Write(buff[:bytesToSend])
 			}
-			if err != nil || n < int(size) {
+			if err != nil {
 				ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 				break ExitForLoop
 			}
-			atomic.AddUint64(&ec.bw, uint64(size))
-			atomic.AddUint64(&test.testResult.bw, uint64(size))
-			sendRate += uint64(size)
-			if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
-				start, waitTime, sendRate = enforceThrottle(start, waitTime)
+			atomic.AddUint64(&ec.bw, uint64(n))
+			atomic.AddUint64(&test.testResult.bw, uint64(n))
+			if !test.clientParam.Reverse {
+				sentBytes += uint64(n)
+				start, waitTime, sentBytes, bytesToSend = enforceThrottle(start, waitTime, totalBytesToSend, sentBytes, bufferLen)
 			}
 		}
 	}
@@ -968,20 +971,22 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 			lserver, lport, _ := net.SplitHostPort(conn.LocalAddr().String())
 			ui.printMsg("[%3d] local %s port %s connected to %s port %s",
 				ec.fd, lserver, lport, rserver, rport)
-			blen := len(buff)
-			start, waitTime, sendRate := beginThrottle()
+			bufferLen := len(buff)
+			totalBytesToSend := test.clientParam.BwRate
+			sentBytes := uint64(0)
+			start, waitTime, bytesToSend := beginThrottle(totalBytesToSend, bufferLen)
 		ExitForLoop:
 			for {
 				select {
 				case <-test.done:
 					break ExitForLoop
 				default:
-					n, err := conn.Write(buff)
+					n, err := conn.Write(buff[:bytesToSend])
 					if err != nil {
 						ui.printDbg("%v", err)
 						continue
 					}
-					if n < blen {
+					if n < bytesToSend {
 						ui.printDbg("Partial write: %d", n)
 						continue
 					}
@@ -989,9 +994,9 @@ func runUDPBandwidthAndPpsTest(test *ethrTest) {
 					atomic.AddUint64(&ec.pps, 1)
 					atomic.AddUint64(&test.testResult.bw, uint64(n))
 					atomic.AddUint64(&test.testResult.pps, 1)
-					sendRate += uint64(size)
-					if test.clientParam.BwRate > 0 && !test.clientParam.Reverse && sendRate >= test.clientParam.BwRate {
-						start, waitTime, sendRate = enforceThrottle(start, waitTime)
+					if !test.clientParam.Reverse {
+						sentBytes += uint64(n)
+						start, waitTime, sentBytes, bytesToSend = enforceThrottle(start, waitTime, totalBytesToSend, sentBytes, bufferLen)
 					}
 				}
 			}
