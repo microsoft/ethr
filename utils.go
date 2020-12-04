@@ -397,6 +397,13 @@ func ethrDialEx(p EthrProtocol, dialAddr, localIP string, localPortNum uint16, t
 		if ok {
 			tcpconn.SetLinger(0)
 		}
+		udpconn, ok := conn.(*net.UDPConn)
+		if ok {
+			err = udpconn.SetWriteBuffer(4 * 1024 * 1024)
+			if err != nil {
+				ui.printDbg("Failed to set ReadBuffer on UDP socket: %v", err)
+			}
+		}
 	}
 	return
 }
@@ -434,7 +441,7 @@ func ethrLookupIP(server string) (net.IPAddr, string, error) {
 // 100ms after stats are printed, not perfect but workable.
 func beginThrottle(totalBytesToSend uint64, bufferLen int) (start time.Time, waitTime time.Duration, bytesToSend int) {
 	start = time.Now()
-	waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 50*time.Millisecond))
 	bytesToSend = bufferLen
 	if totalBytesToSend > 0 && totalBytesToSend < uint64(bufferLen) {
 		bytesToSend = int(totalBytesToSend)
@@ -459,9 +466,9 @@ func enforceThrottle(s time.Time, wt time.Duration, totalBytesToSend, oldSentByt
 				time.Sleep(wt - timeTaken)
 			}
 			start = time.Now()
-			waitTime = time.Until(lastStatsTime.Add(time.Second + 100*time.Millisecond))
+			waitTime = time.Until(lastStatsTime.Add(time.Second + 50*time.Millisecond))
 			newSentBytes = 0
-			if totalBytesToSend > 0 && totalBytesToSend < uint64(bufferLen) {
+			if totalBytesToSend < uint64(bufferLen) {
 				bytesToSend = int(totalBytesToSend)
 			}
 		}

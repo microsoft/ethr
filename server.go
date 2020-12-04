@@ -245,7 +245,7 @@ func srvrRunUDPServer() error {
 	}
 	// Set socket buffer to 2MB per CPU so we can queue 2MB per CPU in case Ethr is not
 	// able to keep up temporarily.
-	err = l.SetReadBuffer(runtime.NumCPU() * 2 * 1024 * 1024)
+	err = l.SetReadBuffer(runtime.NumCPU() * 4 * 1024 * 1024)
 	if err != nil {
 		ui.printDbg("Failed to set ReadBuffer on UDP socket: %v", err)
 	}
