@@ -243,7 +243,7 @@ func srvrRunUDPServer() error {
 		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", gEthrPortStr, err)
 		return err
 	}
-	// Set socket buffer to 2MB per CPU so we can queue 2MB per CPU in case Ethr is not
+	// Set socket buffer to 4MB per CPU so we can queue 4MB per CPU in case Ethr is not
 	// able to keep up temporarily.
 	err = l.SetReadBuffer(runtime.NumCPU() * 4 * 1024 * 1024)
 	if err != nil {
@@ -266,7 +266,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 	// address. We could use createOrGetTest but that takes a global lock.
 	tests := make(map[string]*ethrTest)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
-	readBuffer := make([]byte, 1024)
+	readBuffer := make([]byte, 64*1024)
 	n, remoteIP, err := 0, new(net.UDPAddr), error(nil)
 
 	// This function handles UDP tests that came from clients that are no longer
