@@ -149,22 +149,26 @@ func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn n
 	for i := uint32(0); i < size; i++ {
 		buff[i] = byte(i)
 	}
-	start, waitTime, sendRate := beginThrottle()
+	bufferLen := len(buff)
+	totalBytesToSend := test.clientParam.BwRate
+	sentBytes := uint64(0)
+	start, waitTime, bytesToSend := beginThrottle(totalBytesToSend, bufferLen)
 	for {
+		n := 0
 		var err error
 		if clientParam.Reverse {
-			_, err = conn.Write(buff)
+			n, err = conn.Write(buff[:bytesToSend])
 		} else {
-			_, err = io.ReadFull(conn, buff)
+			n, err = conn.Read(buff)
 		}
 		if err != nil {
 			ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 			break
 		}
-		sendRate += uint64(size)
 		atomic.AddUint64(&test.testResult.bw, uint64(size))
-		if clientParam.BwRate > 0 && clientParam.Reverse && sendRate >= clientParam.BwRate {
-			start, waitTime, sendRate = enforceThrottle(start, waitTime)
+		if clientParam.Reverse {
+			sentBytes += uint64(n)
+			start, waitTime, sentBytes, bytesToSend = enforceThrottle(start, waitTime, totalBytesToSend, sentBytes, bufferLen)
 		}
 	}
 }
@@ -239,6 +243,12 @@ func srvrRunUDPServer() error {
 		ui.printDbg("Error listening on %s for UDP pkt/s tests: %v", gEthrPortStr, err)
 		return err
 	}
+	// Set socket buffer to 4MB per CPU so we can queue 4MB per CPU in case Ethr is not
+	// able to keep up temporarily.
+	err = l.SetReadBuffer(runtime.NumCPU() * 4 * 1024 * 1024)
+	if err != nil {
+		ui.printDbg("Failed to set ReadBuffer on UDP socket: %v", err)
+	}
 	//
 	// We use NumCPU here instead of NumThreads passed from client. The
 	// reason is that for UDP, there is no connection, so all packets come
@@ -289,6 +299,7 @@ func srvrRunUDPPacketHandler(conn *net.UDPConn) {
 			ui.printDbg("Error receiving data from UDP for bandwidth test: %v", err)
 			continue
 		}
+		ethrUnused(remoteIP)
 		ethrUnused(n)
 		server, port, _ := net.SplitHostPort(remoteIP.String())
 		test, found := tests[server]
