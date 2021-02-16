@@ -29,8 +29,6 @@ var gAggregateTestResults = make(map[EthrProtocol]*ethrTestResultAggregate)
 func initServerUI(showUI bool) {
 	gAggregateTestResults[TCP] = &ethrTestResultAggregate{}
 	gAggregateTestResults[UDP] = &ethrTestResultAggregate{}
-	gAggregateTestResults[HTTP] = &ethrTestResultAggregate{}
-	gAggregateTestResults[HTTPS] = &ethrTestResultAggregate{}
 	gAggregateTestResults[ICMP] = &ethrTestResultAggregate{}
 	if !showUI || !initServerTui() {
 		initServerCli()
@@ -143,6 +141,10 @@ func (u *serverTui) fini() {
 	tm.Close()
 }
 
+func (u *serverTui) getTitle() string {
+	return ""
+}
+
 func (u *serverTui) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	logInfo(s)
@@ -189,7 +191,7 @@ func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds u
 func (u *serverTui) printTestResults(s []string) {
 	// Log before truncation of remote address.
 	logResults(s)
-	s[0] = truncateString(s[0], 13)
+	s[0] = truncateStringFromStart(s[0], 13)
 	u.results = append(u.results, s)
 }
 
@@ -212,7 +214,7 @@ func (u *serverTui) emitLatencyResults(remote, proto string, avg, min, max, p50,
 func (u *serverTui) paint(seconds uint64) {
 	tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	defer tm.Flush()
-	printCenterText(0, 0, u.w, "Ethr "+gVersion, tm.ColorBlack, tm.ColorWhite)
+	printCenterText(0, 0, u.w, "Ethr (Version: "+gVersion+")", tm.ColorBlack, tm.ColorWhite)
 	printHLineText(u.resX, u.resY-1, u.resW, "Test Results")
 	printHLineText(u.statX, u.statY-1, u.statW, "Statistics")
 	printVLine(u.topVSplitX, u.topVSplitY, u.topVSplitH)
@@ -302,6 +304,10 @@ func initServerCli() {
 func (u *serverCli) fini() {
 }
 
+func (u *serverCli) getTitle() string {
+	return ""
+}
+
 func (u *serverCli) printMsg(format string, a ...interface{}) {
 	s := fmt.Sprintf(format, a...)
 	fmt.Println(s)
@@ -364,12 +370,12 @@ func (u *serverCli) emitStats(netStats ethrNetStat) {
 
 func (u *serverCli) printTestResults(s []string) {
 	logResults(s)
-	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateString(s[0], 13),
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", truncateStringFromStart(s[0], 13),
 		s[1], s[2], s[3], s[4], s[5])
 }
 
 func emitAggregateResults() {
-	var protoList = []EthrProtocol{TCP, UDP, HTTP, HTTPS, ICMP}
+	var protoList = []EthrProtocol{TCP, UDP, ICMP}
 	for _, proto := range protoList {
 		emitAggregate(proto)
 	}
@@ -400,37 +406,44 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
-	test, found := s.tests[EthrTestID{proto, Bandwidth}]
+	test, found := s.tests[EthrTestID{proto, All}]
 	if found && test.isActive {
 		bwTestOn = true
-		bw = atomic.SwapUint64(&test.testResult.data, 0)
+		bw = atomic.SwapUint64(&test.testResult.bw, 0)
 		bw /= seconds
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
+
+		if proto == TCP {
+			cpsTestOn = true
+			cps = atomic.SwapUint64(&test.testResult.cps, 0)
+			cps /= seconds
+			aggTestResult.cps += cps
+			aggTestResult.ccps++
+		}
+
+		if proto == UDP {
+			ppsTestOn = true
+			pps = atomic.SwapUint64(&test.testResult.pps, 0)
+			pps /= seconds
+			aggTestResult.pps += pps
+			aggTestResult.cpps++
+		}
+
+		if proto == TCP {
+			latency = atomic.LoadUint64(&test.testResult.latency)
+			if latency > 0 {
+				latTestOn = true
+			}
+		}
+
+		if test.isDormant && !((bwTestOn && bw != 0) || (cpsTestOn && cps != 0) || (ppsTestOn && pps != 0) || (latTestOn && latency != 0)) {
+			return []string{}
+		}
 	}
-	test, found = s.tests[EthrTestID{proto, Cps}]
-	if found && test.isActive {
-		cpsTestOn = true
-		cps = atomic.SwapUint64(&test.testResult.data, 0)
-		cps /= seconds
-		aggTestResult.cps += cps
-		aggTestResult.ccps++
-	}
-	test, found = s.tests[EthrTestID{proto, Pps}]
-	if found && test.isActive {
-		ppsTestOn = true
-		pps = atomic.SwapUint64(&test.testResult.data, 0)
-		pps /= seconds
-		aggTestResult.pps += pps
-		aggTestResult.cpps++
-	}
-	test, found = s.tests[EthrTestID{proto, Latency}]
-	if found && test.isActive {
-		latTestOn = true
-		latency = atomic.LoadUint64(&test.testResult.data)
-	}
+
 	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
-		var bwStr, cpsStr, ppsStr, latStr string
+		var bwStr, cpsStr, ppsStr, latStr string = "--  ", "--  ", "--  ", "--  "
 		if bwTestOn {
 			bwStr = bytesToRate(bw)
 		}
@@ -443,7 +456,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		if latTestOn {
 			latStr = durationToString(time.Duration(latency))
 		}
-		str := []string{s.remoteAddr, protoToString(proto),
+		str := []string{s.remoteIP, protoToString(proto),
 			bwStr, cpsStr, ppsStr, latStr}
 		return str
 	}

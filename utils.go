@@ -8,7 +8,7 @@ package main
 import (
 	"fmt"
 	"net"
-	"regexp"
+	"os"
 	"strconv"
 	"strings"
 	"syscall"
@@ -17,90 +17,18 @@ import (
 	"unicode/utf8"
 )
 
-//
-// Regular expression to parse input for custom ports.
-//
-var customPortRegex = regexp.MustCompile("(\\w+)=([0-9]+)")
-
-//
-// TODO: Use a better way to define ports. The core logic is:
-// Find a base port, such as 9999, and the Bandwidth is: base - 0,
-// Cps is base - 1, Pps is base - 2 and Latency is base - 3
-//
-const (
-	hostAddr = ""
-)
-
-var ctrlPort string
-var tcpBandwidthPort, tcpCpsPort, tcpPpsPort, tcpLatencyPort string
-var udpBandwidthPort, udpCpsPort, udpPpsPort, udpLatencyPort string
-var httpBandwidthPort, httpCpsPort, httpPpsPort, httpLatencyPort string
-var httpsBandwidthPort, httpsCpsPort, httpsPpsPort, httpsLatencyPort string
-
-var ctrlBasePort = 8888
-var tcpBasePort = 9999
-var udpBasePort = 9999
-var httpBasePort = 9899
-var httpsBasePort = 9799
-
-func generatePortNumbers(customPortString string) {
-	portsStr := strings.ToUpper(customPortString)
-	data := customPortRegex.FindAllStringSubmatch(portsStr, -1)
-	for _, kv := range data {
-		k := kv[1]
-		v := kv[2]
-		p := toInt(v)
-		if p == 0 {
-			continue
-		}
-		switch k {
-		case "TCP":
-			tcpBasePort = p
-		case "UDP":
-			udpBasePort = p
-		case "HTTP":
-			httpBasePort = p
-		case "HTTPS":
-			httpsBasePort = p
-		case "CONTROL":
-			ctrlBasePort = p
-		default:
-			ui.printErr("generatePortNumbers: ignoring unexpected key in custom ports: %s", k)
-		}
-	}
-	ctrlPort = toString(ctrlBasePort)
-	tcpBandwidthPort = toString(tcpBasePort)
-	tcpCpsPort = toString(tcpBasePort - 1)
-	tcpPpsPort = toString(tcpBasePort - 2)
-	tcpLatencyPort = toString(tcpBasePort - 3)
-	udpBandwidthPort = toString(udpBasePort)
-	udpCpsPort = toString(udpBasePort - 1)
-	udpPpsPort = toString(udpBasePort - 2)
-	udpLatencyPort = toString(udpBasePort - 3)
-	httpBandwidthPort = toString(httpBasePort)
-	httpCpsPort = toString(httpBasePort - 1)
-	httpPpsPort = toString(httpBasePort - 2)
-	httpLatencyPort = toString(httpBasePort - 3)
-	httpsBandwidthPort = toString(httpsBasePort)
-	httpsCpsPort = toString(httpsBasePort - 1)
-	httpsPpsPort = toString(httpsBasePort - 2)
-	httpsLatencyPort = toString(httpsBasePort - 3)
-}
+var gLocalIP = ""
+var gEthrPort = uint16(8888)
+var gEthrPortStr = ""
+var gClientPort = uint16(0)
+var gTOS = uint8(0)
+var gTTL = uint8(0)
 
 const (
-	// UNO represents 1 unit.
-	UNO = 1
-
-	// KILO represents k.
+	UNO  = 1
 	KILO = 1000
-
-	// MEGA represents m.
 	MEGA = 1000 * 1000
-
-	// GIGA represents g.
 	GIGA = 1000 * 1000 * 1000
-
-	// TERA represents t.
 	TERA = 1000 * 1000 * 1000 * 1000
 )
 
@@ -190,6 +118,12 @@ func testToString(testType EthrTestType) string {
 		return "Packets/s"
 	case Latency:
 		return "Latency"
+	case Ping:
+		return "Ping"
+	case TraceRoute:
+		return "TraceRoute"
+	case MyTraceRoute:
+		return "MyTraceRoute"
 	default:
 		return "Invalid"
 	}
@@ -230,18 +164,14 @@ func protoToString(proto EthrProtocol) string {
 		return "TCP"
 	case UDP:
 		return "UDP"
-	case HTTP:
-		return "HTTP"
-	case HTTPS:
-		return "HTTPS"
 	case ICMP:
 		return "ICMP"
 	}
 	return ""
 }
 
-func tcp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Tcp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "tcp4"
 	case ethrIPv6:
@@ -250,14 +180,30 @@ func tcp(ipVer ethrIPVer) string {
 	return "tcp"
 }
 
-func udp(ipVer ethrIPVer) string {
-	switch ipVer {
+func Udp() string {
+	switch gIPVersion {
 	case ethrIPv4:
 		return "udp4"
 	case ethrIPv6:
 		return "udp6"
 	}
 	return "udp"
+}
+
+func Icmp() string {
+	switch gIPVersion {
+	case ethrIPv6:
+		return "ip6:ipv6-icmp"
+	default:
+		return "ip4:icmp"
+	}
+}
+
+func IcmpProto() int {
+	if gIPVersion == ethrIPv6 {
+		return ICMPv6
+	}
+	return ICMPv4
 }
 
 func ethrUnused(vals ...interface{}) {
@@ -300,7 +246,7 @@ func toInt(s string) int {
 	return res
 }
 
-func truncateString(str string, num int) string {
+func truncateStringFromStart(str string, num int) string {
 	s := str
 	l := len(str)
 	if l > num {
@@ -308,6 +254,19 @@ func truncateString(str string, num int) string {
 			s = "..." + str[l-num+3:l]
 		} else {
 			s = str[l-num : l]
+		}
+	}
+	return s
+}
+
+func truncateStringFromEnd(str string, num int) string {
+	s := str
+	l := len(str)
+	if l > num {
+		if num > 3 {
+			s = str[0:num] + "..."
+		} else {
+			s = str[0:num]
 		}
 	}
 	return s
@@ -355,4 +314,164 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 	tc.SetKeepAlive(true)
 	tc.SetKeepAlivePeriod(3 * time.Minute)
 	return tc, nil
+}
+
+func SleepUntilNextWholeSecond() {
+	t0 := time.Now()
+	t1 := t0.Add(time.Second)
+	res := t1.Round(time.Second)
+	time.Sleep(time.Until(res))
+}
+
+func ethrSetTTL(fd uintptr, ttl int) {
+	if ttl == 0 {
+		return
+	}
+	if gIPVersion == ethrIPv4 {
+		setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TTL, ttl)
+	} else {
+		setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_UNICAST_HOPS, ttl)
+	}
+}
+
+func ethrSetTOS(fd uintptr, tos int) {
+	if tos == 0 {
+		return
+	}
+	if gIPVersion == ethrIPv4 {
+		setSockOptInt(fd, syscall.IPPROTO_IP, syscall.IP_TOS, tos)
+	} else {
+		SetTClass(fd, tos)
+	}
+}
+
+func ethrDial(p EthrProtocol, dialAddr string) (conn net.Conn, err error) {
+	return ethrDialEx(p, dialAddr, gLocalIP, gClientPort, int(gTTL), int(gTOS))
+}
+
+func ethrDialInc(p EthrProtocol, dialAddr string, inc uint16) (conn net.Conn, err error) {
+	if gClientPort != 0 {
+		return ethrDialEx(p, dialAddr, gLocalIP, gClientPort+inc, int(gTTL), int(gTOS))
+	} else {
+		return ethrDial(p, dialAddr)
+	}
+}
+
+func ethrDialAll(p EthrProtocol, dialAddr string) (conn net.Conn, err error) {
+	return ethrDialEx(p, dialAddr, gLocalIP, 0, int(gTTL), int(gTOS))
+}
+
+func ethrDialEx(p EthrProtocol, dialAddr, localIP string, localPortNum uint16, ttl int, tos int) (conn net.Conn, err error) {
+	localAddr := fmt.Sprintf("%v:%v", localIP, localPortNum)
+	var la net.Addr
+	network := Tcp()
+	if p == TCP {
+		la, err = net.ResolveTCPAddr(network, localAddr)
+	} else if p == UDP {
+		network = Udp()
+		la, err = net.ResolveUDPAddr(network, localAddr)
+	} else {
+		ui.printDbg("Only TCP or UDP are allowed in ethrDial")
+		err = os.ErrInvalid
+		return
+	}
+	if err != nil {
+		ui.printErr("Unable to resolve TCP or UDP address. Error: %v", err)
+		return
+	}
+	dialer := &net.Dialer{
+		Control: func(network, address string, c syscall.RawConn) error {
+			return c.Control(func(fd uintptr) {
+				ethrSetTTL(fd, ttl)
+				ethrSetTOS(fd, tos)
+			})
+		},
+	}
+	dialer.LocalAddr = la
+	dialer.Timeout = time.Second
+	conn, err = dialer.Dial(network, dialAddr)
+	if err != nil {
+		ui.printDbg("ethrTCPDial Error: %v", err)
+	} else {
+		tcpconn, ok := conn.(*net.TCPConn)
+		if ok {
+			tcpconn.SetLinger(0)
+		}
+		udpconn, ok := conn.(*net.UDPConn)
+		if ok {
+			err = udpconn.SetWriteBuffer(4 * 1024 * 1024)
+			if err != nil {
+				ui.printDbg("Failed to set ReadBuffer on UDP socket: %v", err)
+			}
+		}
+	}
+	return
+}
+
+func ethrLookupIP(server string) (net.IPAddr, string, error) {
+	var ipAddr net.IPAddr
+	var ipStr string
+
+	ip := net.ParseIP(server)
+	if ip != nil {
+		ipAddr.IP = ip
+		ipStr = server
+		return ipAddr, ipStr, nil
+	}
+
+	ips, err := net.LookupIP(server)
+	if err != nil {
+		ui.printErr("Failed to lookup IP address for the server: %v. Error: %v", server, err)
+		return ipAddr, ipStr, err
+	}
+	for _, ip := range ips {
+		if gIPVersion == ethrIPAny || (gIPVersion == ethrIPv4 && ip.To4() != nil) || (gIPVersion == ethrIPv6 && ip.To16() != nil) {
+			ipAddr.IP = ip
+			ipStr = ip.String()
+			ui.printDbg("Resolved server: %v to IP address: %v\n", server, ip)
+			return ipAddr, ipStr, nil
+		}
+	}
+	ui.printErr("Unable to resolve the given server: %v to an IP address.", server)
+	return ipAddr, ipStr, os.ErrNotExist
+}
+
+// This is a workaround to ensure we generate traffic at certain rate
+// and stats are printed correctly. We ensure that current interval lasts
+// 100ms after stats are printed, not perfect but workable.
+func beginThrottle(totalBytesToSend uint64, bufferLen int) (start time.Time, waitTime time.Duration, bytesToSend int) {
+	start = time.Now()
+	waitTime = time.Until(lastStatsTime.Add(time.Second + 50*time.Millisecond))
+	bytesToSend = bufferLen
+	if totalBytesToSend > 0 && totalBytesToSend < uint64(bufferLen) {
+		bytesToSend = int(totalBytesToSend)
+	}
+	return
+}
+
+func enforceThrottle(s time.Time, wt time.Duration, totalBytesToSend, oldSentBytes uint64, bufferLen int) (start time.Time, waitTime time.Duration, newSentBytes uint64, bytesToSend int) {
+	start = s
+	waitTime = wt
+	newSentBytes = oldSentBytes
+	bytesToSend = bufferLen
+	if totalBytesToSend > 0 {
+		remainingBytes := totalBytesToSend - oldSentBytes
+		if remainingBytes > 0 {
+			if remainingBytes < uint64(bufferLen) {
+				bytesToSend = int(remainingBytes)
+			}
+		} else {
+			timeTaken := time.Since(s)
+			if timeTaken < wt {
+				time.Sleep(wt - timeTaken)
+			}
+			start = time.Now()
+			waitTime = time.Until(lastStatsTime.Add(time.Second + 50*time.Millisecond))
+			newSentBytes = 0
+			if totalBytesToSend < uint64(bufferLen) {
+				bytesToSend = int(totalBytesToSend)
+			}
+		}
+	}
+	return
 }

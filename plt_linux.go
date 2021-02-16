@@ -13,6 +13,7 @@ import (
 	"os"
 	"strconv"
 	"strings"
+	"syscall"
 
 	tm "github.com/nsf/termbox-go"
 )
@@ -152,3 +153,43 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 	return false
 }
 
+func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
+	err = syscall.SetsockoptInt(int(fd), level, opt, val)
+	if err != nil {
+		ui.printErr("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
+	}
+	return
+}
+
+func IcmpNewConn(address string) (net.PacketConn, error) {
+	dialedConn, err := net.Dial(Icmp(), address)
+	if err != nil {
+		return nil, err
+	}
+	localAddr := dialedConn.LocalAddr()
+	dialedConn.Close()
+	conn, err := net.ListenPacket(Icmp(), localAddr.String())
+	if err != nil {
+		return nil, err
+	}
+	return conn, nil
+}
+
+func VerifyPermissionForTest(testID EthrTestID) {
+	if testID.Protocol == ICMP || (testID.Protocol == TCP &&
+		(testID.Type == TraceRoute || testID.Type == MyTraceRoute)) {
+		if !IsAdmin() {
+			ui.printMsg("Warning: You are not running as administrator. For %s based %s",
+				protoToString(testID.Protocol), testToString(testID.Type))
+			ui.printMsg("test, running as administrator is required.\n")
+		}
+	}
+}
+
+func IsAdmin() bool {
+	return os.Geteuid() == 0
+}
+
+func SetTClass(fd uintptr, tos int) {
+	setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, tos)
+}

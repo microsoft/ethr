@@ -24,12 +24,14 @@ const (
 
 type logMessage struct {
 	Time    string
+	Title   string
 	Type    string
 	Message string
 }
 
 type logLatencyData struct {
 	Time       string
+	Title      string
 	Type       string
 	RemoteAddr string
 	Protocol   string
@@ -46,6 +48,7 @@ type logLatencyData struct {
 
 type logTestResults struct {
 	Time                 string
+	Title                string
 	Type                 string
 	RemoteAddr           string
 	Protocol             string
@@ -64,7 +67,7 @@ func logInit(fileName string) {
 	}
 	logFile, err := os.OpenFile(fileName, os.O_APPEND|os.O_CREATE|os.O_RDWR, 0666)
 	if err != nil {
-		fmt.Printf("Unable to open the log file %s, Error: %v", fileName, err)
+		fmt.Printf("Unable to open the log file %s, Error: %v\n", fileName, err)
 		return
 	}
 	log.SetFlags(0)
@@ -89,6 +92,7 @@ func logMsg(prefix, msg string) {
 	if loggingActive {
 		logData := logMessage{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = prefix
 		logData.Message = msg
 		logJSON, _ := json.Marshal(logData)
@@ -112,6 +116,7 @@ func logResults(s []string) {
 	if loggingActive {
 		logData := logTestResults{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = "TestResult"
 		logData.RemoteAddr = s[0]
 		logData.Protocol = s[1]
@@ -124,12 +129,13 @@ func logResults(s []string) {
 	}
 }
 
-func logLatency(remoteAddr, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
+func logLatency(remoteIP, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
 	if loggingActive {
 		logData := logLatencyData{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
+		logData.Title = ui.getTitle()
 		logData.Type = "LatencyResult"
-		logData.RemoteAddr = remoteAddr
+		logData.RemoteAddr = remoteIP
 		logData.Protocol = proto
 		logData.Avg = durationToString(avg)
 		logData.Min = durationToString(min)
