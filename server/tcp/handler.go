@@ -45,7 +45,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 	//}
 
 	isCPSorPing := true
-	// For CPS and Ping tests, there is no deterministic way to know when the test starts
+	// For ConnectionsPerSecond and Ping tests, there is no deterministic way to know when the test starts
 	// from the client side and when it ends. This defer function ensures that test is not
 	// created/deleted repeatedly by doing a deferred deletion. If another connection
 	// comes with-in 2s, then another reference would be taken on existing test object
@@ -59,9 +59,9 @@ func (h Handler) HandleConn(conn net.Conn) {
 		h.session.SafeDeleteTest(test)
 	}()
 
-	// Always increment CPS count and then check if the test is Bandwidth etc. and handle
+	// Always increment ConnectionsPerSecond count and then check if the test is Bandwidth etc. and handle
 	// those cases as well.
-	atomic.AddUint64(&test.Result.CPS, 1)
+	atomic.AddUint64(&test.Result.ConnectionsPerSecond, 1)
 
 	testID, clientParam, err := h.handshakeWithClient(conn)
 	if err != nil {

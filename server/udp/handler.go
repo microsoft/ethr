@@ -72,7 +72,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 		if test != nil {
 			test.IsDormant = false
 			test.LastAccess = time.Now()
-			atomic.AddUint64(&test.Result.PPS, 1)
+			atomic.AddUint64(&test.Result.PacketsPerSecond, 1)
 			atomic.AddUint64(&test.Result.Bandwidth, uint64(n))
 		}
 		//else {

@@ -25,10 +25,10 @@ type TestID struct {
 }
 
 type TestResult struct {
-	Bandwidth uint64
-	CPS       uint64
-	PPS       uint64
-	Latency   uint64
+	Bandwidth            uint64
+	ConnectionsPerSecond uint64
+	PacketsPerSecond     uint64
+	Latency              uint64
 	// clatency uint64
 }
 
