@@ -1,7 +1,7 @@
 package ethr
 
 type Logger interface {
-	Errorf(...interface{})
-	Infof(...interface{})
-	Debug(...interface{})
+	Error(string, ...interface{})
+	Info(string, ...interface{})
+	Debug(string, ...interface{})
 }

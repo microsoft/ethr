@@ -36,13 +36,13 @@ type osStats struct {
 func getNetDevStats(stats *NetStat) {
 	ifs, err := net.Interfaces()
 	if err != nil {
-		Logger.Errorf("%v", err)
+		Logger.Error("%v", err)
 		return
 	}
 
 	netStatsFile, err := os.Open("/proc/net/dev")
 	if err != nil {
-		Logger.Errorf("%v", err)
+		Logger.Error("%v", err)
 		return
 	}
 	defer netStatsFile.Close()
@@ -157,7 +157,7 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
 	err = syscall.SetsockoptInt(int(fd), level, opt, val)
 	if err != nil {
-		Logger.Errorf("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
+		Logger.Error("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
 	}
 	return
 }
@@ -180,9 +180,9 @@ func VerifyPermissionForTest(testID ethr.TestID) {
 	if testID.Protocol == ethr.ICMP || (testID.Protocol == ethr.TCP &&
 		(testID.Type == ethr.TestTypeTraceRoute || testID.Type == ethr.TestTypeMyTraceRoute)) {
 		if !IsAdmin() {
-			Logger.Infof("Warning: You are not running as administrator. For %s based %s",
+			Logger.Info("Warning: You are not running as administrator. For %s based %s",
 				ethr.ProtocolToString(testID.Protocol), ethr.TestTypeToString(testID.Type))
-			Logger.Infof("test, running as administrator is required.\n")
+			Logger.Info("test, running as administrator is required.\n")
 		}
 	}
 }

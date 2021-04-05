@@ -40,6 +40,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 
 	// Should be handled in UI thread, signal?
 	//if isNew {
+	// TODO handle externally
 	//	ui.emitTestHdr()
 	//}
 
@@ -72,7 +73,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 		if testID.Type == ethr.TestTypeBandwidth {
 			h.TestBandwidth(test, clientParam, conn)
 		} else if testID.Type == ethr.TestTypeLatency {
-			// Should be handled in UI thread, signal?
+			// TODO Should be handled in UI thread, signal?
 			//ui.emitLatencyHdr()
 			h.TestLatency(test, clientParam, conn)
 		}
