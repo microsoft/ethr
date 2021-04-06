@@ -5,10 +5,11 @@ import (
 	"net"
 	"sync/atomic"
 	"weavelab.xyz/ethr/ethr"
+	"weavelab.xyz/ethr/session"
 	"weavelab.xyz/ethr/stats"
 )
 
-func (h Handler) TestBandwidth(test *ethr.Test, clientParam ethr.ClientParams, conn net.Conn) (*ethr.BandwidthResult, error){
+func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) (*session.BandwidthResult, error){
 	size := clientParam.BufferSize
 	buff := make([]byte, size)
 	for i := uint32(0); i < size; i++ {

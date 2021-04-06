@@ -5,10 +5,11 @@ import (
 	"sync/atomic"
 	"time"
 	"weavelab.xyz/ethr/ethr"
+	"weavelab.xyz/ethr/session"
 )
 
 type Handler struct {
-	session ethr.Session
+	session session.Session
 	logger ethr.Logger
 }
 
@@ -17,7 +18,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 	// This local map aids in efficiency to look up a test based on client's IP
 	// address. We could use createOrGetTest but that takes a global lock.
 	// TODO move caching to session
-	tests := make(map[string]*ethr.Test)
+	tests := make(map[string]*session.Test)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
 	readBuffer := make([]byte, 64*1024)
 	n, remoteIP, err := 0, new(net.UDPAddr), error(nil)
@@ -41,7 +42,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 				// has stopped.
 				if time.Since(v.LastAccess) > (2 * time.Second) {
 					h.logger.Debug("Deleting UDP test from server: %v, lastAccess: %v", k, v.LastAccess)
-					h.session.SafeDeleteTest(v)
+					h.session.DeleteTest(v.ID)
 					delete(tests, k)
 				}
 			}
@@ -59,7 +60,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 		server, _, _ := net.SplitHostPort(remoteIP.String())
 		test, found := tests[server]
 		if !found {
-			test, isNew := h.session.CreateOrGetTest(server, ethr.UDP, ethr.TestTypeAll)
+			test, isNew := h.session.CreateOrGetTest(server, ethr.UDP, session.TestTypeAll)
 			if test != nil {
 				tests[server] = test
 			}

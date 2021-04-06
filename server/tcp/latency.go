@@ -8,9 +8,10 @@ import (
 	"sync/atomic"
 	"time"
 	"weavelab.xyz/ethr/ethr"
+	"weavelab.xyz/ethr/session"
 )
 
-func (h Handler) TestLatency(test *ethr.Test, clientParam ethr.ClientParams, conn net.Conn) (*ethr.LatencyResult, error) {
+func (h Handler) TestLatency(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) (*session.LatencyResult, error) {
 	bytes := make([]byte, clientParam.BufferSize)
 	rttCount := clientParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
@@ -52,7 +53,7 @@ func (h Handler) TestLatency(test *ethr.Test, clientParam ethr.ClientParams, con
 			rttCountFixed = 2
 		}
 		atomic.SwapUint64(&test.Result.Latency, uint64(elapsed.Nanoseconds()))
-		return  &ethr.LatencyResult{
+		return  &session.LatencyResult{
 			RemoteIP: test.RemoteIP,
 			Protocol: test.ID.Protocol,
 			Avg:      elapsed,

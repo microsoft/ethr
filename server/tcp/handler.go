@@ -12,7 +12,7 @@ import (
 
 
 type Handler struct {
-	session ethr.Session
+	session session.Session
 	logger ethr.Logger
 }
 
@@ -33,7 +33,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 	//ethrUnused(lserver, lport)
 	h.logger.Debug("New connection from %v, port %v to %v, port %v", server, port, lserver, lport)
 
-	test, _ := h.session.CreateOrGetTest(server, ethr.TCP, ethr.TestTypeAll)
+	test, _ := h.session.CreateOrGetTest(server, ethr.TCP, session.TestTypeAll)
 	if test == nil {
 		return
 	}
@@ -56,7 +56,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 		if isCPSorPing {
 			time.Sleep(2 * time.Second)
 		}
-		h.session.SafeDeleteTest(test)
+		h.session.DeleteTest(test.ID)
 	}()
 
 	// Always increment ConnectionsPerSecond count and then check if the test is Bandwidth etc. and handle
@@ -70,9 +70,9 @@ func (h Handler) HandleConn(conn net.Conn) {
 	}
 	isCPSorPing = false
 	if testID.Protocol == ethr.TCP {
-		if testID.Type == ethr.TestTypeBandwidth {
+		if testID.Type == session.TestTypeBandwidth {
 			h.TestBandwidth(test, clientParam, conn)
-		} else if testID.Type == ethr.TestTypeLatency {
+		} else if testID.Type == session.TestTypeLatency {
 			// TODO Should be handled in UI thread, signal?
 			//ui.emitLatencyHdr()
 			h.TestLatency(test, clientParam, conn)
@@ -80,7 +80,7 @@ func (h Handler) HandleConn(conn net.Conn) {
 	}
 }
 
-func (h Handler) handshakeWithClient(conn net.Conn) (testID ethr.TestID, clientParam ethr.ClientParams, err error) {
+func (h Handler) handshakeWithClient(conn net.Conn) (testID session.TestID, clientParam ethr.ClientParams, err error) {
 	msg := h.session.Receive(conn)
 	if msg.Type != ethr.Syn {
 		h.logger.Debug("Failed to receive SYN message from client.")
