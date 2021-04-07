@@ -5,6 +5,7 @@ import (
 	"net"
 	"syscall"
 	"time"
+
 	"weavelab.xyz/ethr/ethr"
 )
 
@@ -13,48 +14,46 @@ type TestType uint32
 const (
 	TestTypeAll TestType = iota
 	TestTypeBandwidth
-	TestTypeCps
-	TestTypePps
+	TestTypeConnectionsPerSecond
+	TestTypePacketsPerSecond
 	TestTypeLatency
 	TestTypePing
 	TestTypeTraceRoute
 	TestTypeMyTraceRoute
 )
 
-
 type TestID struct {
 	Protocol ethr.Protocol
 	Type     TestType
 }
 
-type TestResult struct {
-	Bandwidth            uint64
-	ConnectionsPerSecond uint64
-	PacketsPerSecond     uint64
-	Latency              uint64
-	// clatency uint64
-}
-
-type LatencyResult struct {
-	RemoteIP string
-	Protocol ethr.Protocol
-	Avg time.Duration
-	Min time.Duration
-	Max time.Duration
-	P50 time.Duration
-	P90 time.Duration
-	P95 time.Duration
-	P99 time.Duration
-	P999 time.Duration
-	P9999 time.Duration
-}
-
-type BandwidthResult struct {
-
-}
+//type TestResult struct {
+//	Bandwidth            uint64
+//	ConnectionsPerSecond uint64
+//	PacketsPerSecond     uint64
+//	Latency              uint64
+//	// clatency uint64
+//}
+//
+//type LatencyResult struct {
+//	RemoteIP string
+//	Protocol ethr.Protocol
+//	Avg      time.Duration
+//	Min      time.Duration
+//	Max      time.Duration
+//	P50      time.Duration
+//	P90      time.Duration
+//	P95      time.Duration
+//	P99      time.Duration
+//	P999     time.Duration
+//	P9999    time.Duration
+//}
+//
+//type BandwidthResult struct {
+//}
 
 type Test struct {
-	ID      TestID
+	ID          TestID
 	IsActive    bool
 	IsDormant   bool
 	Session     *Session
@@ -64,19 +63,19 @@ type Test struct {
 	DialAddr    string
 	RefCount    int32
 	ClientParam ethr.ClientParams
-	Result  TestResult
-	Done        chan struct{}
-	ConnList    *list.List
-	LastAccess  time.Time
+	//Result      TestResult
+	Done       chan struct{}
+	ConnList   *list.List
+	LastAccess time.Time
 }
 
 func TestTypeToString(tt TestType) string {
 	switch tt {
 	case TestTypeBandwidth:
 		return "Bandwidth"
-	case TestTypeCps:
+	case TestTypeConnectionsPerSecond:
 		return "Connections/s"
-	case TestTypePps:
+	case TestTypePacketsPerSecond:
 		return "Packets/s"
 	case TestTypeLatency:
 		return "Latency"
@@ -90,7 +89,6 @@ func TestTypeToString(tt TestType) string {
 		return "Invalid"
 	}
 }
-
 
 //func (t *Test)SafeDelete() bool {
 //	sessionLock.Lock()
@@ -111,7 +109,7 @@ func TestTypeToString(tt TestType) string {
 //	atomic.AddInt32(&t.RefCount, 1)
 //}
 
-func (t *Test) newConn(conn net.Conn) (c *Conn) {
+func (t *Test) NewConn(conn net.Conn) (c *Conn) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
 	c = &Conn{}

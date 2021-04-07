@@ -11,32 +11,18 @@ import (
 	"sync"
 	"sync/atomic"
 	"time"
+
 	"weavelab.xyz/ethr/ethr"
 )
 
-
-func CreateAckMsg () (msg *ethr.Msg){
-	msg = &ethr.Msg{Version: 0, Type: ethr.Ack}
-	msg.Ack = &ethr.MsgAck{}
-	return
-}
-
-func CreateSynMsg(testID TestID, clientParam ethr.ClientParams) (msg *ethr.Msg) {
-	msg = &ethr.Msg{Version: 0, Type: ethr.Syn}
-	msg.Syn = &ethr.MsgSyn{}
-	msg.Syn.TestID = testID
-	msg.Syn.ClientParam = clientParam
-	return
-}
-
 type Conn struct {
-	Bandwidth      uint64
-	PacketsPerSecond     uint64
-	Test    *Test
-	Conn    net.Conn
-	Elem    *list.Element
-	FD      uintptr
-	Retransmits uint64
+	Bandwidth        uint64
+	PacketsPerSecond uint64
+	Test             *Test
+	Conn             net.Conn
+	Elem             *list.Element
+	FD               uintptr
+	Retransmits      uint64
 }
 
 type Session struct {
@@ -90,7 +76,6 @@ func (s Session) DeleteTest(id TestID) {
 	}
 }
 
-
 func (s Session) NewTest(remoteIP string, testID TestID, clientParam ethr.ClientParams) (*Test, error) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
@@ -125,7 +110,6 @@ func (s Session) unsafeNewTest(remoteIP string, testID TestID, clientParam ethr.
 
 	return test, nil
 }
-
 
 func getTestInternal(remoteIP string, proto ethr.Protocol, testType TestType) (test *Test) {
 	test = nil

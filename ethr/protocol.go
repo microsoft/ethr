@@ -13,7 +13,6 @@ const (
 	ICMPv6 = 58 // ICMP for IPv6
 )
 
-
 func ProtocolToString(p Protocol) string {
 	switch p {
 	case TCP:
@@ -26,7 +25,7 @@ func ProtocolToString(p Protocol) string {
 	return ""
 }
 
-func TCPVersion(v IPVersion) string{
+func TCPVersion(v IPVersion) string {
 	if v == IPv4 {
 		return "tcp4"
 	} else if v == IPv6 {
@@ -49,4 +48,11 @@ func UDPVersion(v IPVersion) string {
 		return "udp6"
 	}
 	return "udp"
+}
+
+func ICMPProtocolNumber(v IPVersion) int {
+	if v == IPv6 {
+		return ICMPv6
+	}
+	return ICMPv4
 }

@@ -13,8 +13,6 @@ import (
 	"os"
 	"strconv"
 	"strings"
-	"syscall"
-	"weavelab.xyz/ethr/ethr"
 
 	tm "github.com/nsf/termbox-go"
 )
@@ -152,45 +150,4 @@ func isIfUp(ifName string, ifs []net.Interface) bool {
 		}
 	}
 	return false
-}
-
-func setSockOptInt(fd uintptr, level, opt, val int) (err error) {
-	err = syscall.SetsockoptInt(int(fd), level, opt, val)
-	if err != nil {
-		Logger.Error("Failed to set socket option (%v) to value (%v) during Dial. Error: %s", opt, val, err)
-	}
-	return
-}
-
-func IcmpNewConn(address string) (net.PacketConn, error) {
-	dialedConn, err := net.Dial(ethr.ICMPVersion(ethr.CurrentIPVersion), address)
-	if err != nil {
-		return nil, err
-	}
-	localAddr := dialedConn.LocalAddr()
-	dialedConn.Close()
-	conn, err := net.ListenPacket(ethr.ICMPVersion(ethr.CurrentIPVersion), localAddr.String())
-	if err != nil {
-		return nil, err
-	}
-	return conn, nil
-}
-
-func VerifyPermissionForTest(testID ethr.TestID) {
-	if testID.Protocol == ethr.ICMP || (testID.Protocol == ethr.TCP &&
-		(testID.Type == ethr.TestTypeTraceRoute || testID.Type == ethr.TestTypeMyTraceRoute)) {
-		if !IsAdmin() {
-			Logger.Info("Warning: You are not running as administrator. For %s based %s",
-				ethr.ProtocolToString(testID.Protocol), ethr.TestTypeToString(testID.Type))
-			Logger.Info("test, running as administrator is required.\n")
-		}
-	}
-}
-
-func IsAdmin() bool {
-	return os.Geteuid() == 0
-}
-
-func SetTClass(fd uintptr, tos int) {
-	setSockOptInt(fd, syscall.IPPROTO_IPV6, syscall.IPV6_TCLASS, tos)
 }
