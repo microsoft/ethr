@@ -3,7 +3,11 @@ package tools
 import (
 	"fmt"
 	"net"
+	"os"
 	"time"
+
+	"golang.org/x/net/ipv4"
+	"golang.org/x/net/ipv6"
 
 	"golang.org/x/net/icmp"
 	"weavelab.xyz/ethr/ethr"
@@ -45,6 +49,70 @@ func (t Tools) ReceiveICMPFromPeer(pc net.PacketConn, timeout time.Duration, nee
 
 		return icmpMsg, peer, nil
 	}
+}
+
+func (t Tools) SendICMP(pc net.PacketConn, dest net.Addr, ttl int, timeout time.Duration, msg *icmp.Message) error {
+	//start := time.Now()
+	err := t.SetICMPTTL(pc, ttl)
+	if err != nil {
+		return fmt.Errorf("failed to set icmp ttl: %w", err)
+	}
+	err = t.setICMPToS(pc, 0)
+	if err != nil {
+		return fmt.Errorf("failed to set icmp tos: %w", err)
+	}
+
+	err = pc.SetDeadline(time.Now().Add(timeout))
+	if err != nil {
+		return fmt.Errorf("failed to set deadline: %w", err)
+	}
+
+	//pid := os.Getpid() & 0xffff
+	//pid = 9999 // TODO wtf?
+	//wm := icmp.Message{
+	//	Type: ipv4.ICMPTypeEcho, Code: 0,
+	//	Body: &icmp.Echo{
+	//		ID: pid, Seq: hop<<8 | seq,
+	//		Data: []byte(body),
+	//	},
+	//}
+	//if t.IPVersion == ethr.IPv6 {
+	//	wm.Type = ipv6.ICMPTypeEchoRequest
+	//}
+	wb, err := msg.Marshal(nil)
+	if err != nil {
+		return fmt.Errorf("failed to marshal data: %w", err)
+	}
+	//start = time.Now()
+	if _, err := pc.WriteTo(wb, dest); err != nil {
+		return fmt.Errorf("failed to send ICMP data: %w", err)
+	}
+	return nil
+}
+
+func (t Tools) SetICMPTTL(pc net.PacketConn, ttl int) error {
+	if t.IPVersion == ethr.IPv4 {
+		cIPv4 := ipv4.NewPacketConn(pc)
+		return cIPv4.SetTTL(ttl)
+	} else if t.IPVersion == ethr.IPv6 {
+		cIPv6 := ipv6.NewPacketConn(pc)
+		return cIPv6.SetHopLimit(ttl)
+	}
+	return os.ErrInvalid
+}
+
+func (t Tools) setICMPToS(pc net.PacketConn, tos int) error {
+	if tos == 0 {
+		return nil
+	}
+	if t.IPVersion == ethr.IPv4 {
+		cIPv4 := ipv4.NewPacketConn(pc)
+		return cIPv4.SetTOS(tos)
+	} else if t.IPVersion == ethr.IPv6 {
+		cIPv6 := ipv6.NewPacketConn(pc)
+		return cIPv6.SetTrafficClass(tos)
+	}
+	return os.ErrInvalid
 }
 
 // https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol

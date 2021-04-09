@@ -7,6 +7,7 @@ import (
 	"net"
 	"os"
 	"strconv"
+	"sync"
 	"time"
 
 	"golang.org/x/net/icmp"
@@ -20,7 +21,7 @@ import (
 )
 
 func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int, results chan client.TestResult) {
-	hops, err := c.discoverHops(test, mtrMode, maxHops)
+	hops, err := c.discoverHops(test, maxHops)
 	if err != nil {
 		results <- client.TestResult{
 			Success: false,
@@ -37,9 +38,11 @@ func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 		}
 		return
 	}
+	var wg sync.WaitGroup
 	for i := 0; i < len(hops); i++ {
-		if hops[i].Addr != "" {
-			go c.probeHops(test, gap, i, hops)
+		if hops[i].Addr.String() != "" {
+			wg.Add(1)
+			go c.probeHops(&wg, test, gap, i, hops)
 		}
 	}
 	results <- client.TestResult{
@@ -47,9 +50,11 @@ func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 		Error:   nil,
 		Body:    payloads.TraceRoutePayload{Hops: hops},
 	}
+	wg.Wait()
 }
 
-func (c Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []payloads.HopData) {
+func (c Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.HopData) {
+	defer wg.Done()
 	seq := 0
 	for {
 		select {
@@ -57,7 +62,7 @@ func (c Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []
 			return
 		default:
 			t0 := time.Now()
-			err, _ := c.probeHop(test, hop+1, hops[hop].Addr, &hops[hop])
+			err, _ := c.probeHop(test, hop+1, hops[hop].Addr.String(), &hops[hop])
 			if err == nil {
 			}
 			seq++
@@ -69,13 +74,13 @@ func (c Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []
 	}
 }
 
-func (c Tests) discoverHops(test *session.Test, mtrMode bool, maxHops int) ([]payloads.HopData, error) {
+func (c Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.HopData, error) {
 	hops := make([]payloads.HopData, maxHops)
 	for i := 0; i < maxHops; i++ {
 		var hopData payloads.HopData
 		err, isLast := c.probeHop(test, i+1, "", &hopData)
 		if err == nil {
-			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr)
+			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
 		}
 		//if hopData.Addr != "" {
 		//	if mtrMode {
@@ -118,7 +123,7 @@ func lookupHopName(addr string) (string, string) {
 
 func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.HopData) (error, bool) {
 	isLast := false
-	icmpConn, err := c.NetTools.IcmpNewConn(test.RemoteIP)
+	icmpConn, err := c.NetTools.IcmpNewConn(test.RemoteIP.String())
 	if err != nil {
 		return fmt.Errorf("failed to create ICMP connection: %w", err), isLast
 	}
@@ -132,10 +137,10 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 	binary.BigEndian.PutUint16(b[0:], localPortNum)
 	remotePortNum, err := strconv.ParseUint(test.RemotePort, 10, 16)
 	binary.BigEndian.PutUint16(b[2:], uint16(remotePortNum))
-	peerAddrChan := make(chan string)
+	peerAddrChan := make(chan net.Addr)
 	endTimeChan := make(chan time.Time)
 	go func() {
-		peerAddr := ""
+		var peerAddr net.Addr
 		// TODO have max messages?
 		for {
 			icmpMsg, peer, _ := c.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
@@ -143,7 +148,7 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 				body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 				index := bytes.Index(body, b[:4])
 				if index > 0 {
-					peerAddr = peer.String()
+					peerAddr = peer
 					break
 				}
 			}
@@ -155,7 +160,7 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 
 	startTime := time.Now()
 	var endTime time.Time
-	peerAddr := ""
+	var peerAddr net.Addr
 
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
@@ -168,27 +173,17 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 		_ = conn.Close()
 		endTime = time.Now()
 		isLast = true
-		peerAddr = test.RemoteIP
+		peerAddr = &net.IPAddr{
+			IP:   test.RemoteIP,
+			Zone: "",
+		}
 	}
 
 	elapsed := endTime.Sub(startTime)
-	if peerAddr == "" || (hopIP != "" && peerAddr != hopIP) {
+	if peerAddr.String() == "" || (hopIP != "" && peerAddr.String() != hopIP) {
 		hopData.Lost++
 		return fmt.Errorf("failed to complete connection or receive ICMP TTL Exceeded: %w", os.ErrNotExist), isLast
 	}
-	c.calcHopData(hopData, peerAddr, elapsed)
+	hopData.UpdateStats(peerAddr, elapsed)
 	return nil, isLast
-}
-
-func (c Tests) calcHopData(hopData *payloads.HopData, peerAddr string, elapsed time.Duration) {
-	hopData.Addr = peerAddr
-	hopData.Last = elapsed
-	if hopData.Best > elapsed {
-		hopData.Best = elapsed
-	}
-	if hopData.Worst < elapsed {
-		hopData.Worst = elapsed
-	}
-	hopData.Total += elapsed
-	hopData.Rcvd++
 }
