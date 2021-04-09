@@ -58,7 +58,7 @@ type Test struct {
 	IsDormant   bool
 	Session     *Session
 	RemoteAddr  string
-	RemoteIP    string
+	RemoteIP    net.IP
 	RemotePort  string
 	DialAddr    string
 	RefCount    int32

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"weavelab.xyz/ethr/client/icmp"
+
 	"weavelab.xyz/ethr/client/tcp"
 	"weavelab.xyz/ethr/client/tools"
 	"weavelab.xyz/ethr/ethr"
@@ -16,9 +18,11 @@ import (
 
 //alias to avoid naming collision on 'Tests'
 type TCPTests = tcp.Tests
+type ICMPTests = icmp.Tests
 
 type Client struct {
 	TCPTests
+	ICMPTests
 
 	NetTools *tools.Tools
 
@@ -66,7 +70,8 @@ func (c Client) CreateTest(testID session.TestID) (*session.Test, error) {
 		return nil, fmt.Errorf("failed to create new test: %w", err)
 	}
 	test.RemoteAddr = c.NetTools.RemoteRaw
-	test.RemoteIP = c.NetTools.RemoteIP.String()
+
+	test.RemoteIP = c.NetTools.RemoteIP
 	test.RemotePort = strconv.Itoa(int(c.NetTools.RemotePort))
 	if testID.Protocol == ethr.ICMP {
 		test.DialAddr = c.NetTools.RemoteIP.String()
@@ -91,24 +96,37 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 		case session.TestTypeConnectionsPerSecond:
 			go c.TestConnectionsPerSecond(test, results)
 		case session.TestTypePing:
-			go c.TestPing(test, gap, test.ClientParam.WarmupCount, results)
+			go c.TCPTests.TestPing(test, gap, test.ClientParam.WarmupCount, results)
 		case session.TestTypeTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run traceroute: %w", ErrPermission)
 			}
-			go c.TestTraceRoute(test, gap, false, 30, results)
+			go c.TCPTests.TestTraceRoute(test, gap, false, 30, results)
 		case session.TestTypeMyTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run mytraceroute: %w", ErrPermission)
 			}
-			go c.TestTraceRoute(test, gap, true, 30, results)
+			go c.TCPTests.TestTraceRoute(test, gap, true, 30, results)
 		default:
 			return ErrNotImplemented
 		}
 	} else if test.ID.Protocol == ethr.UDP {
 		// Run the thing
 	} else if test.ID.Protocol == ethr.ICMP {
-		// Run the thing
+		if !c.NetTools.IsAdmin() {
+			return fmt.Errorf("must be admin to run icmp tests: %w", ErrPermission)
+		}
+
+		switch test.ID.Type {
+		case session.TestTypePing:
+			go c.ICMPTests.TestPing(test, gap, test.ClientParam.WarmupCount, results)
+		case session.TestTypeTraceRoute:
+			go c.ICMPTests.TestTraceRoute(test, gap, false, 30, results)
+		case session.TestTypeMyTraceRoute:
+			go c.ICMPTests.TestTraceRoute(test, gap, true, 30, results)
+		default:
+			return ErrNotImplemented
+		}
 	} else {
 		return ErrNotImplemented
 	}

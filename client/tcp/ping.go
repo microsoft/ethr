@@ -23,7 +23,7 @@ func (c Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 			for {
 				select {
 				case <-test.Done:
-					result := c.calcLatency(test, int(received), latencyNumbers)
+					result := payloads.NewLatencies(test, int(received), latencyNumbers)
 					results <- client.TestResult{
 						Success: true,
 						Error:   nil,
@@ -52,7 +52,7 @@ func (c Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 					}
 					// TODO add failure case. lost > received? all packets lost?
 					if received >= 1000 {
-						result := c.calcLatency(test, int(received), latencyNumbers)
+						result := payloads.NewLatencies(test, int(received), latencyNumbers)
 						results <- client.TestResult{
 							Success: true,
 							Error:   nil,
