@@ -12,7 +12,7 @@ import (
 	"weavelab.xyz/ethr/session"
 )
 
-func (c Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32, results chan client.TestResult) {
+func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32, results chan client.TestResult) {
 	// TODO: Override NumThreads for now, fix it later to support parallel threads
 	//threads := test.ClientParam.NumThreads
 	threads := uint32(1)
@@ -39,10 +39,10 @@ func (c Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 					t0 := time.Now()
 					if warmupCount > 0 {
 						warmupCount--
-						_, _ = c.DoPing(test, "[warmup]")
+						_, _ = t.DoPing(test, "[warmup]")
 					} else {
 						sent++
-						latency, err := c.DoPing(test, "")
+						latency, err := t.DoPing(test, "")
 						if err == nil {
 							received++
 							latencyNumbers = append(latencyNumbers, latency)
@@ -76,9 +76,9 @@ func (c Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 	}
 }
 
-func (c Tests) DoPing(test *session.Test, prefix string) (time.Duration, error) {
+func (t Tests) DoPing(test *session.Test, prefix string) (time.Duration, error) {
 	t0 := time.Now()
-	conn, err := c.NetTools.Dial(ethr.TCP, test.DialAddr, c.NetTools.LocalIP.String(), c.NetTools.LocalPort, 0, 0) // TODO force client port to 0?
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort, 0, 0) // TODO force client port to 0?
 	if err != nil {
 		return 0, fmt.Errorf("%sconnection to %s timed out: %w", prefix, test.DialAddr, err)
 	}

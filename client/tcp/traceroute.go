@@ -20,8 +20,8 @@ import (
 	"weavelab.xyz/ethr/session"
 )
 
-func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int, results chan client.TestResult) {
-	hops, err := c.discoverHops(test, maxHops)
+func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int, results chan client.TestResult) {
+	hops, err := t.discoverHops(test, maxHops)
 	if err != nil {
 		results <- client.TestResult{
 			Success: false,
@@ -42,7 +42,7 @@ func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	for i := 0; i < len(hops); i++ {
 		if hops[i].Addr.String() != "" {
 			wg.Add(1)
-			go c.probeHops(&wg, test, gap, i, hops)
+			go t.probeHops(&wg, test, gap, i, hops)
 		}
 	}
 	results <- client.TestResult{
@@ -53,7 +53,7 @@ func (c Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	wg.Wait()
 }
 
-func (c Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.HopData) {
+func (t Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.HopData) {
 	defer wg.Done()
 	seq := 0
 	for {
@@ -62,7 +62,7 @@ func (c Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Durati
 			return
 		default:
 			t0 := time.Now()
-			err, _ := c.probeHop(test, hop+1, hops[hop].Addr.String(), &hops[hop])
+			err, _ := t.probeHop(test, hop+1, hops[hop].Addr.String(), &hops[hop])
 			if err == nil {
 			}
 			seq++
@@ -74,22 +74,22 @@ func (c Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Durati
 	}
 }
 
-func (c Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.HopData, error) {
+func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.HopData, error) {
 	hops := make([]payloads.HopData, maxHops)
 	for i := 0; i < maxHops; i++ {
 		var hopData payloads.HopData
-		err, isLast := c.probeHop(test, i+1, "", &hopData)
+		err, isLast := t.probeHop(test, i+1, "", &hopData)
 		if err == nil {
 			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
 		}
 		//if hopData.Addr != "" {
 		//	if mtrMode {
-		//		c.Logger.Info("%2d.|--%s", i+1, hopData.Addr+" ["+hopData.FullName+"]")
+		//		t.Logger.Info("%2d.|--%s", i+1, hopData.Addr+" ["+hopData.FullName+"]")
 		//	} else {
-		//		c.Logger.Info("%2d.|--%-70s %s", i+1, hopData.Addr+" ["+hopData.FullName+"]", ui.DurationToString(hopData.Last))
+		//		t.Logger.Info("%2d.|--%-70s %s", i+1, hopData.Addr+" ["+hopData.FullName+"]", ui.DurationToString(hopData.Last))
 		//	}
 		//} else {
-		//	c.Logger.Info("%2d.|--%s", i+1, "???")
+		//	t.Logger.Info("%2d.|--%s", i+1, "???")
 		//}
 		hops[i] = hopData
 		if isLast {
@@ -121,16 +121,16 @@ func lookupHopName(addr string) (string, string) {
 	return tname, name
 }
 
-func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.HopData) (error, bool) {
+func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.HopData) (error, bool) {
 	isLast := false
-	icmpConn, err := c.NetTools.IcmpNewConn(test.RemoteIP.String())
+	icmpConn, err := t.NetTools.IcmpNewConn(test.RemoteIP.String())
 	if err != nil {
 		return fmt.Errorf("failed to create ICMP connection: %w", err), isLast
 	}
 	defer icmpConn.Close()
 	localPortNum := uint16(8888)
-	if c.NetTools.LocalPort != 0 {
-		localPortNum = c.NetTools.LocalPort
+	if t.NetTools.LocalPort != 0 {
+		localPortNum = t.NetTools.LocalPort
 	}
 	localPortNum += uint16(hop)
 	b := make([]byte, 4)
@@ -143,7 +143,7 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 		var peerAddr net.Addr
 		// TODO have max messages?
 		for {
-			icmpMsg, peer, _ := c.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
+			icmpMsg, peer, _ := t.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
 			if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
 				body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 				index := bytes.Index(body, b[:4])
@@ -164,7 +164,7 @@ func (c Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
-	conn, err := c.NetTools.Dial(ethr.TCP, test.DialAddr, c.NetTools.LocalIP.String(), localPortNum, hop, 0)
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), localPortNum, hop, 0)
 	hopData.Sent++
 	if err != nil { // majority case
 		endTime = <-endTimeChan

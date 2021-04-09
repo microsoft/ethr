@@ -12,8 +12,8 @@ import (
 	"weavelab.xyz/ethr/session"
 )
 
-func (c Tests) TestLatency(test *session.Test, g time.Duration, results chan client.TestResult) {
-	conn, err := c.NetTools.Dial(ethr.TCP, test.DialAddr, c.NetTools.LocalIP.String(), c.NetTools.LocalPort, 0, 0)
+func (t Tests) TestLatency(test *session.Test, g time.Duration, results chan client.TestResult) {
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort, 0, 0)
 	if err != nil {
 		results <- client.TestResult{
 			Success: false,
@@ -23,7 +23,7 @@ func (c Tests) TestLatency(test *session.Test, g time.Duration, results chan cli
 		return
 	}
 	defer conn.Close()
-	err = c.NetTools.HandshakeWithServer(test, conn)
+	err = t.NetTools.HandshakeWithServer(test, conn)
 	if err != nil {
 		results <- client.TestResult{
 			Success: false,

@@ -7,6 +7,8 @@ import (
 	"strconv"
 	"time"
 
+	"weavelab.xyz/ethr/client/udp"
+
 	"weavelab.xyz/ethr/client/icmp"
 
 	"weavelab.xyz/ethr/client/tcp"
@@ -19,10 +21,12 @@ import (
 //alias to avoid naming collision on 'Tests'
 type TCPTests = tcp.Tests
 type ICMPTests = icmp.Tests
+type UPDTests = udp.Tests
 
 type Client struct {
 	TCPTests
 	ICMPTests
+	UPDTests
 
 	NetTools *tools.Tools
 
@@ -90,7 +94,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 	if test.ID.Protocol == ethr.TCP {
 		switch test.ID.Type {
 		case session.TestTypeBandwidth:
-			go c.TestBandwidth(test, results)
+			go c.TCPTests.TestBandwidth(test, results)
 		case session.TestTypeLatency:
 			go c.TestLatency(test, gap, results)
 		case session.TestTypeConnectionsPerSecond:
@@ -111,7 +115,14 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 			return ErrNotImplemented
 		}
 	} else if test.ID.Protocol == ethr.UDP {
-		// Run the thing
+		switch test.ID.Type {
+		case session.TestTypePacketsPerSecond:
+			fallthrough
+		case session.TestTypeBandwidth:
+			c.UPDTests.TestBandwidth(test, results)
+		default:
+			return ErrNotImplemented
+		}
 	} else if test.ID.Protocol == ethr.ICMP {
 		if !c.NetTools.IsAdmin() {
 			return fmt.Errorf("must be admin to run icmp tests: %w", ErrPermission)
@@ -138,6 +149,8 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 		stats.StopTimer()
 		close(test.Done)
 
+		test.IsActive = false
+
 		if test.ID.Type == session.TestTypePing {
 			time.Sleep(2 * time.Second)
 		}
@@ -146,6 +159,8 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 	case <-ctx.Done():
 		stats.StopTimer()
 		close(test.Done)
+
+		test.IsActive = false
 
 		if test.ID.Type == session.TestTypePing {
 			time.Sleep(2 * time.Second)

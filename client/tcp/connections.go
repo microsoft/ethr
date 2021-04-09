@@ -10,7 +10,7 @@ import (
 	"weavelab.xyz/ethr/session"
 )
 
-func (c Tests) TestConnectionsPerSecond(test *session.Test, results chan client.TestResult) {
+func (t Tests) TestConnectionsPerSecond(test *session.Test, results chan client.TestResult) {
 	totalConnections := payloads.ConnectionsPerSecondPayload{}
 	for th := uint32(0); th < test.ClientParam.NumThreads; th++ {
 		go func(th uint32) {
@@ -24,9 +24,9 @@ func (c Tests) TestConnectionsPerSecond(test *session.Test, results chan client.
 					}
 					return
 				default:
-					conn, err := c.NetTools.Dial(ethr.TCP, test.DialAddr, c.NetTools.LocalIP.String(), c.NetTools.LocalPort, 0, 0) // TODO need to force local port to 0?
+					conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort, 0, 0) // TODO need to force local port to 0?
 					if err != nil {
-						//c.Logger.Debug("unable to dial TCP connection to %s: %w", test.DialAddr, err)
+						//t.Logger.Debug("unable to dial TCP connection to %s: %w", test.DialAddr, err)
 						continue
 					}
 					atomic.AddUint64(&totalConnections.Connections, 1)
