@@ -7,12 +7,10 @@ import (
 	"strconv"
 	"time"
 
-	"weavelab.xyz/ethr/client/udp"
-
 	"weavelab.xyz/ethr/client/icmp"
-
 	"weavelab.xyz/ethr/client/tcp"
 	"weavelab.xyz/ethr/client/tools"
+	"weavelab.xyz/ethr/client/udp"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 	"weavelab.xyz/ethr/stats"
