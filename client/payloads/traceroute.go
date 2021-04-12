@@ -6,10 +6,10 @@ import (
 )
 
 type TraceRoutePayload struct {
-	Hops []HopData
+	Hops []NetworkHop
 }
 
-type HopData struct {
+type NetworkHop struct {
 	Addr     net.Addr
 	Sent     uint32
 	Rcvd     uint32
@@ -17,20 +17,23 @@ type HopData struct {
 	Last     time.Duration
 	Best     time.Duration
 	Worst    time.Duration
+	Average  time.Duration
 	Total    time.Duration
 	Name     string
 	FullName string
 }
 
-func (h *HopData) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {
+func (h *NetworkHop) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {
 	h.Addr = peerAddr
+	h.Rcvd++
+
 	h.Last = elapsed
+	h.Total += elapsed
 	if h.Best > elapsed {
 		h.Best = elapsed
 	}
 	if h.Worst < elapsed {
 		h.Worst = elapsed
 	}
-	h.Total += elapsed
-	h.Rcvd++
+	h.Average = time.Duration(h.Total.Nanoseconds() / int64(h.Rcvd))
 }

@@ -65,7 +65,7 @@ type Test struct {
 	ClientParam ethr.ClientParams
 	//Result      TestResult
 	Done       chan struct{}
-	ConnList   *list.List
+	ConnList   *list.List // TODO just use a slice
 	LastAccess time.Time
 }
 
@@ -155,7 +155,7 @@ func (t *Test) delConn(conn net.Conn) {
 	}
 }
 
-func (t *Test) connListDo(f func(*Conn)) {
+func (t *Test) ConnListDo(f func(*Conn)) {
 	sessionLock.RLock()
 	defer sessionLock.RUnlock()
 	for e := t.ConnList.Front(); e != nil; e = e.Next() {

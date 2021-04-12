@@ -59,10 +59,10 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 
 }
 
-func (t Tests) discoverHops(dstIPAddr net.IPAddr, maxHops int) ([]payloads.HopData, error) {
-	hops := make([]payloads.HopData, maxHops)
+func (t Tests) discoverHops(dstIPAddr net.IPAddr, maxHops int) ([]payloads.NetworkHop, error) {
+	hops := make([]payloads.NetworkHop, maxHops)
 	for i := 0; i < maxHops; i++ {
-		var hopData payloads.HopData
+		var hopData payloads.NetworkHop
 		_, peer, err := t.icmpPing(&dstIPAddr, time.Second, i, 1)
 		if err != nil && !errors.Is(err, ErrTTLExceeded) {
 			hopData.Lost++
@@ -103,7 +103,7 @@ func lookupHopName(addr string) (string, string) {
 	return tname, name
 }
 
-func (t Tests) probeHop(wg *sync.WaitGroup, done chan struct{}, gap time.Duration, hopData *payloads.HopData, ttl int) {
+func (t Tests) probeHop(wg *sync.WaitGroup, done chan struct{}, gap time.Duration, hopData *payloads.NetworkHop, ttl int) {
 	defer wg.Done()
 	seq := 0
 	for {

@@ -53,7 +53,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	wg.Wait()
 }
 
-func (t Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.HopData) {
+func (t Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.NetworkHop) {
 	defer wg.Done()
 	seq := 0
 	for {
@@ -74,10 +74,10 @@ func (t Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Durati
 	}
 }
 
-func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.HopData, error) {
-	hops := make([]payloads.HopData, maxHops)
+func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.NetworkHop, error) {
+	hops := make([]payloads.NetworkHop, maxHops)
 	for i := 0; i < maxHops; i++ {
-		var hopData payloads.HopData
+		var hopData payloads.NetworkHop
 		err, isLast := t.probeHop(test, i+1, "", &hopData)
 		if err == nil {
 			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
@@ -121,7 +121,7 @@ func lookupHopName(addr string) (string, string) {
 	return tname, name
 }
 
-func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.HopData) (error, bool) {
+func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.NetworkHop) (error, bool) {
 	isLast := false
 	icmpConn, err := t.NetTools.IcmpNewConn(test.RemoteIP.String())
 	if err != nil {
