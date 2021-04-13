@@ -5,14 +5,13 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 	"weavelab.xyz/ethr/stats"
 )
 
-func (t Tests) TestBandwidth(test *session.Test, results chan client.TestResult) {
+func (t Tests) TestBandwidth(test *session.Test) {
 	var wg sync.WaitGroup
 	bandwidthResults := payloads.BandwidthPayload{
 		TotalBandwidth:       0,
@@ -31,7 +30,7 @@ func (t Tests) TestBandwidth(test *session.Test, results chan client.TestResult)
 	}
 
 	// TODO figure out failure conditions
-	results <- client.TestResult{
+	test.Results <- session.TestResult{
 		Success: true,
 		Error:   nil,
 		Body:    &bandwidthResults,

@@ -3,28 +3,32 @@ package tcp
 import (
 	"fmt"
 	"net"
+	"sync"
 	"time"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/client/payloads"
 
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 )
 
-func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32, results chan client.TestResult) {
+func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
 	// TODO: Override NumThreads for now, fix it later to support parallel threads
 	//threads := test.ClientParam.NumThreads
+	// TODO emit raw stats (e.g. sent/lost/received/lat per ping) and aggregate and emit results in a new go routine
+	var wg sync.WaitGroup
 	threads := uint32(1)
 	for th := uint32(0); th < threads; th++ {
+		wg.Add(1)
 		go func() {
+			defer wg.Done()
 			var sent, received, lost uint32
 			latencyNumbers := make([]time.Duration, 0)
 			for {
 				select {
 				case <-test.Done:
 					result := payloads.NewLatencies(test, int(received), latencyNumbers)
-					results <- client.TestResult{
+					test.Results <- session.TestResult{
 						Success: true,
 						Error:   nil,
 						Body: payloads.PingPayload{
@@ -53,7 +57,7 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 					// TODO add failure case. lost > received? all packets lost?
 					if received >= 1000 {
 						result := payloads.NewLatencies(test, int(received), latencyNumbers)
-						results <- client.TestResult{
+						test.Results <- session.TestResult{
 							Success: true,
 							Error:   nil,
 							Body: payloads.PingPayload{
@@ -74,6 +78,7 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32,
 			}
 		}()
 	}
+	wg.Wait()
 }
 
 func (t Tests) DoPing(test *session.Test, prefix string) (time.Duration, error) {

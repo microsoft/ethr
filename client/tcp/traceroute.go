@@ -14,16 +14,15 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 )
 
-func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int, results chan client.TestResult) {
+func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
 	hops, err := t.discoverHops(test, maxHops)
 	if err != nil {
-		results <- client.TestResult{
+		test.Results <- session.TestResult{
 			Success: false,
 			Error:   fmt.Errorf("destination (%s) not responding to TCP connection", test.RemoteIP),
 			Body:    payloads.TraceRoutePayload{Hops: hops},
@@ -31,7 +30,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 		return
 	}
 	if !mtrMode {
-		results <- client.TestResult{
+		test.Results <- session.TestResult{
 			Success: true,
 			Error:   nil,
 			Body:    payloads.TraceRoutePayload{Hops: hops},
@@ -45,7 +44,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 			go t.probeHops(&wg, test, gap, i, hops)
 		}
 	}
-	results <- client.TestResult{
+	test.Results <- session.TestResult{
 		Success: true,
 		Error:   nil,
 		Body:    payloads.TraceRoutePayload{Hops: hops},

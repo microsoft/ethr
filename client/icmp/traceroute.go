@@ -8,15 +8,14 @@ import (
 	"sync"
 	"time"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
 )
 
-func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int, results chan client.TestResult) {
+func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
 	dstIPAddr, _, err := t.NetTools.LookupIP(test.RemoteIP.String())
 	if err != nil {
-		results <- client.TestResult{
+		test.Results <- session.TestResult{
 			Success: false,
 			Error:   err,
 			Body:    nil,
@@ -25,7 +24,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	}
 	hops, err := t.discoverHops(dstIPAddr, maxHops)
 	if err != nil {
-		results <- client.TestResult{
+		test.Results <- session.TestResult{
 			Success: false,
 			Error:   fmt.Errorf("destination is not responding to ICMP echo: %w", err),
 			Body:    nil,
@@ -34,7 +33,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	}
 	if !mtrMode {
 		if !mtrMode {
-			results <- client.TestResult{
+			test.Results <- session.TestResult{
 				Success: true,
 				Error:   nil,
 				Body:    payloads.TraceRoutePayload{Hops: hops},
@@ -50,7 +49,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 			go t.probeHop(&wg, test.Done, gap, &hops[i], i)
 		}
 	}
-	results <- client.TestResult{
+	test.Results <- session.TestResult{
 		Success: true,
 		Error:   nil,
 		Body:    payloads.TraceRoutePayload{Hops: hops},

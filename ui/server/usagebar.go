@@ -14,9 +14,9 @@ func PrintUsageBar(x, y, w int, usage, scale uint64, clr tm.Attribute) {
 		barw = 0
 	}
 	for j := 0; j < w; j++ {
-		tm.SetCell(x+j, y, symbols[symbolBox3], clr, tm.ColorDefault)
+		tm.SetCell(x+j, y, Symbols[SymbolBox3], clr, tm.ColorDefault)
 	}
 	for j := 0; j < barw; j++ {
-		tm.SetCell(x+j, y, symbols[symbolBox3], clr|tm.AttrBold, clr)
+		tm.SetCell(x+j, y, Symbols[SymbolBox3], clr|tm.AttrBold, clr)
 	}
 }

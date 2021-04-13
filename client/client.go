@@ -33,12 +33,6 @@ type Client struct {
 	Session session.Session
 }
 
-type TestResult struct {
-	Success bool
-	Error   error
-	Body    interface{}
-}
-
 func NewClient(isExternal bool, logger ethr.Logger, session session.Session, params ethr.ClientParams, remote string, localPort uint16, localIP net.IP) (*Client, error) {
 	tools, err := tools.NewTools(isExternal, session, remote, localPort, localIP)
 	if err != nil {
@@ -80,35 +74,38 @@ func (c Client) CreateTest(testID session.TestID) (*session.Test, error) {
 	} else {
 		test.DialAddr = fmt.Sprintf("[%s]:%s", c.NetTools.RemoteIP, c.NetTools.RemotePort)
 	}
+
+	//results := make(chan client.TestResult, 100) // Buffer to allow slop with ui processing (minimum 1 so we don't block trying to send an error and bail)
+	test.Results = make(chan session.TestResult, 16) // TODO determine how much buffer is reasonable per test
 	return test, nil
 }
 
-func (c Client) RunTest(ctx context.Context, test *session.Test, results chan TestResult) error {
+func (c Client) RunTest(ctx context.Context, test *session.Test) error {
+	defer close(test.Results)
 	stats.StartTimer()
 	gap := test.ClientParam.Gap
 	test.IsActive = true
 
-	//results := make(chan client.TestResult, 100) // Buffer to allow slop with ui processing (minimum 1 so we don't block trying to send an error and bail)
 	if test.ID.Protocol == ethr.TCP {
 		switch test.ID.Type {
 		case session.TestTypeBandwidth:
-			go c.TCPTests.TestBandwidth(test, results)
+			go c.TCPTests.TestBandwidth(test)
 		case session.TestTypeLatency:
-			go c.TestLatency(test, gap, results)
+			go c.TestLatency(test, gap)
 		case session.TestTypeConnectionsPerSecond:
-			go c.TestConnectionsPerSecond(test, results)
+			go c.TestConnectionsPerSecond(test)
 		case session.TestTypePing:
-			go c.TCPTests.TestPing(test, gap, test.ClientParam.WarmupCount, results)
+			go c.TCPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
 		case session.TestTypeTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run traceroute: %w", ErrPermission)
 			}
-			go c.TCPTests.TestTraceRoute(test, gap, false, 30, results)
+			go c.TCPTests.TestTraceRoute(test, gap, false, 30)
 		case session.TestTypeMyTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run mytraceroute: %w", ErrPermission)
 			}
-			go c.TCPTests.TestTraceRoute(test, gap, true, 30, results)
+			go c.TCPTests.TestTraceRoute(test, gap, true, 30)
 		default:
 			return ErrNotImplemented
 		}
@@ -117,7 +114,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 		case session.TestTypePacketsPerSecond:
 			fallthrough
 		case session.TestTypeBandwidth:
-			c.UPDTests.TestBandwidth(test, results)
+			c.UPDTests.TestBandwidth(test)
 		default:
 			return ErrNotImplemented
 		}
@@ -128,11 +125,11 @@ func (c Client) RunTest(ctx context.Context, test *session.Test, results chan Te
 
 		switch test.ID.Type {
 		case session.TestTypePing:
-			go c.ICMPTests.TestPing(test, gap, test.ClientParam.WarmupCount, results)
+			go c.ICMPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
 		case session.TestTypeTraceRoute:
-			go c.ICMPTests.TestTraceRoute(test, gap, false, 30, results)
+			go c.ICMPTests.TestTraceRoute(test, gap, false, 30)
 		case session.TestTypeMyTraceRoute:
-			go c.ICMPTests.TestTraceRoute(test, gap, true, 30, results)
+			go c.ICMPTests.TestTraceRoute(test, gap, true, 30)
 		default:
 			return ErrNotImplemented
 		}

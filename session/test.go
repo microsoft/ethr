@@ -63,10 +63,17 @@ type Test struct {
 	DialAddr    string
 	RefCount    int32
 	ClientParam ethr.ClientParams
+	Results     chan TestResult
 	//Result      TestResult
 	Done       chan struct{}
 	ConnList   *list.List // TODO just use a slice
 	LastAccess time.Time
+}
+
+type TestResult struct {
+	Success bool
+	Error   error
+	Body    interface{}
 }
 
 func TestTypeToString(tt TestType) string {

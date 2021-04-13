@@ -9,12 +9,11 @@ import (
 
 	"weavelab.xyz/ethr/stats"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 )
 
-func (t Tests) TestBandwidth(test *session.Test, results chan client.TestResult) {
+func (t Tests) TestBandwidth(test *session.Test) {
 	var wg sync.WaitGroup
 	bandwidthResults := payloads.BandwidthPayload{
 		TotalBandwidth:       0,
@@ -36,12 +35,13 @@ func (t Tests) TestBandwidth(test *session.Test, results chan client.TestResult)
 		go t.handleBandwidthConn(test, conn, &wg, th, &bandwidthResults)
 	}
 	// TODO figure out failure conditions
-	results <- client.TestResult{
+	test.Results <- session.TestResult{
 		Success: true,
 		Error:   nil,
 		Body:    &bandwidthResults,
 	}
 	wg.Wait()
+	close(test.Results)
 }
 
 func (t Tests) handleBandwidthConn(test *session.Test, conn net.Conn, wg *sync.WaitGroup, th uint32, result *payloads.BandwidthPayload) {
