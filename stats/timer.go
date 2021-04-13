@@ -3,26 +3,27 @@ package stats
 import (
 	"sort"
 	"time"
+
 	"weavelab.xyz/ethr/ethr"
 )
 
 var Logger ethr.Logger
 
 type NetStat struct {
-	netDevStats []NetDevStat
-	tcpStats    TCPStat
+	Devices []DeviceStats
+	TCP     TCPStat
 }
 
-type NetDevStat struct {
-	interfaceName string
-	rxBytes       uint64
-	txBytes       uint64
-	rxPkts        uint64
-	txPkts        uint64
+type DeviceStats struct {
+	InterfaceName string
+	RXBytes       uint64
+	TXBytes       uint64
+	RXPackets     uint64
+	TXPackets     uint64
 }
 
 type TCPStat struct {
-	segRetrans uint64
+	RetransmittedSegments uint64
 }
 
 func GetNetStats() NetStat {
@@ -34,58 +35,58 @@ func GetNetStats() NetStat {
 			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net device stats")
 		}
 	*/
-	sort.SliceStable(stats.netDevStats, func(i, j int) bool {
-		return stats.netDevStats[i].interfaceName < stats.netDevStats[j].interfaceName
+	sort.SliceStable(stats.Devices, func(i, j int) bool {
+		return stats.Devices[i].InterfaceName < stats.Devices[j].InterfaceName
 	})
 	getTCPStats(stats)
 
 	/*
-		tcpStats, err := osStats.GetTCPStats()
+		TCP, err := osStats.GetTCPStats()
 		if err != nil {
 			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net TCP stats")
 		}
 
-		return stats.EthrNetStats{NetDevStats: devStats, TCPStats: tcpStats}, nil
+		return stats.EthrNetStats{NetDevStats: devStats, TCPStats: TCP}, nil
 	*/
 	return *stats
 }
 
-func DiffNetDevStats(curStats NetDevStat, prevNetStats NetStat, seconds uint64) NetDevStat {
-	for _, prevStats := range prevNetStats.netDevStats {
-		if prevStats.interfaceName != curStats.interfaceName {
+func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, seconds uint64) DeviceStats {
+	for _, prevStats := range prevNetStats.Devices {
+		if prevStats.InterfaceName != curStats.InterfaceName {
 			continue
 		}
 
-		if curStats.rxBytes >= prevStats.rxBytes {
-			curStats.rxBytes -= prevStats.rxBytes
+		if curStats.RXBytes >= prevStats.RXBytes {
+			curStats.RXBytes -= prevStats.RXBytes
 		} else {
-			curStats.rxBytes += (^uint64(0) - prevStats.rxBytes)
+			curStats.RXBytes += (^uint64(0) - prevStats.RXBytes)
 		}
 
-		if curStats.txBytes >= prevStats.txBytes {
-			curStats.txBytes -= prevStats.txBytes
+		if curStats.TXBytes >= prevStats.TXBytes {
+			curStats.TXBytes -= prevStats.TXBytes
 		} else {
-			curStats.txBytes += (^uint64(0) - prevStats.txBytes)
+			curStats.TXBytes += (^uint64(0) - prevStats.TXBytes)
 		}
 
-		if curStats.rxPkts >= prevStats.rxPkts {
-			curStats.rxPkts -= prevStats.rxPkts
+		if curStats.RXPackets >= prevStats.RXPackets {
+			curStats.RXPackets -= prevStats.RXPackets
 		} else {
-			curStats.rxPkts += (^uint64(0) - prevStats.rxPkts)
+			curStats.RXPackets += (^uint64(0) - prevStats.RXPackets)
 		}
 
-		if curStats.txPkts >= prevStats.txPkts {
-			curStats.txPkts -= prevStats.txPkts
+		if curStats.TXPackets >= prevStats.TXPackets {
+			curStats.TXPackets -= prevStats.TXPackets
 		} else {
-			curStats.txPkts += (^uint64(0) - prevStats.txPkts)
+			curStats.TXPackets += (^uint64(0) - prevStats.TXPackets)
 		}
 
 		break
 	}
-	curStats.rxBytes /= seconds
-	curStats.txBytes /= seconds
-	curStats.rxPkts /= seconds
-	curStats.txPkts /= seconds
+	curStats.RXBytes /= seconds
+	curStats.TXBytes /= seconds
+	curStats.RXPackets /= seconds
+	curStats.TXPackets /= seconds
 	return curStats
 }
 
@@ -130,18 +131,24 @@ func StopTimer() {
 	StatsEnabled = false
 }
 
-var lastStatsTime time.Time = time.Now()
+var lastStatsTime = time.Now()
 
 //func timeToNextTick() time.Duration {
 //	nextTick := lastStatsTime.Add(time.Second)
 //	return time.Until(nextTick)
 //}
 
-func Latest() NetStat {
+func LatestStats() NetStat {
 	return latestStats
 }
 
-var latestStats = NetStat{}
+func PreviousStats() NetStat {
+	return historicalStats
+}
+
+var latestStats NetStat
+var historicalStats NetStat
+
 func sampleStats() {
 	d := time.Since(lastStatsTime)
 	lastStatsTime = time.Now()
@@ -149,6 +156,7 @@ func sampleStats() {
 	if seconds < 1 {
 		seconds = 1
 	}
+	historicalStats = latestStats
 	latestStats = GetNetStats()
 	// Handle UI output externally
 	//ui.emitTestResultBegin()

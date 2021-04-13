@@ -34,12 +34,12 @@ func getNetDevStats(stats *NetStat) {
 			continue
 		}
 
-		stats.netDevStats = append(stats.netDevStats, NetDevStat{
-			interfaceName: iface.Name,
-			rxBytes:       ifaceData.Data.Ibytes,
-			rxPkts:        ifaceData.Data.Ipackets,
-			txBytes:       ifaceData.Data.Obytes,
-			txPkts:        ifaceData.Data.Opackets,
+		stats.Devices = append(stats.Devices, DeviceStats{
+			InterfaceName: iface.Name,
+			RXBytes:       ifaceData.Data.Ibytes,
+			RXPackets:     ifaceData.Data.Ipackets,
+			TXBytes:       ifaceData.Data.Obytes,
+			TXPackets:     ifaceData.Data.Opackets,
 		})
 	}
 }
@@ -56,7 +56,7 @@ func getTCPStats(stats *NetStat) {
 
 	// return EthrTCPStat{uint64(data.Sndrexmitpack)}, nil
 	// return the TCP Retransmits
-	stats.tcpStats.segRetrans = uint64(data.Sndrexmitpack)
+	stats.TCP.RetransmittedSegments = uint64(data.Sndrexmitpack)
 	return
 }
 

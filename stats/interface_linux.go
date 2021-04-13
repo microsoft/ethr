@@ -60,8 +60,8 @@ func getNetDevStats(stats *NetStat) {
 			continue
 		}
 		netDevStat := buildNetDevStat(line)
-		if isIfUp(netDevStat.interfaceName, ifs) {
-			stats.netDevStats = append(stats.netDevStats, buildNetDevStat(line))
+		if isIfUp(netDevStat.InterfaceName, ifs) {
+			stats.Devices = append(stats.Devices, buildNetDevStat(line))
 		}
 	}
 }
@@ -90,7 +90,7 @@ func getTCPStats(stats *NetStat) {
 			break
 		}
 		fields := strings.Fields(line)
-		stats.tcpStats.segRetrans = toUInt64(fields[12])
+		stats.TCP.RetransmittedSegments = toUInt64(fields[12])
 	}
 }
 
@@ -101,20 +101,20 @@ func hideCursor() {
 func blockWindowResize() {
 }
 
-func buildNetDevStat(line string) NetDevStat {
+func buildNetDevStat(line string) DeviceStats {
 	fields := strings.Fields(line)
 	if len(fields) < 17 {
-		return NetDevStat{}
+		return DeviceStats{}
 	}
 	interfaceName := strings.TrimSuffix(fields[0], ":")
 	rxInfo := toNetDevInfo(fields[1:9])
 	txInfo := toNetDevInfo(fields[9:17])
-	return NetDevStat{
-		interfaceName: interfaceName,
-		rxBytes:       rxInfo.bytes,
-		txBytes:       txInfo.bytes,
-		rxPkts:        rxInfo.packets,
-		txPkts:        txInfo.packets,
+	return DeviceStats{
+		InterfaceName: interfaceName,
+		RXBytes:       rxInfo.bytes,
+		TXBytes:       txInfo.bytes,
+		RXPackets:     rxInfo.packets,
+		TXPackets:     txInfo.packets,
 	}
 }
 

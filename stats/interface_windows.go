@@ -63,14 +63,14 @@ func getNetDevStats(stats *NetStat) {
 			drop:    uint64(row.OutDiscards),
 			errs:    uint64(row.OutErrors),
 		}
-		netStats := NetDevStat{
-			interfaceName: ifi.Name,
-			rxBytes:       rxInfo.bytes,
-			txBytes:       txInfo.bytes,
-			rxPkts:        rxInfo.packets,
-			txPkts:        txInfo.packets,
+		netStats := DeviceStats{
+			InterfaceName: ifi.Name,
+			RXBytes:       rxInfo.bytes,
+			TXBytes:       txInfo.bytes,
+			RXPackets:     rxInfo.packets,
+			TXPackets:     txInfo.packets,
 		}
-		stats.netDevStats = append(stats.netDevStats, netStats)
+		stats.Devices = append(stats.Devices, netStats)
 	}
 }
 
@@ -106,7 +106,7 @@ func getTCPStats(stats *NetStat) (errcode error) {
 		errcode = syscall.Errno(r0)
 		return
 	}
-	stats.tcpStats.segRetrans = uint64(tcpStats.DwRetransSegs)
+	stats.TCP.RetransmittedSegments = uint64(tcpStats.DwRetransSegs)
 	return
 }
 
