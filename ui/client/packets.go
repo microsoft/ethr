@@ -34,5 +34,5 @@ func (u *UI) printPacketsDivider() {
 }
 
 func (u *UI) printPacketsResult(protocol ethr.Protocol, body payloads.BandwidthPayload, printCount uint64) {
-	fmt.Printf("  %-5s    %03d-%03d sec   %7s   %7s\n", ethr.ProtocolToString(protocol), printCount, printCount+1, ui.BytesToRate(body.TotalBandwidth), ui.PpsToString(body.PacketsPerSecond))
+	fmt.Printf("  %-5s    %03d-%03d sec   %7s   %7s\n", ethr.ProtocolToString(protocol), printCount, printCount+1, ui.BytesToRate(body.TotalBandwidth), ui.PpsToString(body.TotalPacketsPerSecond))
 }

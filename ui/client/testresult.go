@@ -8,7 +8,7 @@ import (
 	"weavelab.xyz/ethr/session"
 )
 
-func (u *UI) PrintTestResults(ctx context.Context, test *session.Test, seconds uint64) {
+func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 	// TODO get rid of printCount nonsense
 	printCount := uint64(0)
 	var latestResult session.TestResult
