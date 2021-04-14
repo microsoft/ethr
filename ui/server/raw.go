@@ -1,16 +1,134 @@
 package server
 
+import (
+	"fmt"
+
+	"weavelab.xyz/ethr/ethr"
+	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
+	"weavelab.xyz/ethr/ui"
+)
+
 type RawUI struct {
+	tcpStats  *AggregateStats
+	udpStats  *AggregateStats
+	icmpStats *AggregateStats
 }
 
-func InitRawUI() (*RawUI, error) {
-	return &RawUI{}, nil
+func InitRawUI(tcp *AggregateStats, udp *AggregateStats, icmp *AggregateStats) (*RawUI, error) {
+	return &RawUI{
+		tcpStats:  tcp,
+		udpStats:  udp,
+		icmpStats: icmp,
+	}, nil
 }
 
 func (u *RawUI) Paint(seconds uint64) {
+	sessions := session.GetSessions()
+	if len(sessions) > 0 {
+		fmt.Println("- - - - - - - - - - - - - - - - - - - - - - - - - - - - - -")
+		u.printTestHeader()
+	} else {
+		return
+	}
+	for _, s := range sessions {
+		tcpResults := u.getTestResults(&s, ethr.TCP, u.tcpStats)
+		u.printTestResults(tcpResults)
 
+		udpResults := u.getTestResults(&s, ethr.UDP, u.udpStats)
+		u.printTestResults(udpResults)
+
+		icmpResults := u.getTestResults(&s, ethr.ICMP, u.icmpStats)
+		u.printTestResults(icmpResults)
+	}
+
+	tcpAgg := u.tcpStats.ToString(ethr.TCP)
+	u.tcpStats.Reset()
+	u.printTestResults(tcpAgg)
+
+	udpAgg := u.udpStats.ToString(ethr.UDP)
+	u.udpStats.Reset()
+	u.printTestResults(udpAgg)
+
+	icmpAgg := u.icmpStats.ToString(ethr.ICMP)
+	u.icmpStats.Reset()
+	u.printTestResults(icmpAgg)
 }
 
-//func (u *RawUI) printTestResults(results []string) {
-//	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", ui.TruncateStringFromStart(results[0], 13), results[1], results[2], results[3], results[4], results[5])
-//}
+func (u *RawUI) printTestHeader() {
+	header := []string{"RemoteAddress", "Proto", "Bits/s", "Conn/s", "Pkt/s", "Latency"}
+	fmt.Println("-----------------------------------------------------------")
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", header[0], header[1], header[2], header[3], header[4], header[5])
+}
+
+func (u *RawUI) printTestResults(results []string) {
+	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", ui.TruncateStringFromStart(results[0], 13), results[1], results[2], results[3], results[4], results[5])
+}
+
+func (t *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *AggregateStats) []string {
+	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
+	var bw, cps, pps uint64
+	var lat payloads.LatencyPayload
+	test, found := s.Tests[session.TestID{Protocol: protocol, Type: session.TestTypeServer}]
+	if found && test.IsActive {
+		result := test.LatestResult()
+		if body, ok := result.Body.(payloads.ServerPayload); ok {
+			bwTestOn = true
+			bw = body.Bandwidth
+			agg.Stats.Bandwidth += body.Bandwidth
+			agg.Counts.Bandwidth++
+
+			if protocol == ethr.TCP {
+				cpsTestOn = true
+				cps = body.ConnectionsPerSecond
+				agg.Stats.ConnectionsPerSecond += body.ConnectionsPerSecond
+				agg.Counts.ConnectionsPerSecond++
+
+				if len(body.Latency.Raw) > 0 {
+					latTestOn = true
+					lat = body.Latency
+
+					// TODO figure out how to log latencies
+				}
+			}
+
+			if protocol == ethr.UDP {
+				ppsTestOn = true
+				pps = body.PacketsPerSecond
+				agg.Stats.PacketsPerSecond += body.PacketsPerSecond
+				agg.Counts.PacketsPerSecond++
+			}
+
+		}
+
+		if test.IsDormant && !bwTestOn && !cpsTestOn && !ppsTestOn && !latTestOn {
+			return []string{}
+		}
+	}
+
+	if bwTestOn || cpsTestOn || ppsTestOn || latTestOn {
+		var bwStr, cpsStr, ppsStr, latStr string = "--  ", "--  ", "--  ", "--  "
+		if bwTestOn {
+			bwStr = ui.BytesToRate(bw)
+		}
+		if cpsTestOn {
+			cpsStr = ui.CpsToString(cps)
+		}
+		if ppsTestOn {
+			ppsStr = ui.PpsToString(pps)
+		}
+		if latTestOn {
+			latStr = ui.DurationToString(lat.Avg)
+		}
+		return []string{
+			ui.TruncateStringFromStart(test.RemoteIP.String(), 13),
+			ethr.ProtocolToString(protocol),
+			bwStr,
+			cpsStr,
+			ppsStr,
+			latStr,
+		}
+	}
+
+	return []string{}
+}

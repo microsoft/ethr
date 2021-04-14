@@ -16,16 +16,15 @@ type StatsGroup struct {
 	PacketsPerSecond     uint64
 }
 
-func (a *AggregateStats) ToString(protocol ethr.Protocol) []string {
-	var str []string
+func (a *AggregateStats) ToString(protocol ethr.Protocol) (out []string) {
 	if a.Counts.Bandwidth > 1 || a.Counts.ConnectionsPerSecond > 1 || a.Counts.PacketsPerSecond > 1 {
-		str = []string{"[SUM]", ethr.ProtocolToString(protocol),
+		out = []string{"[SUM]", ethr.ProtocolToString(protocol),
 			ui.BytesToRate(a.Stats.Bandwidth),
 			ui.CpsToString(a.Stats.ConnectionsPerSecond),
 			ui.PpsToString(a.Stats.PacketsPerSecond),
 			""}
 	}
-	return str
+	return
 }
 
 func (a *AggregateStats) Reset() {

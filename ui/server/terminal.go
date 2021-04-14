@@ -189,15 +189,18 @@ func (t *Tui) Paint(seconds uint64) {
 		t.res.addTblSpr()
 	}
 
-	tcpAgg := t.getAggregate(ethr.TCP, t.tcpStats)
+	tcpAgg := t.tcpStats.ToString(ethr.TCP)
+	t.tcpStats.Reset()
 	t.res.addTblRow(tcpAgg)
 	t.res.addTblSpr()
 
-	udpAgg := t.getAggregate(ethr.UDP, t.udpStats)
+	udpAgg := t.udpStats.ToString(ethr.UDP)
+	t.udpStats.Reset()
 	t.res.addTblRow(udpAgg)
 	t.res.addTblSpr()
 
-	icmpAgg := t.getAggregate(ethr.ICMP, t.icmpStats)
+	icmpAgg := t.icmpStats.ToString(ethr.ICMP)
+	t.icmpStats.Reset()
 	t.res.addTblRow(icmpAgg)
 	t.res.addTblSpr()
 
@@ -238,18 +241,6 @@ func (t *Tui) Paint(seconds uint64) {
 		fmt.Sprintf("Tcp Retrans: %s",
 			ui.NumberToUnit((currentStats.TCP.RetransmittedSegments-previousStats.TCP.RetransmittedSegments)/seconds)),
 		tm.ColorDefault, tm.ColorDefault)
-}
-
-func (t *Tui) getAggregate(protocol ethr.Protocol, agg *AggregateStats) (out []string) {
-	if agg.Counts.Bandwidth > 0 || agg.Counts.PacketsPerSecond > 0 || agg.Counts.ConnectionsPerSecond > 0 {
-		out = []string{"[SUM]", ethr.ProtocolToString(protocol),
-			ui.BytesToRate(agg.Stats.Bandwidth),
-			ui.CpsToString(agg.Stats.ConnectionsPerSecond),
-			ui.PpsToString(agg.Stats.PacketsPerSecond),
-			""}
-	}
-	agg.Reset()
-	return
 }
 
 func (t *Tui) getTestResults(s *session.Session, protocol ethr.Protocol, agg *AggregateStats) []string {
