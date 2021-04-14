@@ -3,30 +3,30 @@ package ui
 import "github.com/mattn/go-runewidth"
 
 const (
-	symbolLeftTop = iota
-	symbolHorizontal
-	symbolRightTop
-	symbolVertical
-	symbolLeftBottom
-	symbolRightBottom
-	symbolMiddleBottom
-	symbolMiddleTop
-	symbolMiddleLeft
-	symbolMiddleRight
-	symbolMiddleMiddle
-	symbolSpace
-	symbolBox1
-	symbolBox2
-	symbolBox3
-	symbolBox4
-	symbolUpArrow
-	symbolDownArrow
+	SymbolLeftTop = iota
+	SymbolHorizontal
+	SymbolRightTop
+	SymbolVertical
+	SymbolLeftBottom
+	SymbolRightBottom
+	SymbolMiddleBottom
+	SymbolMiddleTop
+	SymbolMiddleLeft
+	SymbolMiddleRight
+	SymbolMiddleMiddle
+	SymbolSpace
+	SymbolBox1
+	SymbolBox2
+	SymbolBox3
+	SymbolBox4
+	SymbolUpArrow
+	SymbolDownArrow
 )
 
-var symbols = []rune{'┌', '─', '┐', '│', '└', '┘', '┴', '┬', '├', '┤', '┼', ' ', '░', '▒', '▓', '█', '↑', '↓'}
+var Symbols = []rune{'┌', '─', '┐', '│', '└', '┘', '┴', '┬', '├', '┤', '┼', ' ', '░', '▒', '▓', '█', '↑', '↓'}
 
 func init() {
 	if runewidth.IsEastAsian() {
-		symbols = []rune{'+', '-', '+', '|', '+', '+', '+', '+', '+', '+', '+', ' ', '░', '▒', '▓', '█', '^', 'v'}
+		Symbols = []rune{'+', '-', '+', '|', '+', '+', '+', '+', '+', '+', '+', ' ', '░', '▒', '▓', '█', '^', 'v'}
 	}
 }

@@ -23,6 +23,16 @@ var Logger ethr.Logger
 var sessions = make(map[string]*Session)
 var sessionLock sync.RWMutex
 
+func GetSessions() []Session {
+	out := make([]Session, 0, len(sessions))
+	sessionLock.RLock()
+	defer sessionLock.RUnlock()
+	for _, v := range sessions {
+		out = append(out, *v)
+	}
+	return out
+}
+
 func (s Session) CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType TestType, aggregator ResultAggregator) (*Test, bool) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()

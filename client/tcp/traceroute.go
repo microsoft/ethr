@@ -78,7 +78,8 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 		var hopData payloads.NetworkHop
 		err, isLast := t.probeHop(test, i+1, "", &hopData)
 		if err == nil {
-			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
+			name := lookupHopName(hopData.Addr.String())
+			hopData.Name, hopData.FullName = name, name
 		}
 		hops[i] = hopData
 		if isLast {
@@ -88,26 +89,21 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 	return nil, os.ErrNotExist
 }
 
-func lookupHopName(addr string) (string, string) {
-	name := ""
-	tname := ""
+func lookupHopName(addr string) string {
 	if addr == "" {
-		return tname, name
+		return ""
 	}
 	names, err := net.LookupAddr(addr)
 	if err == nil && len(names) > 0 {
-		name = names[0]
+		name := names[0]
 		sz := len(name)
 
 		if sz > 0 && name[sz-1] == '.' {
 			name = name[:sz-1]
 		}
-		tname = name
-		if len(name) > 16 {
-			tname = name[:16] + "..."
-		}
+		return name
 	}
-	return tname, name
+	return ""
 }
 
 func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.NetworkHop) (error, bool) {

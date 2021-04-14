@@ -1,7 +1,10 @@
-package ui
+package server
 
 import (
 	"fmt"
+
+	"github.com/mattn/go-runewidth"
+	"weavelab.xyz/ethr/ui"
 
 	tm "github.com/nsf/termbox-go"
 )
@@ -53,8 +56,8 @@ func (t *table) drawTblRow(ledge, redge, middle, spr rune, fg, bg tm.Attribute) 
 }
 
 func (t *table) addTblRow(row []string) {
-	t.drawTblRow(symbols[symbolVertical], symbols[symbolVertical], symbols[symbolSpace],
-		symbols[symbolVertical], tm.ColorDefault, tm.ColorDefault)
+	t.drawTblRow(ui.Symbols[ui.SymbolVertical], ui.Symbols[ui.SymbolVertical], ui.Symbols[ui.SymbolSpace],
+		ui.Symbols[ui.SymbolVertical], tm.ColorDefault, tm.ColorDefault)
 	t.cr--
 
 	o := 1
@@ -70,7 +73,7 @@ func (t *table) addTblRow(row []string) {
 		} else {
 			s = fmt.Sprintf("%*s", w, row[i])
 		}
-		printText(t.x+o+alignOffset, t.y+t.cr, w, s, tm.ColorDefault, tm.ColorDefault)
+		t.printText(t.x+o+alignOffset, t.y+t.cr, w, s, tm.ColorDefault, tm.ColorDefault)
 		o += w + 1
 		alignOffset = 0
 	}
@@ -79,16 +82,30 @@ func (t *table) addTblRow(row []string) {
 }
 
 func (t *table) addTblSpr() {
-	t.drawTblRow(symbols[symbolMiddleLeft], symbols[symbolMiddleRight], symbols[symbolHorizontal],
-		symbols[symbolMiddleMiddle], tm.ColorDefault, tm.ColorDefault)
+	t.drawTblRow(ui.Symbols[ui.SymbolMiddleLeft], ui.Symbols[ui.SymbolMiddleRight], ui.Symbols[ui.SymbolHorizontal],
+		ui.Symbols[ui.SymbolMiddleMiddle], tm.ColorDefault, tm.ColorDefault)
 }
 
 func (t *table) addTblHdr() {
-	t.drawTblRow(symbols[symbolLeftTop], symbols[symbolRightTop], symbols[symbolHorizontal],
-		symbols[symbolMiddleTop], tm.ColorDefault, tm.ColorDefault)
+	t.drawTblRow(ui.Symbols[ui.SymbolLeftTop], ui.Symbols[ui.SymbolRightTop], ui.Symbols[ui.SymbolHorizontal],
+		ui.Symbols[ui.SymbolMiddleTop], tm.ColorDefault, tm.ColorDefault)
 }
 
 func (t *table) addTblFtr() {
-	t.drawTblRow(symbols[symbolLeftBottom], symbols[symbolRightBottom], symbols[symbolHorizontal],
-		symbols[symbolMiddleBottom], tm.ColorDefault, tm.ColorDefault)
+	t.drawTblRow(ui.Symbols[ui.SymbolLeftBottom], ui.Symbols[ui.SymbolRightBottom], ui.Symbols[ui.SymbolHorizontal],
+		ui.Symbols[ui.SymbolMiddleBottom], tm.ColorDefault, tm.ColorDefault)
+}
+
+func (t *table) printText(x, y, w int, text string, fg, bg tm.Attribute) {
+	textArr := []rune(text)
+	for i := 0; i < w; i++ {
+		tm.SetCell(x+i, y, ' ', fg, bg)
+	}
+	xoff := 0
+	for i := 0; i < len(textArr); i++ {
+		tm.SetCell(x+i+xoff, y, textArr[i], fg, bg)
+		if runewidth.RuneWidth(textArr[i]) == 2 {
+			xoff++
+		}
+	}
 }

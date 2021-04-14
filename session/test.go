@@ -46,6 +46,7 @@ type Test struct {
 	resultLock          sync.Mutex
 	intermediateResults []TestResult
 	aggregator          ResultAggregator
+	latestResult        TestResult
 }
 
 type TestResult struct {
@@ -80,6 +81,7 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype TestType, rIP net.IP, rPo
 		resultLock:          sync.Mutex{},
 		intermediateResults: make([]TestResult, 0, 100),
 		aggregator:          aggregator,
+		latestResult:        TestResult{},
 	}
 }
 
@@ -102,6 +104,7 @@ func (t *Test) StartPublishing() {
 				}
 				r := t.aggregator(seconds, t.intermediateResults)
 				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+				t.latestResult = r
 				t.resultLock.Unlock()
 
 				t.Results <- r
@@ -112,6 +115,7 @@ func (t *Test) StartPublishing() {
 			// TODO async publishing to avoid potential block? ordering wouldn't be guaranteed
 			for _, r := range t.intermediateResults {
 				t.Results <- r
+				t.latestResult = r
 			}
 			if len(t.intermediateResults) > 0 {
 				// TODO make sure old array is GC'ed
@@ -128,6 +132,12 @@ func (t *Test) AddIntermediateResult(r TestResult) {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()
 	t.intermediateResults = append(t.intermediateResults, r)
+}
+
+func (t *Test) LatestResult() TestResult {
+	t.resultLock.Lock()
+	defer t.resultLock.Unlock()
+	return t.latestResult
 }
 
 func TestTypeToString(tt TestType) string {

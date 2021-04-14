@@ -43,6 +43,19 @@ func DurationToString(d time.Duration) string {
 	return d.String()
 }
 
+func TruncateStringFromStart(str string, num int) string {
+	s := str
+	l := len(str)
+	if l > num {
+		if num > 3 {
+			s = "..." + str[l-num+3:l]
+		} else {
+			s = str[l-num : l]
+		}
+	}
+	return s
+}
+
 func TruncateStringFromEnd(str string, num int) string {
 	s := str
 	l := len(str)
