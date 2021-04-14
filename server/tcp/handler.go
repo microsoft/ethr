@@ -2,47 +2,21 @@ package tcp
 
 import (
 	"net"
-	"os"
-	"sync/atomic"
 	"time"
+
+	"weavelab.xyz/ethr/session/payloads"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 )
 
-
-
 type Handler struct {
 	session session.Session
-	logger ethr.Logger
+	logger  ethr.Logger
 }
 
-func (h Handler) HandleConn(conn net.Conn) {
+func (h Handler) HandleConn(test *session.Test, conn net.Conn) {
 	defer conn.Close()
-
-	server, port, err := net.SplitHostPort(conn.RemoteAddr().String())
-	//ethrUnused(server, port) // Seems like this is pointless
-	if err != nil {
-		h.logger.Debug("RemoteAddr: Split host port failed: %v", err)
-		return
-	}
-	lserver, lport, err := net.SplitHostPort(conn.LocalAddr().String())
-	if err != nil {
-		h.logger.Debug("LocalAddr: Split host port failed: %v", err)
-		return
-	}
-	//ethrUnused(lserver, lport)
-	h.logger.Debug("New connection from %v, port %v to %v, port %v", server, port, lserver, lport)
-
-	test, _ := h.session.CreateOrGetTest(server, ethr.TCP, session.TestTypeAll)
-	if test == nil {
-		return
-	}
-
-	// Should be handled in UI thread, signal?
-	//if isNew {
-	// TODO handle externally
-	//	ui.emitTestHdr()
-	//}
 
 	isCPSorPing := true
 	// For ConnectionsPerSecond and Ping tests, there is no deterministic way to know when the test starts
@@ -54,16 +28,20 @@ func (h Handler) HandleConn(conn net.Conn) {
 	// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
 	defer func() {
 		if isCPSorPing {
-			time.Sleep(2 * time.Second)
+			time.Sleep(2 * time.Second) // must be longer than handshake timeout
 		}
 		h.session.DeleteTest(test.ID)
 	}()
 
 	// Always increment ConnectionsPerSecond count and then check if the test is Bandwidth etc. and handle
 	// those cases as well.
-	atomic.AddUint64(&test.Result.ConnectionsPerSecond, 1)
+	test.AddIntermediateResult(session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body:    payloads.ConnectionsPerSecondPayload{Connections: 1},
+	})
 
-	testID, clientParam, err := h.handshakeWithClient(conn)
+	testID, clientParam, err := h.session.HandshakeWithClient(conn)
 	if err != nil {
 		h.logger.Debug("Failed in handshake with the client. Error: %v", err)
 		return
@@ -71,25 +49,40 @@ func (h Handler) HandleConn(conn net.Conn) {
 	isCPSorPing = false
 	if testID.Protocol == ethr.TCP {
 		if testID.Type == session.TestTypeBandwidth {
-			h.TestBandwidth(test, clientParam, conn)
+			_ = h.TestBandwidth(test, clientParam, conn)
 		} else if testID.Type == session.TestTypeLatency {
-			// TODO Should be handled in UI thread, signal?
-			//ui.emitLatencyHdr()
-			h.TestLatency(test, clientParam, conn)
+			_ = h.TestLatency(test, clientParam, conn)
 		}
 	}
 }
 
-func (h Handler) handshakeWithClient(conn net.Conn) (testID session.TestID, clientParam ethr.ClientParams, err error) {
-	msg := h.session.Receive(conn)
-	if msg.Type != ethr.Syn {
-		h.logger.Debug("Failed to receive SYN message from client.")
-		err = os.ErrInvalid
-		return
+func ServerAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	connections := uint64(0)
+	totalBandwidth := uint64(0)
+	latencies := make([]time.Duration, 0, 100) // TODO figure out reasonable initial capacity to avoid to many resizes
+
+	for _, r := range intermediateResults {
+		// ignore failed results
+
+		switch body := r.Body.(type) {
+		case payloads.BandwidthPayload:
+			totalBandwidth += body.TotalBandwidth
+		case payloads.RawLatencies:
+			latencies = append(latencies, body.Latencies...)
+		case payloads.ConnectionsPerSecondPayload:
+			connections += body.Connections
+		default:
+			// do nothing, drop unknowns
+		}
 	}
-	testID = msg.Syn.TestID
-	clientParam = msg.Syn.ClientParam
-	ack := session.CreateAckMsg()
-	err = h.session.Send(conn, ack)
-	return
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body: payloads.ServerPayload{
+			ConnectionsPerSecond: connections / seconds,
+			Bandwidth:            totalBandwidth / seconds,
+			Latency:              payloads.NewLatencies(len(latencies), latencies),
+		},
+	}
 }

@@ -4,15 +4,15 @@ import (
 	"net"
 	"sync/atomic"
 	"time"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
 )
 
 type Handler struct {
 	session session.Session
-	logger ethr.Logger
+	logger  ethr.Logger
 }
-
 
 func (h Handler) HandleConn(conn *net.UDPConn) {
 	// This local map aids in efficiency to look up a test based on client's IP
@@ -60,7 +60,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 		server, _, _ := net.SplitHostPort(remoteIP.String())
 		test, found := tests[server]
 		if !found {
-			test, isNew := h.session.CreateOrGetTest(server, ethr.UDP, session.TestTypeAll)
+			test, isNew := h.session.CreateOrGetTest(server, ethr.UDP, session.TestTypeServer)
 			if test != nil {
 				tests[server] = test
 			}
@@ -77,7 +77,7 @@ func (h Handler) HandleConn(conn *net.UDPConn) {
 			atomic.AddUint64(&test.Result.Bandwidth, uint64(n))
 		}
 		//else {
-			//h.logger.Debug("Unable to create test for UDP traffic on port %s from %s port %s", gEthrPortStr, server, port)
+		//h.logger.Debug("Unable to create test for UDP traffic on port %s from %s port %s", gEthrPortStr, server, port)
 		//}
 	}
 }

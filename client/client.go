@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"net"
-	"strconv"
 	"time"
 
 	"weavelab.xyz/ethr/client/icmp"
@@ -48,9 +47,9 @@ func NewClient(isExternal bool, logger ethr.Logger, session session.Session, par
 	}, nil
 }
 
-func (c Client) CreateTest(testID session.TestID) (*session.Test, error) {
+func (c Client) CreateTest(protocol ethr.Protocol, tt session.TestType) (*session.Test, error) {
 	if c.NetTools.IsExternal {
-		if testID.Protocol != ethr.ICMP && c.NetTools.RemotePort == 0 {
+		if protocol != ethr.ICMP && c.NetTools.RemotePort == 0 {
 			return nil, fmt.Errorf("in external mode, port cannot be empty for TCP tests")
 		}
 	} else {
@@ -60,24 +59,33 @@ func (c Client) CreateTest(testID session.TestID) (*session.Test, error) {
 		//port = gEthrPortStr // TODO figure out how to make this less confusing. Why allow a port in 'server' just to force it to the global var?
 	}
 
+	var aggregator session.ResultAggregator
+	if protocol == ethr.TCP {
+		switch tt {
+		case session.TestTypeBandwidth:
+			aggregator = tcp.BandwidthAggregator
+		case session.TestTypeConnectionsPerSecond:
+			aggregator = tcp.ConnectionsAggregator
+		case session.TestTypeLatency:
+			aggregator = tcp.LatencyAggregator
+		case session.TestTypePing:
+			aggregator = tcp.PingAggregator
+		default:
+			// no aggregator for traceroute (single result w/ pointer updates for mtr)
+		}
+	} else if protocol == ethr.UDP {
+		if tt == session.TestTypeBandwidth {
+			aggregator = udp.BandwidthAggregator
+		}
+	} else if protocol == ethr.ICMP {
+		if tt == session.TestTypePing {
+			aggregator = icmp.PingAggregator
+		}
+
+	}
+
 	c.Logger.Info("Using destination: %s, ip: %s, port: %s", c.NetTools.RemoteHostname, c.NetTools.RemoteIP, c.NetTools.RemotePort)
-	test, err := c.Session.NewTest(c.NetTools.RemoteIP.String(), testID, c.Params)
-	if err != nil {
-		return nil, fmt.Errorf("failed to create new test: %w", err)
-	}
-	test.RemoteAddr = c.NetTools.RemoteRaw
-
-	test.RemoteIP = c.NetTools.RemoteIP
-	test.RemotePort = strconv.Itoa(int(c.NetTools.RemotePort))
-	if testID.Protocol == ethr.ICMP {
-		test.DialAddr = c.NetTools.RemoteIP.String()
-	} else {
-		test.DialAddr = fmt.Sprintf("[%s]:%s", c.NetTools.RemoteIP, c.NetTools.RemotePort)
-	}
-
-	//results := make(chan client.TestResult, 100) // Buffer to allow slop with ui processing (minimum 1 so we don't block trying to send an error and bail)
-	test.Results = make(chan session.TestResult, 16) // TODO determine how much buffer is reasonable per test
-	return test, nil
+	return c.Session.CreateTest(c.NetTools.RemoteIP, c.NetTools.RemotePort, protocol, tt, c.Params, aggregator)
 }
 
 func (c Client) RunTest(ctx context.Context, test *session.Test) error {

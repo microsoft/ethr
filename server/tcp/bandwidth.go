@@ -3,13 +3,14 @@ package tcp
 import (
 	"fmt"
 	"net"
-	"sync/atomic"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 	"weavelab.xyz/ethr/stats"
 )
 
-func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) (*session.BandwidthResult, error){
+func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) error {
 	size := clientParam.BufferSize
 	buff := make([]byte, size)
 	for i := uint32(0); i < size; i++ {
@@ -28,9 +29,15 @@ func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams
 			n, err = conn.Read(buff)
 		}
 		if err != nil {
-			return nil, fmt.Errorf("error sending/receiving data on a connection for bandwidth test: %w", err)
+			return fmt.Errorf("error sending/receiving data on a connection for bandwidth test: %w", err)
 		}
-		atomic.AddUint64(&test.Result.Bandwidth, uint64(size))
+		test.AddIntermediateResult(session.TestResult{
+			Success: true,
+			Error:   nil,
+			Body: payloads.BandwidthPayload{
+				TotalBandwidth: uint64(size),
+			},
+		})
 		if clientParam.Reverse {
 			sentBytes += uint64(n)
 			start, waitTime, sentBytes, bytesToSend = stats.EnforceThrottle(start, waitTime, totalBytesToSend, sentBytes, bufferLen)

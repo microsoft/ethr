@@ -1,8 +1,10 @@
 package session
 
 import (
-	"container/list"
+	"fmt"
 	"net"
+	"strconv"
+	"sync"
 	"syscall"
 	"time"
 
@@ -12,7 +14,7 @@ import (
 type TestType uint32
 
 const (
-	TestTypeAll TestType = iota
+	TestTypeServer TestType = iota
 	TestTypeBandwidth
 	TestTypeConnectionsPerSecond
 	TestTypePacketsPerSecond
@@ -27,53 +29,105 @@ type TestID struct {
 	Type     TestType
 }
 
-//type TestResult struct {
-//	Bandwidth            uint64
-//	ConnectionsPerSecond uint64
-//	PacketsPerSecond     uint64
-//	Latency              uint64
-//	// clatency uint64
-//}
-//
-//type LatencyResult struct {
-//	RemoteIP string
-//	Protocol ethr.Protocol
-//	Avg      time.Duration
-//	Min      time.Duration
-//	Max      time.Duration
-//	P50      time.Duration
-//	P90      time.Duration
-//	P95      time.Duration
-//	P99      time.Duration
-//	P999     time.Duration
-//	P9999    time.Duration
-//}
-//
-//type BandwidthResult struct {
-//}
-
 type Test struct {
 	ID          TestID
 	IsActive    bool
 	IsDormant   bool
 	Session     *Session
-	RemoteAddr  string
 	RemoteIP    net.IP
-	RemotePort  string
+	RemotePort  uint16
 	DialAddr    string
-	RefCount    int32
 	ClientParam ethr.ClientParams
 	Results     chan TestResult
-	//Result      TestResult
-	Done       chan struct{}
-	ConnList   *list.List // TODO just use a slice
-	LastAccess time.Time
+	Done        chan struct{}
+	ConnList    []*Conn
+	LastAccess  time.Time
+
+	resultLock          sync.Mutex
+	intermediateResults []TestResult
+	aggregator          ResultAggregator
 }
 
 type TestResult struct {
 	Success bool
 	Error   error
 	Body    interface{}
+}
+
+type ResultAggregator func(uint64, []TestResult) TestResult
+
+func NewTest(s *Session, protocol ethr.Protocol, ttype TestType, rIP net.IP, rPort uint16, params ethr.ClientParams, aggregator ResultAggregator) *Test {
+	dialAddr := fmt.Sprintf("[%s]:%s", rIP.String(), strconv.Itoa(int(rPort)))
+	if protocol == ethr.ICMP {
+		dialAddr = rIP.String()
+	}
+	return &Test{
+		Session: s,
+		ID: TestID{
+			Protocol: protocol,
+			Type:     ttype,
+		},
+		RemoteIP:    rIP,
+		RemotePort:  rPort,
+		DialAddr:    dialAddr,
+		ClientParam: params,
+		Done:        make(chan struct{}),
+		Results:     make(chan TestResult, 16), // TODO figure out appropriate buffer size (minimum 1 to avoid blocking an error)
+		ConnList:    make([]*Conn, 0, params.NumThreads),
+		LastAccess:  time.Now(),
+		IsDormant:   true,
+
+		resultLock:          sync.Mutex{},
+		intermediateResults: make([]TestResult, 0, 100),
+		aggregator:          aggregator,
+	}
+}
+
+func (t *Test) StartPublishing() {
+	ticker := time.NewTicker(time.Second) // most metrics are per second
+	for {
+		start := time.Now()
+		if t.aggregator != nil {
+			select {
+			case <-ticker.C:
+				t.resultLock.Lock()
+				if len(t.intermediateResults) == 0 {
+					t.resultLock.Unlock()
+					break
+				}
+
+				seconds := uint64(time.Since(start).Seconds())
+				if seconds < 1 {
+					seconds = 1
+				}
+				r := t.aggregator(seconds, t.intermediateResults)
+				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+				t.resultLock.Unlock()
+
+				t.Results <- r
+
+			}
+		} else {
+			t.resultLock.Lock()
+			// TODO async publishing to avoid potential block? ordering wouldn't be guaranteed
+			for _, r := range t.intermediateResults {
+				t.Results <- r
+			}
+			if len(t.intermediateResults) > 0 {
+				// TODO make sure old array is GC'ed
+				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+			}
+			t.resultLock.Unlock()
+			time.Sleep(100 * time.Millisecond) // TODO how long to wait for?
+		}
+	}
+
+}
+
+func (t *Test) AddIntermediateResult(r TestResult) {
+	t.resultLock.Lock()
+	defer t.resultLock.Unlock()
+	t.intermediateResults = append(t.intermediateResults, r)
 }
 
 func TestTypeToString(tt TestType) string {
@@ -97,34 +151,15 @@ func TestTypeToString(tt TestType) string {
 	}
 }
 
-//func (t *Test)SafeDelete() bool {
-//	sessionLock.Lock()
-//	defer sessionLock.Unlock()
-//	if atomic.AddInt32(&t.RefCount, -1) == 0 {
-//		// TODO fix cleanup
-//		//t.Session.DeleteTest(t)
-//		//deleteTestInternal(t)
-//		return true
-//	}
-//	return false
-//}
-
-//func (t *Test) addRef() {
-//	sessionLock.Lock()
-//	defer sessionLock.Unlock()
-//	// TODO: Since we already take lock, atomic is not needed. Fix this later.
-//	atomic.AddInt32(&t.RefCount, 1)
-//}
-
 func (t *Test) NewConn(conn net.Conn) (c *Conn) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
-	c = &Conn{}
-	c.Test = t
-	c.Conn = conn
-	c.FD = getFd(conn)
-	c.Elem = t.ConnList.PushBack(c)
-	return
+	c = &Conn{
+		Conn: conn,
+		FD:   getFd(conn),
+	}
+	t.ConnList = append(t.ConnList, c)
+	return c
 }
 
 func getFd(conn net.Conn) uintptr {
@@ -145,28 +180,13 @@ func getFd(conn net.Conn) uintptr {
 	default:
 		return 0
 	}
+
+	// The docs say this pointer is not guaranteed to stay valid
+	// https://pkg.go.dev/syscall#RawConn.Control
+	// TODO find a better pattern for persistent access/interaction with fd
 	fn := func(s uintptr) {
 		fd = s
 	}
 	rc.Control(fn)
 	return fd
-}
-
-func (t *Test) delConn(conn net.Conn) {
-	for e := t.ConnList.Front(); e != nil; e = e.Next() {
-		ec := e.Value.(*Conn)
-		if ec.Conn == conn {
-			t.ConnList.Remove(e)
-			break
-		}
-	}
-}
-
-func (t *Test) ConnListDo(f func(*Conn)) {
-	sessionLock.RLock()
-	defer sessionLock.RUnlock()
-	for e := t.ConnList.Front(); e != nil; e = e.Next() {
-		ec := e.Value.(*Conn)
-		f(ec)
-	}
 }

@@ -11,8 +11,8 @@ import (
 	"golang.org/x/net/ipv6"
 	"weavelab.xyz/ethr/ethr"
 
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 )
 
 func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
@@ -26,28 +26,12 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 		return
 	}
 
-	// TODO emit raw stats (e.g. sent/lost/received/lat per ping) and aggregate and emit results in a new go routine
-	// TODO: Override NumThreads for now, fix it later to support parallel threads
-	//threads := test.ClientParam.NumThreads
-	threads := uint32(1)
+	threads := test.ClientParam.NumThreads
 	for th := uint32(0); th < threads; th++ {
 		go func() {
-			var sent, received, lost uint32
-			latencyNumbers := make([]time.Duration, 0)
 			for {
 				select {
 				case <-test.Done:
-					result := payloads.NewLatencies(test, int(received), latencyNumbers)
-					test.Results <- session.TestResult{
-						Success: true,
-						Error:   nil,
-						Body: payloads.PingPayload{
-							Latency:  result,
-							Sent:     sent,
-							Lost:     lost,
-							Received: received,
-						},
-					}
 					return
 				default:
 					t0 := time.Now()
@@ -55,30 +39,15 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 						warmupCount--
 						_, _ = t.DoPing(&addr)
 					} else {
-						sent++
 						latency, err := t.DoPing(&addr)
-						if err == nil {
-							received++
-							latencyNumbers = append(latencyNumbers, latency)
-						} else {
-							lost++
-						}
-					}
-					// TODO add failure case. lost > received? all packets lost?
-					if received >= 1000 {
-						result := payloads.NewLatencies(test, int(received), latencyNumbers)
-						test.Results <- session.TestResult{
-							Success: true,
-							Error:   nil,
-							Body: payloads.PingPayload{
-								Latency:  result,
-								Sent:     sent,
-								Lost:     lost,
-								Received: received,
+						test.AddIntermediateResult(session.TestResult{
+							Success: err == nil,
+							Error:   err,
+							Body: payloads.RawPingPayload{
+								Latency: latency,
+								Lost:    err == nil,
 							},
-						}
-						latencyNumbers = make([]time.Duration, 0)
-						sent, received, lost = 0, 0, 0
+						})
 					}
 					t1 := time.Since(t0)
 					if t1 < g {
@@ -165,5 +134,33 @@ func (t Tests) icmpPing(dest net.Addr, timeout time.Duration, hop int, seq int) 
 
 			return time.Since(start), peer, nil
 		}
+	}
+}
+
+func PingAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	lost := 0
+	received := 0
+	latencies := make([]time.Duration, 0, len(intermediateResults))
+	for _, r := range intermediateResults {
+		// ignore failed results
+		if body, ok := r.Body.(payloads.RawPingPayload); ok && r.Success {
+			latencies = append(latencies, body.Latency)
+			if body.Lost {
+				lost++
+			} else {
+				received++
+			}
+		}
+	}
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body: payloads.PingPayload{
+			Latency:  payloads.NewLatencies(len(latencies), latencies),
+			Sent:     uint32(len(intermediateResults)),
+			Lost:     uint32(lost),
+			Received: uint32(received),
+		},
 	}
 }

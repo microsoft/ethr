@@ -6,7 +6,6 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"strconv"
 	"sync"
 	"time"
 
@@ -14,9 +13,9 @@ import (
 	"golang.org/x/net/ipv4"
 	"golang.org/x/net/ipv6"
 
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 )
 
 func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
@@ -81,15 +80,6 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 		if err == nil {
 			hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
 		}
-		//if hopData.Addr != "" {
-		//	if mtrMode {
-		//		t.Logger.Info("%2d.|--%s", i+1, hopData.Addr+" ["+hopData.FullName+"]")
-		//	} else {
-		//		t.Logger.Info("%2d.|--%-70s %s", i+1, hopData.Addr+" ["+hopData.FullName+"]", ui.DurationToString(hopData.Last))
-		//	}
-		//} else {
-		//	t.Logger.Info("%2d.|--%s", i+1, "???")
-		//}
 		hops[i] = hopData
 		if isLast {
 			return hops[:i+1], nil
@@ -134,8 +124,7 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 	localPortNum += uint16(hop)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint16(b[0:], localPortNum)
-	remotePortNum, err := strconv.ParseUint(test.RemotePort, 10, 16)
-	binary.BigEndian.PutUint16(b[2:], uint16(remotePortNum))
+	binary.BigEndian.PutUint16(b[2:], test.RemotePort)
 	peerAddrChan := make(chan net.Addr)
 	endTimeChan := make(chan time.Time)
 	go func() {

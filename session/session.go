@@ -1,28 +1,15 @@
 package session
 
 import (
-	"bytes"
-	"container/list"
-	"encoding/binary"
-	"encoding/gob"
-	"io"
 	"net"
-	"os"
 	"sync"
-	"sync/atomic"
-	"time"
 
 	"weavelab.xyz/ethr/ethr"
 )
 
 type Conn struct {
-	Bandwidth        uint64
-	PacketsPerSecond uint64
-	Test             *Test
-	Conn             net.Conn
-	Elem             *list.Element
-	FD               uintptr
-	Retransmits      uint64
+	Conn net.Conn
+	FD   uintptr
 }
 
 type Session struct {
@@ -36,19 +23,17 @@ var Logger ethr.Logger
 var sessions = make(map[string]*Session)
 var sessionLock sync.RWMutex
 
-func (s Session) CreateOrGetTest(remoteIP string, proto ethr.Protocol, testType TestType) (test *Test, isNew bool) {
+func (s Session) CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType TestType, aggregator ResultAggregator) (*Test, bool) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
-	isNew = false
-	test = getTestInternal(remoteIP, proto, testType)
+	isNew := false
+	test := getTest(rIP, protocol, testType)
 	if test == nil {
 		isNew = true
-		testID := TestID{Protocol: proto, Type: testType}
-		test, _ = s.unsafeNewTest(remoteIP, testID, ethr.ClientParams{})
+		test, _ = s.unsafeNewTest(rIP, rPort, protocol, testType, ethr.ClientParams{}, aggregator)
 		test.IsActive = true
 	}
-	atomic.AddInt32(&test.RefCount, 1)
-	return
+	return test, isNew
 }
 
 func (s Session) DeleteTest(id TestID) {
@@ -69,127 +54,49 @@ func (s Session) DeleteTest(id TestID) {
 	// test.connList = test.connList.Init()
 	//
 	delete(s.Tests, id)
-	s.TestCount--
-
-	if s.TestCount == 0 {
+	if len(s.Tests) == 0 {
 		delete(sessions, s.RemoteIP)
 	}
 }
 
-func (s Session) NewTest(remoteIP string, testID TestID, clientParam ethr.ClientParams) (*Test, error) {
+func (s Session) CreateTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
-	return s.unsafeNewTest(remoteIP, testID, clientParam)
+	return s.unsafeNewTest(rIP, rPort, protocol, tt, clientParam, aggregator)
 }
 
-func (s Session) unsafeNewTest(remoteIP string, testID TestID, clientParam ethr.ClientParams) (*Test, error) {
+func (s Session) unsafeNewTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
 	var session *Session
-	session, found := sessions[remoteIP]
+	session, found := sessions[rIP.String()]
 	if !found {
 		session = &Session{}
-		session.RemoteIP = remoteIP
+		session.RemoteIP = rIP.String()
 		session.Tests = make(map[TestID]*Test)
-		sessions[remoteIP] = session
+		sessions[rIP.String()] = session
 	}
 
-	test, found := session.Tests[testID]
-	if found {
-		return test, os.ErrExist
+	tID := TestID{
+		Protocol: protocol,
+		Type:     tt,
 	}
-	session.TestCount++
-	test = &Test{}
-	test.Session = session
-	test.RefCount = 0
-	test.ID = testID
-	test.ClientParam = clientParam
-	test.Done = make(chan struct{})
-	test.ConnList = list.New()
-	test.LastAccess = time.Now()
-	test.IsDormant = true
-	session.Tests[testID] = test
+	test, found := session.Tests[tID]
+	if found {
+		return test, nil
+	}
+	test = NewTest(&s, protocol, tt, rIP, rPort, clientParam, aggregator)
+	session.Tests[tID] = test
+
+	go test.StartPublishing()
 
 	return test, nil
 }
 
-func getTestInternal(remoteIP string, proto ethr.Protocol, testType TestType) (test *Test) {
+func getTest(remoteIP net.IP, proto ethr.Protocol, testType TestType) (test *Test) {
 	test = nil
-	session, found := sessions[remoteIP]
+	session, found := sessions[remoteIP.String()]
 	if !found {
 		return
 	}
 	test, _ = session.Tests[TestID{Protocol: proto, Type: testType}]
-	return
-}
-
-func (s Session) Receive(conn net.Conn) (msg *ethr.Msg) {
-	msg = &ethr.Msg{}
-	msg.Type = ethr.Inv
-	msgBytes := make([]byte, 4)
-	_, err := io.ReadFull(conn, msgBytes)
-	if err != nil {
-		Logger.Debug("Error receiving message on control channel. Error: %v", err)
-		return
-	}
-	msgSize := binary.BigEndian.Uint32(msgBytes[0:])
-	// TODO: Assuming max ethr message size as 16K sent over gob.
-	if msgSize > 16384 {
-		return
-	}
-	msgBytes = make([]byte, msgSize)
-	_, err = io.ReadFull(conn, msgBytes)
-	if err != nil {
-		Logger.Debug("Error receiving message on control channel. Error: %v", err)
-		return
-	}
-	msg = decodeMsg(msgBytes)
-	return
-}
-
-func (s Session) ReceiveFromBuffer(msgBytes []byte) (msg *ethr.Msg) {
-	msg = decodeMsg(msgBytes)
-	return
-}
-
-func (s Session) Send(conn net.Conn, msg *ethr.Msg) (err error) {
-	msgBytes, err := encodeMsg(msg)
-	if err != nil {
-		Logger.Debug("Error sending message on control channel. Message: %v, Error: %v", msg, err)
-		return
-	}
-	msgSize := len(msgBytes)
-	tempBuf := make([]byte, 4)
-	binary.BigEndian.PutUint32(tempBuf[0:], uint32(msgSize))
-	_, err = conn.Write(tempBuf)
-	if err != nil {
-		Logger.Debug("Error sending message on control channel. Message: %v, Error: %v", msg, err)
-	}
-	_, err = conn.Write(msgBytes)
-	if err != nil {
-		Logger.Debug("Error sending message on control channel. Message: %v, Error: %v", msg, err)
-	}
-	return err
-}
-
-func decodeMsg(msgBytes []byte) (msg *ethr.Msg) {
-	msg = &ethr.Msg{}
-	buffer := bytes.NewBuffer(msgBytes)
-	decoder := gob.NewDecoder(buffer)
-	err := decoder.Decode(msg)
-	if err != nil {
-		Logger.Debug("Failed to decode message using Gob: %v", err)
-		msg.Type = ethr.Inv
-	}
-	return
-}
-
-func encodeMsg(msg *ethr.Msg) (msgBytes []byte, err error) {
-	var writeBuffer bytes.Buffer
-	encoder := gob.NewEncoder(&writeBuffer)
-	err = encoder.Encode(msg)
-	if err != nil {
-		Logger.Debug("Failed to encode message using Gob: %v", err)
-		return
-	}
-	msgBytes = writeBuffer.Bytes()
 	return
 }

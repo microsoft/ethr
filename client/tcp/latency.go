@@ -5,7 +5,7 @@ import (
 	"io"
 	"time"
 
-	"weavelab.xyz/ethr/client/payloads"
+	"weavelab.xyz/ethr/session/payloads"
 
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
@@ -22,7 +22,7 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 		return
 	}
 	defer conn.Close()
-	err = t.NetTools.HandshakeWithServer(test, conn)
+	err = t.NetTools.Session.HandshakeWithServer(test, conn)
 	if err != nil {
 		test.Results <- session.TestResult{
 			Success: false,
@@ -43,13 +43,13 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 	ExitSelect:
 		select {
 		case <-test.Done:
-			result := payloads.NewLatencies(test, len(latencyNumbers), latencyNumbers)
-			test.Results <- session.TestResult{
+			test.AddIntermediateResult(session.TestResult{
 				Success: true,
 				Error:   nil,
-				Body:    result,
-			}
-			close(test.Results)
+				Body: payloads.RawLatencies{
+					Latencies: latencyNumbers,
+				},
+			})
 			return
 		default:
 			t0 := time.Now()
@@ -79,16 +79,34 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 			// TODO temp code, fix it better, this is to allow server to do
 			// server side latency measurements as well.
 			_, _ = conn.Write(buff)
-			result := payloads.NewLatencies(test, len(latencyNumbers), latencyNumbers)
-			test.Results <- session.TestResult{
+			test.AddIntermediateResult(session.TestResult{
 				Success: true,
 				Error:   nil,
-				Body:    result,
-			}
+				Body: payloads.RawLatencies{
+					Latencies: latencyNumbers,
+				},
+			})
 			t1 := time.Since(t0)
 			if t1 < g {
 				time.Sleep(g - t1)
 			}
 		}
+	}
+}
+
+func LatencyAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	latencies := make([]time.Duration, 0)
+
+	for _, r := range intermediateResults {
+		// ignore failed results
+		if body, ok := r.Body.(payloads.RawLatencies); ok && r.Success {
+			latencies = append(latencies, body.Latencies...)
+		}
+	}
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body:    payloads.NewLatencies(len(latencies), latencies),
 	}
 }

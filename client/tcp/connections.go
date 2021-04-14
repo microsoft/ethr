@@ -5,9 +5,9 @@ import (
 	"sync"
 	"sync/atomic"
 
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 )
 
 func (t Tests) TestConnectionsPerSecond(test *session.Test) {
@@ -43,4 +43,22 @@ func (t Tests) TestConnectionsPerSecond(test *session.Test) {
 		Body:    totalConnections,
 	}
 	wg.Wait()
+}
+
+func ConnectionsAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	connections := uint64(0)
+	for _, r := range intermediateResults {
+		// ignore failed results
+		if body, ok := r.Body.(payloads.ConnectionsPerSecondPayload); ok && r.Success {
+			connections += body.Connections
+		}
+	}
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body: payloads.ConnectionsPerSecondPayload{
+			Connections: connections / seconds,
+		},
+	}
 }

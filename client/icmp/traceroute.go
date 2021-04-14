@@ -8,8 +8,8 @@ import (
 	"sync"
 	"time"
 
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 )
 
 func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {

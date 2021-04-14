@@ -3,11 +3,10 @@ package udp
 import (
 	"net"
 	"sync"
-	"sync/atomic"
 
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 	"weavelab.xyz/ethr/stats"
 )
 
@@ -41,7 +40,6 @@ func (t Tests) TestBandwidth(test *session.Test) {
 func (t Tests) handleBandwidthConn(test *session.Test, conn net.Conn, wg *sync.WaitGroup, th uint32, result *payloads.BandwidthPayload) {
 	defer wg.Done()
 	defer conn.Close()
-	ec := test.NewConn(conn)
 
 	buffer := make([]byte, test.ClientParam.BufferSize)
 	totalBytesToSend := test.ClientParam.BwRate
@@ -60,16 +58,44 @@ func (t Tests) handleBandwidthConn(test *session.Test, conn net.Conn, wg *sync.W
 				continue
 			}
 
-			atomic.AddUint64(&ec.Bandwidth, uint64(n))
-			atomic.AddUint64(&ec.PacketsPerSecond, 1)
-			atomic.AddUint64(&result.ConnectionBandwidths[th], uint64(n))
-			atomic.AddUint64(&result.TotalBandwidth, uint64(n))
-			atomic.AddUint64(&result.PacketsPerSecond, 1)
+			test.AddIntermediateResult(session.TestResult{
+				Success: true,
+				Error:   nil,
+				Body: payloads.BandwidthPayload{
+					TotalBandwidth:       uint64(n),
+					ConnectionBandwidths: nil,
+					PacketsPerSecond:     1,
+				},
+			})
 
 			if !test.ClientParam.Reverse {
 				sentBytes += uint64(n)
 				start, waitTime, sentBytes, bytesToSend = stats.EnforceThrottle(start, waitTime, totalBytesToSend, sentBytes, len(buffer))
 			}
 		}
+	}
+}
+
+func BandwidthAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	totalBandwidth := uint64(0)
+	totalPackets := uint64(0)
+	// TODO calculate bandwidth of individual threads/conns
+
+	for _, r := range intermediateResults {
+		// ignore failed results
+		if body, ok := r.Body.(payloads.BandwidthPayload); ok && r.Success {
+			totalBandwidth += body.TotalBandwidth
+			totalPackets += body.PacketsPerSecond
+		}
+	}
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body: payloads.BandwidthPayload{
+			TotalBandwidth:       totalBandwidth / seconds,
+			ConnectionBandwidths: nil,
+			PacketsPerSecond:     totalPackets / seconds,
+		},
 	}
 }

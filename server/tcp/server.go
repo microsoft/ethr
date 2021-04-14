@@ -2,16 +2,15 @@ package tcp
 
 import (
 	"net"
+	"strconv"
 	"time"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/server"
+	"weavelab.xyz/ethr/session"
 )
 
-
-
-type HandlerFunc func(net.Conn)
-
-func Serve(cfg *server.Config, h HandlerFunc) error {
+func Serve(cfg *server.Config, h Handler) error {
 	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP+":"+cfg.LocalPort)
 	if err != nil {
 		return err
@@ -42,8 +41,18 @@ func Serve(cfg *server.Config, h HandlerFunc) error {
 
 			return err
 		}
-		go h(conn)
+		conn.RemoteAddr()
+		remote, port, err := net.SplitHostPort(conn.RemoteAddr().String())
+		if err != nil {
+			h.logger.Debug("RemoteAddr: Split host port failed: %v", err)
+			continue
+		}
+		rIP := net.ParseIP(remote)
+		rPort, _ := strconv.Atoi(port)
+		test, _ := h.session.CreateOrGetTest(rIP, uint16(rPort), ethr.TCP, session.TestTypeServer, ServerAggregator)
+		if test == nil {
+			continue
+		}
+		go h.HandleConn(test, conn)
 	}
 }
-
-
