@@ -2,8 +2,9 @@ package udp
 
 import (
 	"net"
-	"sync/atomic"
 	"time"
+
+	"weavelab.xyz/ethr/session/payloads"
 
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
@@ -15,69 +16,63 @@ type Handler struct {
 }
 
 func (h Handler) HandleConn(conn *net.UDPConn) {
-	// This local map aids in efficiency to look up a test based on client's IP
-	// address. We could use createOrGetTest but that takes a global lock.
-	// TODO move caching to session
-	tests := make(map[string]*session.Test)
 	// For UDP, allocate buffer that can accomodate largest UDP datagram.
 	readBuffer := make([]byte, 64*1024)
-	n, remoteIP, err := 0, new(net.UDPAddr), error(nil)
 
-	// This function handles UDP tests that came from clients that are no longer
-	// sending any traffic. This is poor man's garbage collection to ensure the
-	// server doesn't end up printing dormant client related statistics as UDP
-	// has no reliable way to detect if client is active or not.
-	// TODO move to session handling
-	go func() {
-		for {
-			time.Sleep(100 * time.Millisecond)
-			for k, v := range tests {
-				h.logger.Debug("Found Test from server: %v, time: %v", k, v.LastAccess)
-				// At 200ms of no activity, mark the test in-active so stats stop
-				// printing.
-				if time.Since(v.LastAccess) > (200 * time.Millisecond) {
-					v.IsDormant = true
-				}
-				// At 2s of no activity, delete the test by assuming that client
-				// has stopped.
-				if time.Since(v.LastAccess) > (2 * time.Second) {
-					h.logger.Debug("Deleting UDP test from server: %v, lastAccess: %v", k, v.LastAccess)
-					h.session.DeleteTest(v.ID)
-					delete(tests, k)
-				}
-			}
-		}
-	}()
+	var err error
+	n := 0
 	for err == nil {
-		n, remoteIP, err = conn.ReadFromUDP(readBuffer)
+		n, _, err = conn.ReadFrom(readBuffer) // don't actually care about the packet just how many bytes we read 'n'
 		if err != nil {
 			h.logger.Debug("Error receiving data from UDP for bandwidth test: %v", err)
 			continue
 		}
-		//ethrUnused(remoteIP)
-		//ethrUnused(n)
-		//server, port, _ := net.SplitHostPort(remoteIP.String())
-		server, _, _ := net.SplitHostPort(remoteIP.String())
-		test, found := tests[server]
-		if !found {
-			test, isNew := h.session.CreateOrGetTest(server, ethr.UDP, session.TestTypeServer)
-			if test != nil {
-				tests[server] = test
-			}
+
+		if udpAddr, ok := conn.RemoteAddr().(*net.UDPAddr); ok {
+			test, isNew := h.session.CreateOrGetTest(udpAddr.IP, uint16(udpAddr.Port), ethr.UDP, session.TestTypeServer, ServerAggregator)
+
 			if isNew {
-				h.logger.Debug("Creating UDP test from server: %v, lastAccess: %v", server, time.Now())
-				// TODO handle externally
-				//ui.emitTestHdr()
+				h.logger.Debug("Creating UDP test from server: %v, lastAccess: %v", udpAddr.String(), time.Now())
+			}
+
+			if test != nil {
+				test.IsDormant = false
+				test.LastAccess = time.Now()
+				test.AddIntermediateResult(session.TestResult{
+					Success: true,
+					Error:   nil,
+					Body: payloads.RawBandwidthPayload{
+						Bandwidth:        uint64(n),
+						PacketsPerSecond: 1,
+					},
+				})
 			}
 		}
-		if test != nil {
-			test.IsDormant = false
-			test.LastAccess = time.Now()
-			atomic.AddUint64(&test.Result.PacketsPerSecond, 1)
-			atomic.AddUint64(&test.Result.Bandwidth, uint64(n))
+	}
+}
+
+func ServerAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+	totalBandwidth := uint64(0)
+	totalPackets := uint64(0)
+
+	for _, r := range intermediateResults {
+		// ignore failed results
+
+		switch body := r.Body.(type) {
+		case payloads.RawBandwidthPayload:
+			totalBandwidth += body.Bandwidth
+			totalPackets += body.PacketsPerSecond
+		default:
+			// do nothing, drop unknowns
 		}
-		//else {
-		//h.logger.Debug("Unable to create test for UDP traffic on port %s from %s port %s", gEthrPortStr, server, port)
-		//}
+	}
+
+	return session.TestResult{
+		Success: true,
+		Error:   nil,
+		Body: payloads.ServerPayload{
+			PacketsPerSecond: totalPackets / seconds,
+			Bandwidth:        totalBandwidth / seconds,
+		},
 	}
 }
