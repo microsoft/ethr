@@ -3,21 +3,18 @@ package client
 import (
 	"fmt"
 
-	"weavelab.xyz/ethr/client"
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 	"weavelab.xyz/ethr/ui"
 )
 
-func (u *UI) PrintPacketsPerSecond(test *session.Test, result client.TestResult, showHeader bool, printCount uint64) {
+func (u *UI) PrintPacketsPerSecond(test *session.Test, result session.TestResult, showHeader bool, printCount uint64) {
 	if showHeader {
 		u.printPacketsDivider()
 		u.printPacketsHeader()
 	}
-	// TODO make results self contained
-	//bw := atomic.SwapUint64(&test.testResult.bw, 0)
-	//pps := atomic.SwapUint64(&test.testResult.pps, 0)
+
 	switch r := result.Body.(type) {
 	case payloads.BandwidthPayload:
 		u.printPacketsResult(test.ID.Protocol, r, printCount)

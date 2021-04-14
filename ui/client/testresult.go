@@ -5,15 +5,15 @@ import (
 	"fmt"
 	"time"
 
-	"weavelab.xyz/ethr/client"
 	"weavelab.xyz/ethr/session"
 )
 
-func (u *UI) PrintTestResults(ctx context.Context, test *session.Test, results chan client.TestResult, seconds uint64) {
+func (u *UI) PrintTestResults(ctx context.Context, test *session.Test, seconds uint64) {
+	// TODO get rid of printCount nonsense
 	printCount := uint64(0)
-	var latestResult client.TestResult
+	var latestResult session.TestResult
 
-	paintTicker := time.NewTicker(200 * time.Millisecond)
+	paintTicker := time.NewTicker(time.Second)
 	for {
 		switch test.ID.Type {
 		case session.TestTypePing:
@@ -21,7 +21,7 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test, results c
 		case session.TestTypePacketsPerSecond:
 			u.PrintPacketsPerSecond(test, latestResult, printCount == 0, printCount)
 		case session.TestTypeBandwidth:
-			u.PrintBandwidth(test, printCount == 0, seconds, printCount)
+			u.PrintBandwidth(test, latestResult, printCount == 0, printCount)
 		case session.TestTypeLatency:
 			u.PrintLatency(test, latestResult, printCount == 0)
 		case session.TestTypeConnectionsPerSecond:
@@ -36,9 +36,8 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test, results c
 		printCount++
 
 		select {
-		case latestResult = <-results:
-			continue
 		case <-paintTicker.C:
+			latestResult = test.LatestResult()
 			continue
 		case <-ctx.Done():
 			return

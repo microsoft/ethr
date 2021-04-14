@@ -4,13 +4,12 @@ import (
 	"fmt"
 	"net"
 
-	"weavelab.xyz/ethr/client"
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 	"weavelab.xyz/ethr/ui"
 )
 
-func (u *UI) PrintTraceroute(test *session.Test, result client.TestResult, showHeader bool) {
+func (u *UI) PrintTraceroute(test *session.Test, result session.TestResult, showHeader bool) {
 	if showHeader {
 		u.printTracerouteDivider()
 		u.printTracerouteHeader(test.RemoteIP)

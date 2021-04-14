@@ -4,12 +4,11 @@ import (
 	"fmt"
 	"net"
 
-	"weavelab.xyz/ethr/client"
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 )
 
-func (u *UI) PrintPing(test *session.Test, result client.TestResult, showHeader bool) {
+func (u *UI) PrintPing(test *session.Test, result session.TestResult, showHeader bool) {
 	if showHeader {
 		u.printPingDivider()
 		u.printPingHeader(test.RemoteIP)

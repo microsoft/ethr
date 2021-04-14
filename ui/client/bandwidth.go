@@ -2,7 +2,8 @@ package client
 
 import (
 	"fmt"
-	"sync/atomic"
+
+	"weavelab.xyz/ethr/session/payloads"
 
 	"weavelab.xyz/ethr/session"
 
@@ -10,45 +11,28 @@ import (
 	"weavelab.xyz/ethr/ui"
 )
 
-// TODO use results object rather than test.Conn
-func (u *UI) PrintBandwidth(test *session.Test, showHeader bool, seconds uint64, printCount uint64) {
+func (u *UI) PrintBandwidth(test *session.Test, result session.TestResult, showHeader bool, printCount uint64) {
 	protocol := test.ID.Protocol
 	if protocol != ethr.TCP && protocol != ethr.UDP {
-		fmt.Printf("Unsupported protocol for bandwidth test: %s\n", ethr.ProtocolToString(test.ID.Protocol))
+		fmt.Printf("Unsupported protocol for bandwidth test: %s\n", ethr.ProtocolToString(protocol))
 		return
 	}
 	if showHeader {
-		u.printBandwidthDivider(protocol)
-		u.printBandwidthHeader(protocol)
+		u.printConnectionsDivider()
+		u.printConnectionsHeader()
 	}
-
-	// TODO make results self contained
-	cbw := uint64(0)
-	cpps := uint64(0)
-	ccount := 0
-
-	test.ConnListDo(func(ec *session.Conn) {
-		bw := atomic.SwapUint64(&ec.Bandwidth, 0)
-		pps := atomic.SwapUint64(&ec.PacketsPerSecond, 0)
-		bw /= seconds
-		if u.ShowConnectionStats {
-			fd := fmt.Sprintf("%5d", ec.FD)
-			u.printBandwidthResult(protocol, fd, printCount, printCount+1, bw, pps)
+	switch r := result.Body.(type) {
+	case payloads.BandwidthPayload:
+		for _, conn := range r.ConnectionBandwidths {
+			u.printBandwidthResult(protocol, conn.ConnectionID, printCount, printCount+1, conn.Bandwidth, conn.PacketsPerSecond)
 		}
-		cbw += bw
-		cpps += pps
-		ccount++
-	})
+		u.printBandwidthResult(protocol, "SUM", printCount, printCount+1, r.TotalBandwidth, r.TotalPacketsPerSecond)
+		//logResults([]string{test.RemoteIP.String(), ethr.ProtocolToString(protocol),
+		//	ui.BytesToRate(cbw), "", ui.PpsToString(cpps), ""})
+	default:
+		u.printUnknownResultType()
 
-	if ccount > 1 || !u.ShowConnectionStats {
-		u.printBandwidthResult(protocol, "SUM", printCount, printCount+1, cbw, cpps)
-		if u.ShowConnectionStats {
-			u.printBandwidthDivider(protocol)
-		}
 	}
-
-	//logResults([]string{test.RemoteIP.String(), ethr.ProtocolToString(protocol),
-	//	ui.BytesToRate(cbw), "", ui.PpsToString(cpps), ""})
 }
 
 func (u *UI) printBandwidthHeader(p ethr.Protocol) {

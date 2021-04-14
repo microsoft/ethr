@@ -3,15 +3,13 @@ package client
 import (
 	"fmt"
 
-	"weavelab.xyz/ethr/client"
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 	"weavelab.xyz/ethr/ui"
 )
 
-func (u *UI) PrintConnectionsPerSecond(test *session.Test, result client.TestResult, showHeader bool, printCount uint64) {
-	// TODO make results self contained
+func (u *UI) PrintConnectionsPerSecond(test *session.Test, result session.TestResult, showHeader bool, printCount uint64) {
 	if showHeader {
 		u.printConnectionsDivider()
 		u.printConnectionsHeader()

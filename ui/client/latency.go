@@ -3,14 +3,13 @@ package client
 import (
 	"fmt"
 
-	"weavelab.xyz/ethr/client"
-	"weavelab.xyz/ethr/client/payloads"
 	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/session/payloads"
 
 	"weavelab.xyz/ethr/ui"
 )
 
-func (u *UI) PrintLatency(test *session.Test, result client.TestResult, showHeader bool) {
+func (u *UI) PrintLatency(test *session.Test, result session.TestResult, showHeader bool) {
 	if showHeader {
 		u.printLatencyDivider()
 		u.printLatencyHeader()
