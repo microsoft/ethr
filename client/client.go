@@ -31,7 +31,7 @@ type Client struct {
 	Logger ethr.Logger
 }
 
-func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, remote string, localPort uint16, localIP net.IP) (*Client, error) {
+func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, remote string, localIP net.IP, localPort uint16) (*Client, error) {
 	tools, err := tools.NewTools(isExternal, remote, localPort, localIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initial network tools: %w", err)

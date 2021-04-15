@@ -12,7 +12,7 @@ import (
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	udpAddr, err := net.ResolveUDPAddr(ethr.UDPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(cfg.LocalPort))
+	udpAddr, err := net.ResolveUDPAddr(ethr.UDPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(int(cfg.LocalPort)))
 	if err != nil {
 		return fmt.Errorf("unable to resolve UDP address: %w", err)
 	}

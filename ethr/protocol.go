@@ -6,6 +6,9 @@ const (
 	TCP Protocol = iota
 	UDP
 	ICMP
+	HTTP
+	HTTPS
+	ProtocolUnknown
 )
 
 const (
@@ -13,7 +16,7 @@ const (
 	ICMPv6 = 58 // ICMP for IPv6
 )
 
-func ProtocolToString(p Protocol) string {
+func (p Protocol) String() string {
 	switch p {
 	case TCP:
 		return "TCP"
@@ -21,8 +24,28 @@ func ProtocolToString(p Protocol) string {
 		return "UDP"
 	case ICMP:
 		return "ICMP"
+	case HTTP:
+		return "HTTP"
+	case HTTPS:
+		return "HTTPS"
 	}
 	return ""
+}
+
+func ParseProtocol(s string) Protocol {
+	switch s {
+	case "TCP":
+		return TCP
+	case "UDP":
+		return UDP
+	case "ICMP":
+		return ICMP
+	case "HTTP":
+		return HTTP
+	case "HTTPS":
+		return HTTPS
+	}
+	return ProtocolUnknown
 }
 
 func TCPVersion(v IPVersion) string {

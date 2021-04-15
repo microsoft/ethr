@@ -9,5 +9,5 @@ import (
 type Config struct {
 	IPVersion ethr.IPVersion
 	LocalIP   net.IP
-	LocalPort int
+	LocalPort uint16
 }

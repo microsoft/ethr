@@ -13,7 +13,7 @@ import (
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(cfg.LocalPort))
+	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(int(cfg.LocalPort)))
 	if err != nil {
 		return err
 	}
