@@ -18,7 +18,7 @@ type StatsGroup struct {
 
 func (a *AggregateStats) ToString(protocol ethr.Protocol) (out []string) {
 	if a.Counts.Bandwidth > 1 || a.Counts.ConnectionsPerSecond > 1 || a.Counts.PacketsPerSecond > 1 {
-		out = []string{"[SUM]", ethr.ProtocolToString(protocol),
+		out = []string{"[SUM]", protocol.String(),
 			ui.BytesToRate(a.Stats.Bandwidth),
 			ui.CpsToString(a.Stats.ConnectionsPerSecond),
 			ui.PpsToString(a.Stats.PacketsPerSecond),

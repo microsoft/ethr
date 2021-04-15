@@ -34,5 +34,5 @@ func (u *UI) printConnectionsDivider() {
 }
 
 func (u *UI) printConnectionsResult(protocol ethr.Protocol, printCount uint64, cps uint64) {
-	fmt.Printf("  %-5s    %03d-%03d sec   %7s\n", ethr.ProtocolToString(protocol), printCount, printCount+1, ui.CpsToString(cps))
+	fmt.Printf("  %-5s    %03d-%03d sec   %7s\n", protocol.String(), printCount, printCount+1, ui.CpsToString(cps))
 }

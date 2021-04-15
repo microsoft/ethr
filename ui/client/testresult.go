@@ -5,6 +5,8 @@ import (
 	"fmt"
 	"time"
 
+	"weavelab.xyz/ethr/ethr"
+
 	"weavelab.xyz/ethr/session"
 )
 
@@ -16,19 +18,19 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 	paintTicker := time.NewTicker(time.Second)
 	for {
 		switch test.ID.Type {
-		case session.TestTypePing:
+		case ethr.TestTypePing:
 			u.PrintPing(test, latestResult, printCount == 0)
-		case session.TestTypePacketsPerSecond:
+		case ethr.TestTypePacketsPerSecond:
 			u.PrintPacketsPerSecond(test, latestResult, printCount == 0, printCount)
-		case session.TestTypeBandwidth:
+		case ethr.TestTypeBandwidth:
 			u.PrintBandwidth(test, latestResult, printCount == 0, printCount)
-		case session.TestTypeLatency:
+		case ethr.TestTypeLatency:
 			u.PrintLatency(test, latestResult, printCount == 0)
-		case session.TestTypeConnectionsPerSecond:
+		case ethr.TestTypeConnectionsPerSecond:
 			u.PrintConnectionsPerSecond(test, latestResult, printCount == 0, printCount)
-		case session.TestTypeTraceRoute:
+		case ethr.TestTypeTraceRoute:
 			fallthrough
-		case session.TestTypeMyTraceRoute:
+		case ethr.TestTypeMyTraceRoute:
 			u.PrintTraceroute(test, latestResult, printCount == 0)
 		default:
 			u.printUnknownResultType()

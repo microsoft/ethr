@@ -69,7 +69,7 @@ func (t *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps uint64
 	var lat payloads.LatencyPayload
-	test, found := s.Tests[session.TestID{Protocol: protocol, Type: session.TestTypeServer}]
+	test, found := s.Tests[session.TestID{Protocol: protocol, Type: ethr.TestTypeServer}]
 	if found && test.IsActive {
 		result := test.LatestResult()
 		if body, ok := result.Body.(payloads.ServerPayload); ok {
@@ -122,7 +122,7 @@ func (t *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *
 		}
 		return []string{
 			ui.TruncateStringFromStart(test.RemoteIP.String(), 13),
-			ethr.ProtocolToString(protocol),
+			protocol.String(),
 			bwStr,
 			cpsStr,
 			ppsStr,

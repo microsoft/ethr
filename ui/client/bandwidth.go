@@ -14,7 +14,7 @@ import (
 func (u *UI) PrintBandwidth(test *session.Test, result session.TestResult, showHeader bool, printCount uint64) {
 	protocol := test.ID.Protocol
 	if protocol != ethr.TCP && protocol != ethr.UDP {
-		fmt.Printf("Unsupported protocol for bandwidth test: %s\n", ethr.ProtocolToString(protocol))
+		fmt.Printf("Unsupported protocol for bandwidth test: %s\n", protocol.String())
 		return
 	}
 	if showHeader {
@@ -47,9 +47,9 @@ func (u *UI) printBandwidthHeader(p ethr.Protocol) {
 
 func (u *UI) printBandwidthResult(p ethr.Protocol, fd string, t0, t1, bw, pps uint64) {
 	if p == ethr.UDP {
-		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s   %7s", fd, ethr.ProtocolToString(p), t0, t1, ui.BytesToRate(bw), ui.PpsToString(pps))
+		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s   %7s", fd, p.String(), t0, t1, ui.BytesToRate(bw), ui.PpsToString(pps))
 	} else {
-		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s", fd, ethr.ProtocolToString(p), t0, t1, ui.BytesToRate(bw))
+		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s", fd, p.String(), t0, t1, ui.BytesToRate(bw))
 	}
 }
 

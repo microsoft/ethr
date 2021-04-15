@@ -18,7 +18,7 @@ type UI struct {
 	UDP  *AggregateStats
 }
 
-func NewUI(terminalUI bool) (*UI, error) {
+func NewUI(terminalUI bool) *UI {
 	var ui ServerUI
 	var err error
 	var tcp, udp, icmp AggregateStats
@@ -36,7 +36,7 @@ func NewUI(terminalUI bool) (*UI, error) {
 
 	return &UI{
 		Terminal: ui,
-	}, nil
+	}
 }
 
 func (u *UI) Display(ctx context.Context) {
