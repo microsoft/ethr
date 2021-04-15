@@ -5,14 +5,14 @@ import (
 	"fmt"
 	"net"
 	"runtime"
-	"time"
+	"strconv"
 
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/server"
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	udpAddr, err := net.ResolveUDPAddr(ethr.UDPVersion(cfg.IPVersion), cfg.LocalIP+":"+cfg.LocalPort)
+	udpAddr, err := net.ResolveUDPAddr(ethr.UDPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(cfg.LocalPort))
 	if err != nil {
 		return fmt.Errorf("unable to resolve UDP address: %w", err)
 	}
@@ -27,7 +27,7 @@ func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
 		return fmt.Errorf("failed to set ReadBuffer on UDP socket: %w", err)
 	}
 
-	go h.session.PollInactive(ctx, 100*time.Millisecond)
+	//go h.session.PollInactive(ctx, 100*time.Millisecond)
 
 	//
 	// We use NumCPU here instead of NumThreads passed from client. The
@@ -37,7 +37,7 @@ func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
 	//
 
 	for i := 0; i < runtime.NumCPU(); i++ {
-		go h.HandleConn(l)
+		go h.HandleConn(ctx, nil, l)
 	}
 	return nil
 }

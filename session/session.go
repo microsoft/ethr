@@ -15,9 +15,9 @@ type Conn struct {
 }
 
 type Session struct {
-	RemoteIP  string
-	TestCount uint32
-	Tests     map[TestID]*Test
+	sync.RWMutex
+	Tests   map[TestID]*Test
+	polling bool
 }
 
 var Logger ethr.Logger
@@ -40,14 +40,23 @@ func GetSessions() []Session {
 // server doesn't end up printing dormant client related statistics as UDP
 // has no reliable way to detect if client is active or not.
 func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
+	s.RLock()
+	if s.polling {
+		s.RUnlock()
+		return
+	}
+	s.polling = true
+	s.RUnlock()
+
 	ticker := time.NewTicker(gap)
 	for {
 		select {
 		case <-ctx.Done():
 			return
 		case <-ticker.C:
-			// TODO potential performance issue for VERY high volume of newly created tests
-			sessionLock.Lock()
+			// TODO make sure frequent locking doesn't block
+			toDelete := make([]*Test, 0)
+			s.RLock()
 			for k, v := range s.Tests {
 				Logger.Debug("Found Test from server: %v, time: %v", k, v.LastAccess)
 				// At 200ms of no activity, mark the test in-active so stats stop
@@ -59,78 +68,71 @@ func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
 				// has stopped.
 				if time.Since(v.LastAccess) > (2 * time.Second) {
 					Logger.Debug("Deleting UDP test from server: %v, lastAccess: %v", k, v.LastAccess)
-					s.unsafeDeleteTest(v.ID)
+					toDelete = append(toDelete, v)
 				}
 			}
-			sessionLock.Unlock()
+			s.RUnlock()
+			for _, t := range toDelete {
+				DeleteTest(t) // delete needs a write lock so handle externally from
+			}
 		}
 	}
 }
 
-func (s Session) CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType TestType, aggregator ResultAggregator) (*Test, bool) {
-	sessionLock.Lock()
-	defer sessionLock.Unlock()
+func CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType ethr.TestType, aggregator ResultAggregator) (*Test, bool) {
+	//sessionLock.Lock()
+	//defer sessionLock.Unlock()
 	isNew := false
-	test := getTest(rIP, protocol, testType)
+	session := getOrCreateSession(rIP)
+	test := session.getTest(protocol, testType)
 	if test == nil {
 		isNew = true
-		test, _ = s.unsafeNewTest(rIP, rPort, protocol, testType, ethr.ClientParams{}, aggregator)
+		test, _ = session.newTest(rIP, rPort, protocol, testType, ethr.ClientParams{}, aggregator)
 		test.IsActive = true
 	}
 	return test, isNew
 }
 
-func (s Session) DeleteTest(id TestID) {
+func DeleteTest(t *Test) {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
-	s.unsafeDeleteTest(id)
-}
-
-func (s Session) unsafeDeleteTest(id TestID) {
-	delete(s.Tests, id)
-	if len(s.Tests) == 0 {
-		delete(sessions, s.RemoteIP)
+	if s, ok := sessions[t.RemoteIP.String()]; ok {
+		s.Lock()
+		delete(s.Tests, t.ID)
+		s.Unlock()
+		if len(s.Tests) == 0 {
+			delete(sessions, t.RemoteIP.String()) // TODO locking here causes issues, maybe another solution?
+		}
 	}
 }
 
-func (s Session) CreateTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
+func getOrCreateSession(rIP net.IP) *Session {
 	sessionLock.Lock()
 	defer sessionLock.Unlock()
-	return s.unsafeNewTest(rIP, rPort, protocol, tt, clientParam, aggregator)
-}
-
-func (s Session) unsafeNewTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
-	var session *Session
 	session, found := sessions[rIP.String()]
 	if !found {
-		session = &Session{}
-		session.RemoteIP = rIP.String()
-		session.Tests = make(map[TestID]*Test)
+		session = &Session{
+			Tests: make(map[TestID]*Test),
+		}
 		sessions[rIP.String()] = session
 	}
+	return session
+}
 
-	tID := TestID{
-		Protocol: protocol,
-		Type:     tt,
-	}
-	test, found := session.Tests[tID]
-	if found {
-		return test, nil
-	}
-	test = NewTest(&s, protocol, tt, rIP, rPort, clientParam, aggregator)
-	session.Tests[tID] = test
+func (s *Session) newTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt ethr.TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
+	test := NewTest(s, protocol, tt, rIP, rPort, clientParam, aggregator)
+	s.Lock()
+	s.Tests[test.ID] = test
+	s.Unlock()
 
 	go test.StartPublishing()
 
 	return test, nil
 }
 
-func getTest(remoteIP net.IP, proto ethr.Protocol, testType TestType) (test *Test) {
-	test = nil
-	session, found := sessions[remoteIP.String()]
-	if !found {
-		return
-	}
-	test, _ = session.Tests[TestID{Protocol: proto, Type: testType}]
+func (s *Session) getTest(proto ethr.Protocol, testType ethr.TestType) (test *Test) {
+	s.RLock()
+	test, _ = s.Tests[TestID{Protocol: proto, Type: testType}]
+	s.RUnlock()
 	return
 }

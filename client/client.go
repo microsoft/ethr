@@ -27,13 +27,12 @@ type Client struct {
 
 	NetTools *tools.Tools
 
-	Params  ethr.ClientParams
-	Logger  ethr.Logger
-	Session session.Session
+	Params ethr.ClientParams
+	Logger ethr.Logger
 }
 
-func NewClient(isExternal bool, logger ethr.Logger, session session.Session, params ethr.ClientParams, remote string, localPort uint16, localIP net.IP) (*Client, error) {
-	tools, err := tools.NewTools(isExternal, session, remote, localPort, localIP)
+func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, remote string, localPort uint16, localIP net.IP) (*Client, error) {
+	tools, err := tools.NewTools(isExternal, remote, localPort, localIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initial network tools: %w", err)
 	}
@@ -43,11 +42,10 @@ func NewClient(isExternal bool, logger ethr.Logger, session session.Session, par
 		TCPTests: tcp.Tests{NetTools: tools},
 		Params:   params,
 		Logger:   logger,
-		Session:  session,
 	}, nil
 }
 
-func (c Client) CreateTest(protocol ethr.Protocol, tt session.TestType) (*session.Test, error) {
+func (c Client) CreateTest(protocol ethr.Protocol, tt ethr.TestType) (*session.Test, error) {
 	if c.NetTools.IsExternal {
 		if protocol != ethr.ICMP && c.NetTools.RemotePort == 0 {
 			return nil, fmt.Errorf("in external mode, port cannot be empty for TCP tests")
@@ -62,30 +60,31 @@ func (c Client) CreateTest(protocol ethr.Protocol, tt session.TestType) (*sessio
 	var aggregator session.ResultAggregator
 	if protocol == ethr.TCP {
 		switch tt {
-		case session.TestTypeBandwidth:
+		case ethr.TestTypeBandwidth:
 			aggregator = tcp.BandwidthAggregator
-		case session.TestTypeConnectionsPerSecond:
+		case ethr.TestTypeConnectionsPerSecond:
 			aggregator = tcp.ConnectionsAggregator
-		case session.TestTypeLatency:
+		case ethr.TestTypeLatency:
 			aggregator = tcp.LatencyAggregator
-		case session.TestTypePing:
+		case ethr.TestTypePing:
 			aggregator = tcp.PingAggregator
 		default:
 			// no aggregator for traceroute (single result w/ pointer updates for mtr)
 		}
 	} else if protocol == ethr.UDP {
-		if tt == session.TestTypeBandwidth {
+		if tt == ethr.TestTypeBandwidth {
 			aggregator = udp.BandwidthAggregator
 		}
 	} else if protocol == ethr.ICMP {
-		if tt == session.TestTypePing {
+		if tt == ethr.TestTypePing {
 			aggregator = icmp.PingAggregator
 		}
 
 	}
 
 	c.Logger.Info("Using destination: %s, ip: %s, port: %s", c.NetTools.RemoteHostname, c.NetTools.RemoteIP, c.NetTools.RemotePort)
-	return c.Session.CreateTest(c.NetTools.RemoteIP, c.NetTools.RemotePort, protocol, tt, c.Params, aggregator)
+	test, _ := session.CreateOrGetTest(c.NetTools.RemoteIP, c.NetTools.RemotePort, protocol, tt, aggregator)
+	return test, nil
 }
 
 func (c Client) RunTest(ctx context.Context, test *session.Test) error {
@@ -96,20 +95,20 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 
 	if test.ID.Protocol == ethr.TCP {
 		switch test.ID.Type {
-		case session.TestTypeBandwidth:
+		case ethr.TestTypeBandwidth:
 			go c.TCPTests.TestBandwidth(test)
-		case session.TestTypeLatency:
+		case ethr.TestTypeLatency:
 			go c.TestLatency(test, gap)
-		case session.TestTypeConnectionsPerSecond:
+		case ethr.TestTypeConnectionsPerSecond:
 			go c.TestConnectionsPerSecond(test)
-		case session.TestTypePing:
+		case ethr.TestTypePing:
 			go c.TCPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
-		case session.TestTypeTraceRoute:
+		case ethr.TestTypeTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run traceroute: %w", ErrPermission)
 			}
 			go c.TCPTests.TestTraceRoute(test, gap, false, 30)
-		case session.TestTypeMyTraceRoute:
+		case ethr.TestTypeMyTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run mytraceroute: %w", ErrPermission)
 			}
@@ -119,9 +118,9 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		}
 	} else if test.ID.Protocol == ethr.UDP {
 		switch test.ID.Type {
-		case session.TestTypePacketsPerSecond:
+		case ethr.TestTypePacketsPerSecond:
 			fallthrough
-		case session.TestTypeBandwidth:
+		case ethr.TestTypeBandwidth:
 			c.UPDTests.TestBandwidth(test)
 		default:
 			return ErrNotImplemented
@@ -132,11 +131,11 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		}
 
 		switch test.ID.Type {
-		case session.TestTypePing:
+		case ethr.TestTypePing:
 			go c.ICMPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
-		case session.TestTypeTraceRoute:
+		case ethr.TestTypeTraceRoute:
 			go c.ICMPTests.TestTraceRoute(test, gap, false, 30)
-		case session.TestTypeMyTraceRoute:
+		case ethr.TestTypeMyTraceRoute:
 			go c.ICMPTests.TestTraceRoute(test, gap, true, 30)
 		default:
 			return ErrNotImplemented
@@ -154,7 +153,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 
 		test.IsActive = false
 
-		if test.ID.Type == session.TestTypePing {
+		if test.ID.Type == ethr.TestTypePing {
 			time.Sleep(2 * time.Second)
 		}
 
@@ -165,7 +164,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 
 		test.IsActive = false
 
-		if test.ID.Type == session.TestTypePing {
+		if test.ID.Type == ethr.TestTypePing {
 			time.Sleep(2 * time.Second)
 		}
 

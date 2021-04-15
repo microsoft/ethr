@@ -20,7 +20,7 @@ func (t Tests) TestBandwidth(test *session.Test) {
 			//t.Logger.Error("error dialing connection: %w", err)
 			continue
 		}
-		err = t.NetTools.Session.HandshakeWithServer(test, conn)
+		err = test.Session.HandshakeWithServer(test, conn)
 		if err != nil {
 			//t.Logger.Error("failed in handshake with the server: %w", err)
 			_ = conn.Close()

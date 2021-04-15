@@ -11,22 +11,9 @@ import (
 	"weavelab.xyz/ethr/ethr"
 )
 
-type TestType uint32
-
-const (
-	TestTypeServer TestType = iota
-	TestTypeBandwidth
-	TestTypeConnectionsPerSecond
-	TestTypePacketsPerSecond
-	TestTypeLatency
-	TestTypePing
-	TestTypeTraceRoute
-	TestTypeMyTraceRoute
-)
-
 type TestID struct {
 	Protocol ethr.Protocol
-	Type     TestType
+	Type     ethr.TestType
 }
 
 type Test struct {
@@ -57,7 +44,7 @@ type TestResult struct {
 
 type ResultAggregator func(uint64, []TestResult) TestResult
 
-func NewTest(s *Session, protocol ethr.Protocol, ttype TestType, rIP net.IP, rPort uint16, params ethr.ClientParams, aggregator ResultAggregator) *Test {
+func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP, rPort uint16, params ethr.ClientParams, aggregator ResultAggregator) *Test {
 	dialAddr := fmt.Sprintf("[%s]:%s", rIP.String(), strconv.Itoa(int(rPort)))
 	if protocol == ethr.ICMP {
 		dialAddr = rIP.String()
@@ -138,27 +125,6 @@ func (t *Test) LatestResult() TestResult {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()
 	return t.latestResult
-}
-
-func TestTypeToString(tt TestType) string {
-	switch tt {
-	case TestTypeBandwidth:
-		return "Bandwidth"
-	case TestTypeConnectionsPerSecond:
-		return "Connections/s"
-	case TestTypePacketsPerSecond:
-		return "Packets/s"
-	case TestTypeLatency:
-		return "Latency"
-	case TestTypePing:
-		return "Ping"
-	case TestTypeTraceRoute:
-		return "TraceRoute"
-	case TestTypeMyTraceRoute:
-		return "MyTraceRoute"
-	default:
-		return "Invalid"
-	}
 }
 
 func (t *Test) NewConn(conn net.Conn) (c *Conn) {

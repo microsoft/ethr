@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"net"
 	"time"
 
@@ -11,11 +12,16 @@ import (
 )
 
 type Handler struct {
-	session session.Session
-	logger  ethr.Logger
+	logger ethr.Logger
 }
 
-func (h Handler) HandleConn(test *session.Test, conn net.Conn) {
+func NewHandler(logger ethr.Logger) Handler {
+	return Handler{
+		logger: logger,
+	}
+}
+
+func (h Handler) HandleConn(ctx context.Context, test *session.Test, conn net.Conn) {
 	defer conn.Close()
 
 	isCPSorPing := true
@@ -30,7 +36,7 @@ func (h Handler) HandleConn(test *session.Test, conn net.Conn) {
 		if isCPSorPing {
 			time.Sleep(2 * time.Second) // must be longer than handshake timeout
 		}
-		h.session.DeleteTest(test.ID)
+		session.DeleteTest(test)
 	}()
 
 	// Always increment ConnectionsPerSecond count and then check if the test is Bandwidth etc. and handle
@@ -41,16 +47,16 @@ func (h Handler) HandleConn(test *session.Test, conn net.Conn) {
 		Body:    payloads.ConnectionsPerSecondPayload{Connections: 1},
 	})
 
-	testID, clientParam, err := h.session.HandshakeWithClient(conn)
+	testID, clientParam, err := test.Session.HandshakeWithClient(conn)
 	if err != nil {
 		h.logger.Debug("Failed in handshake with the client. Error: %v", err)
 		return
 	}
 	isCPSorPing = false
 	if testID.Protocol == ethr.TCP {
-		if testID.Type == session.TestTypeBandwidth {
+		if testID.Type == ethr.TestTypeBandwidth {
 			_ = h.TestBandwidth(test, clientParam, conn)
-		} else if testID.Type == session.TestTypeLatency {
+		} else if testID.Type == ethr.TestTypeLatency {
 			_ = h.TestLatency(test, clientParam, conn)
 		}
 	}

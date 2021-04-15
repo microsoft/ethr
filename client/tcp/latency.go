@@ -22,7 +22,7 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 		return
 	}
 	defer conn.Close()
-	err = t.NetTools.Session.HandshakeWithServer(test, conn)
+	err = test.Session.HandshakeWithServer(test, conn)
 	if err != nil {
 		test.Results <- session.TestResult{
 			Success: false,

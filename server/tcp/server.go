@@ -1,17 +1,19 @@
 package tcp
 
 import (
+	"context"
 	"net"
 	"strconv"
 	"time"
 
+	"weavelab.xyz/ethr/session"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/server"
-	"weavelab.xyz/ethr/session"
 )
 
-func Serve(cfg *server.Config, h Handler) error {
-	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP+":"+cfg.LocalPort)
+func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
+	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(cfg.LocalPort))
 	if err != nil {
 		return err
 	}
@@ -20,6 +22,7 @@ func Serve(cfg *server.Config, h Handler) error {
 	// https://golang.org/src/net/http/server.go?s=99574:99629#L3152
 	var tempDelay time.Duration // how long to sleep on accept failure
 	for {
+		// TODO break on ctx cancel
 		conn, err := l.Accept()
 		// If Temporary try again... otherwise bail
 		if err != nil {
@@ -49,10 +52,10 @@ func Serve(cfg *server.Config, h Handler) error {
 		}
 		rIP := net.ParseIP(remote)
 		rPort, _ := strconv.Atoi(port)
-		test, _ := h.session.CreateOrGetTest(rIP, uint16(rPort), ethr.TCP, session.TestTypeServer, ServerAggregator)
+		test, _ := session.CreateOrGetTest(rIP, uint16(rPort), ethr.TCP, ethr.TestTypeServer, ServerAggregator)
 		if test == nil {
 			continue
 		}
-		go h.HandleConn(test, conn)
+		go h.HandleConn(ctx, test, conn)
 	}
 }

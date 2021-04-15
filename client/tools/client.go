@@ -8,12 +8,10 @@ import (
 	"strconv"
 
 	"weavelab.xyz/ethr/ethr"
-	"weavelab.xyz/ethr/session"
 )
 
 type Tools struct {
 	IPVersion ethr.IPVersion
-	Session   session.Session
 
 	IsExternal     bool
 	RemoteIP       net.IP
@@ -25,7 +23,7 @@ type Tools struct {
 	LocalIP   net.IP
 }
 
-func NewTools(isExternal bool, session session.Session, remote string, localPort uint16, localIP net.IP) (*Tools, error) {
+func NewTools(isExternal bool, remote string, localPort uint16, localIP net.IP) (*Tools, error) {
 	rHostname, rIP, rPort, err := getServerIPandPort(isExternal, remote)
 	if err != nil {
 		return nil, fmt.Errorf("error parsing server host and port (%s): %w", remote, err)
@@ -44,7 +42,6 @@ func NewTools(isExternal bool, session session.Session, remote string, localPort
 
 	return &Tools{
 		IPVersion:      ipVersion,
-		Session:        session,
 		IsExternal:     isExternal,
 		RemoteIP:       ip,
 		RemotePort:     rPort,
