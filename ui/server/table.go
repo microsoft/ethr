@@ -60,6 +60,10 @@ func (t *table) addTblRow(row []string) {
 		ui.Symbols[ui.SymbolVertical], tm.ColorDefault, tm.ColorDefault)
 	t.cr--
 
+	if len(row) == 0 {
+		return
+	}
+
 	o := 1
 	alignOffset := 0
 	for i := 0; i < t.ccount; i++ {

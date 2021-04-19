@@ -18,7 +18,7 @@ func CreateAckMsg() (msg *ethr.Msg) {
 	return
 }
 
-func CreateSynMsg(testID TestID, clientParam ethr.ClientParams) (msg *ethr.Msg) {
+func CreateSynMsg(testID ethr.TestID, clientParam ethr.ClientParams) (msg *ethr.Msg) {
 	msg = &ethr.Msg{Version: 0, Type: ethr.Syn}
 	msg.Syn = &ethr.MsgSyn{}
 	msg.Syn.TestID = testID
@@ -32,15 +32,21 @@ func (s Session) HandshakeWithServer(test *Test, conn net.Conn) error {
 	if err != nil {
 		return fmt.Errorf("failed to send SYN message: %w", err)
 	}
-	resp := s.Receive(conn)
+	resp, err := s.Receive(conn)
+	if err != nil {
+		return err
+	}
 	if resp.Type != ethr.Ack {
 		return fmt.Errorf("failed to receive ACK message: %w", os.ErrInvalid)
 	}
 	return nil
 }
 
-func (s Session) HandshakeWithClient(conn net.Conn) (testID TestID, clientParam ethr.ClientParams, err error) {
-	msg := s.Receive(conn)
+func (s Session) HandshakeWithClient(conn net.Conn) (testID ethr.TestID, clientParam ethr.ClientParams, err error) {
+	msg, err := s.Receive(conn)
+	if err != nil {
+		return
+	}
 	if msg.Type != ethr.Syn {
 		err = os.ErrInvalid
 		return
@@ -52,13 +58,13 @@ func (s Session) HandshakeWithClient(conn net.Conn) (testID TestID, clientParam 
 	return
 }
 
-func (s Session) Receive(conn net.Conn) (msg *ethr.Msg) {
+func (s Session) Receive(conn net.Conn) (msg *ethr.Msg, err error) {
 	msg = &ethr.Msg{}
 	msg.Type = ethr.Inv
 	msgBytes := make([]byte, 4)
-	_, err := io.ReadFull(conn, msgBytes)
+	_, err = io.ReadFull(conn, msgBytes)
 	if err != nil {
-		Logger.Debug("Error receiving message on control channel. Error: %v", err)
+		//Logger.Debug("Error receiving message on control channel. Error: %v", err)
 		return
 	}
 	msgSize := binary.BigEndian.Uint32(msgBytes[0:])
@@ -69,7 +75,7 @@ func (s Session) Receive(conn net.Conn) (msg *ethr.Msg) {
 	msgBytes = make([]byte, msgSize)
 	_, err = io.ReadFull(conn, msgBytes)
 	if err != nil {
-		Logger.Debug("Error receiving message on control channel. Error: %v", err)
+		//Logger.Debug("Error receiving message on control channel. Error: %v", err)
 		return
 	}
 	msg = decodeMsg(msgBytes)

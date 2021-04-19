@@ -5,6 +5,7 @@ import (
 	"strings"
 	"time"
 	"unicode"
+	"unicode/utf8"
 )
 
 const (
@@ -67,6 +68,20 @@ func TruncateStringFromEnd(str string, num int) string {
 		}
 	}
 	return s
+}
+
+func SplitString(longString string, maxLen int) []string {
+	splits := []string{}
+
+	var l, r int
+	for l, r = 0, maxLen; r < len(longString); l, r = r, r+maxLen {
+		for !utf8.RuneStart(longString[r]) {
+			r--
+		}
+		splits = append(splits, longString[l:r])
+	}
+	splits = append(splits, longString[l:])
+	return splits
 }
 
 func NumberToUnit(num uint64) string {

@@ -1,5 +1,7 @@
 package ethr
 
+import "strings"
+
 type TestType uint32
 
 const (
@@ -13,6 +15,28 @@ const (
 	TestTypeMyTraceRoute
 	TestTypeUnknown
 )
+
+func (p TestType) MarshalJSON() ([]byte, error) {
+	switch p {
+	case TestTypeServer:
+		return []byte("Server"), nil
+	case TestTypeBandwidth:
+		return []byte("Bandwidth"), nil
+	case TestTypeConnectionsPerSecond:
+		return []byte("ConnectionsPerSecond"), nil
+	case TestTypePacketsPerSecond:
+		return []byte("PacketsPerSecond"), nil
+	case TestTypeLatency:
+		return []byte("Latency"), nil
+	case TestTypePing:
+		return []byte("Ping"), nil
+	case TestTypeTraceRoute:
+		return []byte("TraceRoute"), nil
+	case TestTypeMyTraceRoute:
+		return []byte("MyTraceRoute"), nil
+	}
+	return []byte("UNKNOWN"), nil
+}
 
 func (p TestType) String() string {
 	switch p {
@@ -37,23 +61,28 @@ func (p TestType) String() string {
 }
 
 func ParseTestType(s string) TestType {
-	switch s {
-	case "s":
+	switch strings.ToUpper(s) {
+	case "S":
 		return TestTypeServer
-	case "b":
+	case "B":
 		return TestTypeBandwidth
-	case "c":
+	case "C":
 		return TestTypeConnectionsPerSecond
-	case "p":
+	case "P":
 		return TestTypePacketsPerSecond
-	case "l":
+	case "L":
 		return TestTypeLatency
-	case "pi":
+	case "PI":
 		return TestTypePing
-	case "tr":
+	case "TR":
 		return TestTypeTraceRoute
-	case "mtr":
+	case "MTR":
 		return TestTypeMyTraceRoute
 	}
 	return TestTypeUnknown
+}
+
+type TestID struct {
+	Protocol Protocol
+	Type     TestType
 }

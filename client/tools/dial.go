@@ -10,8 +10,13 @@ import (
 	"weavelab.xyz/ethr/ethr"
 )
 
-func (t Tools) Dial(p ethr.Protocol, dialAddr, localIP string, localPortNum uint16, ttl int, tos int) (net.Conn, error) {
-	localAddr := fmt.Sprintf("%v:%v", localIP, localPortNum)
+func (t Tools) Dial(p ethr.Protocol, dialAddr string, localIP net.IP, localPort uint16, ttl int, tos int) (net.Conn, error) {
+	var localAddr string
+	if localIP != nil {
+		localAddr = fmt.Sprintf("%s:%d", localIP, localPort)
+	} else {
+		localAddr = fmt.Sprintf(":%d", localPort) // listen on localhost for IPv4 AND IPv6 :/
+	}
 	var lAddr net.Addr
 	var network string
 	var err error

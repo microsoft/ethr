@@ -65,11 +65,11 @@ func (u *RawUI) printTestResults(results []string) {
 	fmt.Printf("[%13s]  %5s  %7s  %7s  %7s  %8s\n", ui.TruncateStringFromStart(results[0], 13), results[1], results[2], results[3], results[4], results[5])
 }
 
-func (t *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *AggregateStats) []string {
+func (u *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *AggregateStats) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps uint64
 	var lat payloads.LatencyPayload
-	test, found := s.Tests[session.TestID{Protocol: protocol, Type: ethr.TestTypeServer}]
+	test, found := s.Tests[ethr.TestID{Protocol: protocol, Type: ethr.TestTypeServer}]
 	if found && test.IsActive {
 		result := test.LatestResult()
 		if body, ok := result.Body.(payloads.ServerPayload); ok {
@@ -131,4 +131,12 @@ func (t *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *
 	}
 
 	return []string{}
+}
+
+func (u *RawUI) AddInfoMsg(msg string) {
+	// do nothing
+}
+
+func (u *RawUI) AddErrorMsg(msg string) {
+	// do nothing
 }

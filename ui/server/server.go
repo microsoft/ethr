@@ -6,12 +6,16 @@ import (
 	"time"
 )
 
+// TODO figure out a better way to interact with tui error/info panes
 type ServerUI interface {
 	Paint(uint64)
+	AddInfoMsg(string)
+	AddErrorMsg(string)
 }
 
 type UI struct {
 	Terminal ServerUI
+	isTui    bool
 
 	TCP  *AggregateStats
 	ICMP *AggregateStats
@@ -21,9 +25,10 @@ type UI struct {
 func NewUI(terminalUI bool) *UI {
 	var ui ServerUI
 	var err error
-	var tcp, udp, icmp AggregateStats
+
+	tcp, udp, icmp := NewAggregateStats(), NewAggregateStats(), NewAggregateStats()
 	if terminalUI {
-		ui, err = InitTui(&tcp, &udp, &icmp)
+		ui, err = InitTui(tcp, udp, icmp)
 		if err != nil {
 			fmt.Println("Error: Failed to initialize UI.", err)
 			fmt.Println("Using command line view instead of UI")
@@ -31,11 +36,17 @@ func NewUI(terminalUI bool) *UI {
 	}
 
 	if ui == nil {
-		ui, _ = InitRawUI(&tcp, &udp, &icmp)
+		terminalUI = false
+		ui, _ = InitRawUI(tcp, udp, icmp)
 	}
 
 	return &UI{
 		Terminal: ui,
+		isTui:    terminalUI,
+
+		TCP:  tcp,
+		UDP:  udp,
+		ICMP: icmp,
 	}
 }
 

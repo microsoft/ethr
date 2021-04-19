@@ -83,6 +83,9 @@ func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, seconds uint64)
 
 		break
 	}
+	if seconds < 1 {
+		seconds = 1
+	}
 	curStats.RXBytes /= seconds
 	curStats.TXBytes /= seconds
 	curStats.RXPackets /= seconds

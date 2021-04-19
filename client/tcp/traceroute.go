@@ -148,7 +148,7 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), localPortNum, hop, 0)
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, localPortNum, hop, 0)
 	hopData.Sent++
 	if err != nil { // majority case
 		endTime = <-endTimeChan

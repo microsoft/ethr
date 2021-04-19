@@ -23,15 +23,12 @@ type LatencyPayload struct {
 	P9999 time.Duration
 }
 
-func NewLatencies(rttCount int, latencies []time.Duration) LatencyPayload {
-	sum := int64(0)
-	for _, d := range latencies {
-		sum += d.Nanoseconds()
+func NewLatencies(latencies []time.Duration) LatencyPayload {
+	rttCount := len(latencies)
+	if rttCount == 0 {
+		return LatencyPayload{}
 	}
-	elapsed := time.Duration(sum / int64(rttCount))
-	sort.SliceStable(latencies, func(i, j int) bool {
-		return latencies[i] < latencies[j]
-	})
+
 	//
 	// Special handling for rttCount == 1. This prevents negative index
 	// in the latencyNumber index. The other option is to use
@@ -41,6 +38,16 @@ func NewLatencies(rttCount int, latencies []time.Duration) LatencyPayload {
 	if rttCountFixed == 1 {
 		rttCountFixed = 2
 	}
+
+	sum := int64(0)
+	for _, d := range latencies {
+		sum += d.Nanoseconds()
+	}
+	elapsed := time.Duration(sum / int64(rttCount))
+	sort.SliceStable(latencies, func(i, j int) bool {
+		return latencies[i] < latencies[j]
+	})
+
 	return LatencyPayload{
 		Raw:   latencies,
 		Avg:   elapsed,

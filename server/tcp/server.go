@@ -2,6 +2,7 @@ package tcp
 
 import (
 	"context"
+	"fmt"
 	"net"
 	"strconv"
 	"time"
@@ -13,7 +14,13 @@ import (
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), cfg.LocalIP.String()+":"+strconv.Itoa(int(cfg.LocalPort)))
+	var addr string
+	if cfg.LocalIP != nil {
+		addr = fmt.Sprintf("%s:%d", cfg.LocalIP, cfg.LocalPort)
+	} else {
+		addr = fmt.Sprintf(":%d", cfg.LocalPort) // listen on localhost for IPv4 AND IPv6 :/
+	}
+	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), addr)
 	if err != nil {
 		return err
 	}
@@ -47,7 +54,7 @@ func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
 		conn.RemoteAddr()
 		remote, port, err := net.SplitHostPort(conn.RemoteAddr().String())
 		if err != nil {
-			h.logger.Debug("RemoteAddr: Split host port failed: %v", err)
+			h.logger.Error("RemoteAddr: Split host port failed: %v", err)
 			continue
 		}
 		rIP := net.ParseIP(remote)

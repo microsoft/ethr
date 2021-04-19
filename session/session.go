@@ -9,15 +9,11 @@ import (
 	"weavelab.xyz/ethr/ethr"
 )
 
-type Conn struct {
-	Conn net.Conn
-	FD   uintptr
-}
-
 type Session struct {
 	sync.RWMutex
-	Tests   map[TestID]*Test
+	Tests   map[ethr.TestID]*Test
 	polling bool
+	done    chan struct{}
 }
 
 var Logger ethr.Logger
@@ -39,7 +35,7 @@ func GetSessions() []Session {
 // sending any traffic. This is poor man's garbage collection to ensure the
 // server doesn't end up printing dormant client related statistics as UDP
 // has no reliable way to detect if client is active or not.
-func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
+func (s *Session) PollInactive(ctx context.Context, gap time.Duration) {
 	s.RLock()
 	if s.polling {
 		s.RUnlock()
@@ -48,17 +44,20 @@ func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
 	s.polling = true
 	s.RUnlock()
 
+	Logger.Debug("starting new polling for session")
 	ticker := time.NewTicker(gap)
 	for {
 		select {
 		case <-ctx.Done():
+			return
+		case <-s.done:
 			return
 		case <-ticker.C:
 			// TODO make sure frequent locking doesn't block
 			toDelete := make([]*Test, 0)
 			s.RLock()
 			for k, v := range s.Tests {
-				Logger.Debug("Found Test from server: %v, time: %v", k, v.LastAccess)
+				//Logger.Debug("Found Test from server: %v, time: %v", k, v.LastAccess)
 				// At 200ms of no activity, mark the test in-active so stats stop
 				// printing.
 				if time.Since(v.LastAccess) > (200 * time.Millisecond) {
@@ -67,7 +66,7 @@ func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
 				// At 2s of no activity, delete the test by assuming that client
 				// has stopped.
 				if time.Since(v.LastAccess) > (2 * time.Second) {
-					Logger.Debug("Deleting UDP test from server: %v, lastAccess: %v", k, v.LastAccess)
+					Logger.Debug("Deleting test from server: %v, lastAccess: %v", k, v.LastAccess)
 					toDelete = append(toDelete, v)
 				}
 			}
@@ -80,8 +79,6 @@ func (s Session) PollInactive(ctx context.Context, gap time.Duration) {
 }
 
 func CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType ethr.TestType, aggregator ResultAggregator) (*Test, bool) {
-	//sessionLock.Lock()
-	//defer sessionLock.Unlock()
 	isNew := false
 	session := getOrCreateSession(rIP)
 	test := session.getTest(protocol, testType)
@@ -90,6 +87,8 @@ func CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType 
 		test, _ = session.newTest(rIP, rPort, protocol, testType, ethr.ClientParams{}, aggregator)
 		test.IsActive = true
 	}
+	test.LastAccess = time.Now()
+	test.IsDormant = false
 	return test, isNew
 }
 
@@ -101,6 +100,7 @@ func DeleteTest(t *Test) {
 		delete(s.Tests, t.ID)
 		s.Unlock()
 		if len(s.Tests) == 0 {
+			close(s.done)
 			delete(sessions, t.RemoteIP.String()) // TODO locking here causes issues, maybe another solution?
 		}
 	}
@@ -112,7 +112,8 @@ func getOrCreateSession(rIP net.IP) *Session {
 	session, found := sessions[rIP.String()]
 	if !found {
 		session = &Session{
-			Tests: make(map[TestID]*Test),
+			Tests: make(map[ethr.TestID]*Test),
+			done:  make(chan struct{}),
 		}
 		sessions[rIP.String()] = session
 	}
@@ -120,6 +121,7 @@ func getOrCreateSession(rIP net.IP) *Session {
 }
 
 func (s *Session) newTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt ethr.TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
+	Logger.Debug("New test created from %s:%d", rIP, rPort)
 	test := NewTest(s, protocol, tt, rIP, rPort, clientParam, aggregator)
 	s.Lock()
 	s.Tests[test.ID] = test
@@ -132,7 +134,7 @@ func (s *Session) newTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt e
 
 func (s *Session) getTest(proto ethr.Protocol, testType ethr.TestType) (test *Test) {
 	s.RLock()
-	test, _ = s.Tests[TestID{Protocol: proto, Type: testType}]
+	test, _ = s.Tests[ethr.TestID{Protocol: proto, Type: testType}]
 	s.RUnlock()
 	return
 }

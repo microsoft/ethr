@@ -2,7 +2,9 @@ package tcp
 
 import (
 	"context"
+	"errors"
 	"net"
+	"syscall"
 	"time"
 
 	"weavelab.xyz/ethr/session/payloads"
@@ -24,23 +26,6 @@ func NewHandler(logger ethr.Logger) Handler {
 func (h Handler) HandleConn(ctx context.Context, test *session.Test, conn net.Conn) {
 	defer conn.Close()
 
-	isCPSorPing := true
-	// For ConnectionsPerSecond and Ping tests, there is no deterministic way to know when the test starts
-	// from the client side and when it ends. This defer function ensures that test is not
-	// created/deleted repeatedly by doing a deferred deletion. If another connection
-	// comes with-in 2s, then another reference would be taken on existing test object
-	// and it won't be deleted by safeDeleteTest call. This also ensures, test header is
-	// not printed repeatedly via emitTestHdr.
-	// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
-	defer func() {
-		if isCPSorPing {
-			time.Sleep(2 * time.Second) // must be longer than handshake timeout
-		}
-		session.DeleteTest(test)
-	}()
-
-	// Always increment ConnectionsPerSecond count and then check if the test is Bandwidth etc. and handle
-	// those cases as well.
 	test.AddIntermediateResult(session.TestResult{
 		Success: true,
 		Error:   nil,
@@ -49,16 +34,29 @@ func (h Handler) HandleConn(ctx context.Context, test *session.Test, conn net.Co
 
 	testID, clientParam, err := test.Session.HandshakeWithClient(conn)
 	if err != nil {
-		h.logger.Debug("Failed in handshake with the client. Error: %v", err)
+		//// For ConnectionsPerSecond and Ping tests, there is no deterministic way to know when the test starts
+		//// from the client side and when it ends. This defer function ensures that test is not
+		//// created/deleted repeatedly by doing a deferred deletion. If another connection
+		//// comes with-in 2s, then another reference would be taken on existing test object
+		//// and it won't be deleted by safeDeleteTest call. This also ensures, test header is
+		//// not printed repeatedly via emitTestHdr.
+		//// Note: Similar mechanism is used in UDP tests to handle test lifetime as well.
+		if operr, ok := err.(*net.OpError); ok && errors.Is(operr.Err, syscall.ECONNRESET) {
+			// TODO find a better way to avoid spinning up go routines just to close them for all but the first connection
+			go test.Session.PollInactive(ctx, 100*time.Millisecond)
+			return
+		}
+
+		h.logger.Error("Failed in handshake with the client. Error: %v", err)
 		return
 	}
-	isCPSorPing = false
 	if testID.Protocol == ethr.TCP {
 		if testID.Type == ethr.TestTypeBandwidth {
 			_ = h.TestBandwidth(test, clientParam, conn)
 		} else if testID.Type == ethr.TestTypeLatency {
 			_ = h.TestLatency(test, clientParam, conn)
 		}
+		session.DeleteTest(test) // tests block until complete, cleanup
 	}
 }
 
@@ -88,7 +86,7 @@ func ServerAggregator(seconds uint64, intermediateResults []session.TestResult) 
 		Body: payloads.ServerPayload{
 			ConnectionsPerSecond: connections / seconds,
 			Bandwidth:            totalBandwidth / seconds,
-			Latency:              payloads.NewLatencies(len(latencies), latencies),
+			Latency:              payloads.NewLatencies(latencies),
 		},
 	}
 }

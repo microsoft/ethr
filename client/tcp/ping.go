@@ -53,7 +53,7 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 
 func (t Tests) DoPing(test *session.Test, prefix string) (time.Duration, error) {
 	t0 := time.Now()
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort, 0, 0) // TODO force client port to 0?
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort, 0, 0) // TODO force client port to 0?
 	if err != nil {
 		return 0, fmt.Errorf("%sconnection to %s timed out: %w", prefix, test.DialAddr, err)
 	}
@@ -86,7 +86,7 @@ func PingAggregator(seconds uint64, intermediateResults []session.TestResult) se
 		Success: true,
 		Error:   nil,
 		Body: payloads.PingPayload{
-			Latency:  payloads.NewLatencies(len(latencies), latencies),
+			Latency:  payloads.NewLatencies(latencies),
 			Sent:     uint32(len(intermediateResults)),
 			Lost:     uint32(lost),
 			Received: uint32(received),

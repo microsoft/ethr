@@ -14,7 +14,7 @@ import (
 func (t Tests) TestBandwidth(test *session.Test) {
 	for th := uint32(0); th < test.ClientParam.NumThreads; th++ {
 		go func(th uint32) {
-			conn, err := t.NetTools.Dial(ethr.UDP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort+uint16(th), 0, 0)
+			conn, err := t.NetTools.Dial(ethr.UDP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort+uint16(th), 0, 0)
 			if err != nil {
 				return
 			}

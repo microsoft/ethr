@@ -1,5 +1,7 @@
 package ethr
 
+import "strings"
+
 type Protocol uint32
 
 const (
@@ -33,7 +35,7 @@ func (p Protocol) String() string {
 }
 
 func ParseProtocol(s string) Protocol {
-	switch s {
+	switch strings.ToUpper(s) {
 	case "TCP":
 		return TCP
 	case "UDP":

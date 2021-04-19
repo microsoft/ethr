@@ -26,16 +26,15 @@ func (h Handler) HandleConn(ctx context.Context, unused *session.Test, conn net.
 	readBuffer := make([]byte, 64*1024)
 
 	var err error
-	n := 0
 	for err == nil {
 		if udpConn, ok := conn.(*net.UDPConn); ok {
-			n, _, err = udpConn.ReadFrom(readBuffer) // don't actually care about the packet just how many bytes we read 'n'
+			bytes, raddr, err := udpConn.ReadFrom(readBuffer) // don't actually care about the packet just how many bytes we read 'n'
 			if err != nil {
 				h.logger.Debug("Error receiving data from UDP for bandwidth test: %v", err)
 				continue
 			}
 
-			if udpAddr, ok := conn.RemoteAddr().(*net.UDPAddr); ok {
+			if udpAddr, ok := raddr.(*net.UDPAddr); ok {
 				test, isNew := session.CreateOrGetTest(udpAddr.IP, uint16(udpAddr.Port), ethr.UDP, ethr.TestTypeServer, ServerAggregator)
 				if isNew {
 					h.logger.Debug("Creating UDP test from server: %v, lastAccess: %v", udpAddr.String(), time.Now())
@@ -43,13 +42,11 @@ func (h Handler) HandleConn(ctx context.Context, unused *session.Test, conn net.
 				}
 
 				if test != nil {
-					test.IsDormant = false
-					test.LastAccess = time.Now()
 					test.AddIntermediateResult(session.TestResult{
 						Success: true,
 						Error:   nil,
 						Body: payloads.RawBandwidthPayload{
-							Bandwidth:        uint64(n),
+							Bandwidth:        uint64(bytes),
 							PacketsPerSecond: 1,
 						},
 					})

@@ -5,19 +5,13 @@ import (
 	"net"
 	"strconv"
 	"sync"
-	"syscall"
 	"time"
 
 	"weavelab.xyz/ethr/ethr"
 )
 
-type TestID struct {
-	Protocol ethr.Protocol
-	Type     ethr.TestType
-}
-
 type Test struct {
-	ID          TestID
+	ID          ethr.TestID
 	IsActive    bool
 	IsDormant   bool
 	Session     *Session
@@ -27,7 +21,6 @@ type Test struct {
 	ClientParam ethr.ClientParams
 	Results     chan TestResult
 	Done        chan struct{}
-	ConnList    []*Conn
 	LastAccess  time.Time
 
 	resultLock          sync.Mutex
@@ -51,7 +44,7 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP
 	}
 	return &Test{
 		Session: s,
-		ID: TestID{
+		ID: ethr.TestID{
 			Protocol: protocol,
 			Type:     ttype,
 		},
@@ -61,7 +54,6 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP
 		ClientParam: params,
 		Done:        make(chan struct{}),
 		Results:     make(chan TestResult, 16), // TODO figure out appropriate buffer size (minimum 1 to avoid blocking an error)
-		ConnList:    make([]*Conn, 0, params.NumThreads),
 		LastAccess:  time.Now(),
 		IsDormant:   true,
 
@@ -73,7 +65,10 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP
 }
 
 func (t *Test) StartPublishing() {
+	publishingGap := 100 * time.Millisecond // TODO how long to wait for?
+
 	ticker := time.NewTicker(time.Second) // most metrics are per second
+	// TODO figure out cleanup on test delete to avoid memory leak
 	for {
 		start := time.Now()
 		if t.aggregator != nil {
@@ -95,7 +90,8 @@ func (t *Test) StartPublishing() {
 				t.resultLock.Unlock()
 
 				t.Results <- r
-
+			default:
+				time.Sleep(publishingGap)
 			}
 		} else {
 			t.resultLock.Lock()
@@ -106,10 +102,11 @@ func (t *Test) StartPublishing() {
 			}
 			if len(t.intermediateResults) > 0 {
 				// TODO make sure old array is GC'ed
-				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+				t.intermediateResults = t.intermediateResults[:0]
+				//t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
 			}
 			t.resultLock.Unlock()
-			time.Sleep(100 * time.Millisecond) // TODO how long to wait for?
+			time.Sleep(publishingGap)
 		}
 	}
 
@@ -125,44 +122,4 @@ func (t *Test) LatestResult() TestResult {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()
 	return t.latestResult
-}
-
-func (t *Test) NewConn(conn net.Conn) (c *Conn) {
-	sessionLock.Lock()
-	defer sessionLock.Unlock()
-	c = &Conn{
-		Conn: conn,
-		FD:   getFd(conn),
-	}
-	t.ConnList = append(t.ConnList, c)
-	return c
-}
-
-func getFd(conn net.Conn) uintptr {
-	var fd uintptr
-	var rc syscall.RawConn
-	var err error
-	switch ct := conn.(type) {
-	case *net.TCPConn:
-		rc, err = ct.SyscallConn()
-		if err != nil {
-			return 0
-		}
-	case *net.UDPConn:
-		rc, err = ct.SyscallConn()
-		if err != nil {
-			return 0
-		}
-	default:
-		return 0
-	}
-
-	// The docs say this pointer is not guaranteed to stay valid
-	// https://pkg.go.dev/syscall#RawConn.Control
-	// TODO find a better pattern for persistent access/interaction with fd
-	fn := func(s uintptr) {
-		fd = s
-	}
-	rc.Control(fn)
-	return fd
 }

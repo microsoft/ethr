@@ -1,7 +1,6 @@
 package server
 
 import (
-	"errors"
 	"fmt"
 	"os"
 	"sync"
@@ -46,11 +45,11 @@ func InitTui(tcp *AggregateStats, udp *AggregateStats, icmp *AggregateStats) (*T
 	}
 
 	w, h := tm.Size()
-	if h < 40 || w < 80 {
-		tm.Close()
-		s := fmt.Sprintf("Terminal too small (%dwx%dh), must be at least 40hx80w", w, h)
-		return nil, errors.New(s)
-	}
+	//if h < 40 || w < 80 {
+	//	tm.Close()
+	//	s := fmt.Sprintf("Terminal too small (%dwx%dh), must be at least 40hx80w", w, h)
+	//	return nil, errors.New(s)
+	//}
 
 	tm.SetInputMode(tm.InputEsc | tm.InputMouse)
 	tm.Clear(tm.ColorDefault, tm.ColorDefault)
@@ -143,7 +142,11 @@ func InitTui(tcp *AggregateStats, udp *AggregateStats, icmp *AggregateStats) (*T
 	return &tui, nil
 }
 
+// TODO change to milliseconds or smaller
 func (t *Tui) Paint(seconds uint64) {
+	if seconds < 1 {
+		seconds = 1 // avoid divide by zero
+	}
 	_ = tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	defer tm.Flush()
 	printCenterText(0, 0, t.w, "Ethr (Version: "+config.Version+")", tm.ColorBlack, tm.ColorWhite)
@@ -175,34 +178,52 @@ func (t *Tui) Paint(seconds uint64) {
 		t.res.addTblRow(t.resultHdr)
 		t.res.addTblSpr()
 	}
+	tcpActive, udpActive, icmpActive := false, false, false
 	for _, s := range sessions {
 		tcpResults := t.getTestResults(&s, ethr.TCP, t.tcpStats)
-		t.res.addTblRow(tcpResults)
-		t.res.addTblSpr()
+		if len(tcpResults) > 0 {
+			t.res.addTblRow(tcpResults)
+			t.res.addTblSpr()
+			tcpActive = true
+		}
 
 		udpResults := t.getTestResults(&s, ethr.UDP, t.udpStats)
-		t.res.addTblRow(udpResults)
-		t.res.addTblSpr()
+		if len(udpResults) > 0 {
+			t.res.addTblRow(udpResults)
+			t.res.addTblSpr()
+			udpActive = true
+		}
 
 		icmpResults := t.getTestResults(&s, ethr.ICMP, t.icmpStats)
-		t.res.addTblRow(icmpResults)
-		t.res.addTblSpr()
+		if len(icmpResults) > 0 {
+			t.res.addTblRow(icmpResults)
+			t.res.addTblSpr()
+			icmpActive = true
+		}
 	}
 
-	tcpAgg := t.tcpStats.ToString(ethr.TCP)
-	t.tcpStats.Reset()
-	t.res.addTblRow(tcpAgg)
-	t.res.addTblSpr()
+	if len(sessions) > 0 {
+		if tcpActive {
+			tcpAgg := t.tcpStats.ToString(ethr.TCP)
+			t.tcpStats.Reset()
+			t.res.addTblRow(tcpAgg)
+			t.res.addTblSpr()
+		}
 
-	udpAgg := t.udpStats.ToString(ethr.UDP)
-	t.udpStats.Reset()
-	t.res.addTblRow(udpAgg)
-	t.res.addTblSpr()
+		if udpActive {
+			udpAgg := t.udpStats.ToString(ethr.UDP)
+			t.udpStats.Reset()
+			t.res.addTblRow(udpAgg)
+			t.res.addTblSpr()
+		}
 
-	icmpAgg := t.icmpStats.ToString(ethr.ICMP)
-	t.icmpStats.Reset()
-	t.res.addTblRow(icmpAgg)
-	t.res.addTblSpr()
+		if icmpActive {
+			icmpAgg := t.icmpStats.ToString(ethr.ICMP)
+			t.icmpStats.Reset()
+			t.res.addTblRow(icmpAgg)
+			t.res.addTblSpr()
+		}
+	}
 
 	previousStats := stats.PreviousStats()
 
@@ -247,7 +268,7 @@ func (t *Tui) getTestResults(s *session.Session, protocol ethr.Protocol, agg *Ag
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps uint64
 	var lat payloads.LatencyPayload
-	test, found := s.Tests[session.TestID{Protocol: protocol, Type: ethr.TestTypeServer}]
+	test, found := s.Tests[ethr.TestID{Protocol: protocol, Type: ethr.TestTypeServer}]
 	if found && test.IsActive {
 		result := test.LatestResult()
 		if body, ok := result.Body.(payloads.ServerPayload); ok {
@@ -307,4 +328,20 @@ func (t *Tui) getTestResults(s *session.Session, protocol ethr.Protocol, agg *Ag
 	}
 
 	return []string{}
+}
+
+func (t *Tui) AddInfoMsg(msg string) {
+	t.ringLock.Lock()
+	parts := ui.SplitString(msg, t.msgW)
+	t.msgRing = t.msgRing[len(parts):]
+	t.msgRing = append(t.msgRing, parts...)
+	t.ringLock.Unlock()
+}
+
+func (t *Tui) AddErrorMsg(msg string) {
+	parts := ui.SplitString(msg, t.errW)
+	t.ringLock.Lock()
+	t.errRing = t.errRing[len(parts):]
+	t.errRing = append(t.errRing, parts...)
+	t.ringLock.Unlock()
 }

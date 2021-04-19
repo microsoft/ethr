@@ -12,7 +12,7 @@ import (
 )
 
 func (t Tests) TestLatency(test *session.Test, g time.Duration) {
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP.String(), t.NetTools.LocalPort, 0, 0)
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort, 0, 0)
 	if err != nil {
 		test.Results <- session.TestResult{
 			Success: false,
@@ -107,6 +107,6 @@ func LatencyAggregator(seconds uint64, intermediateResults []session.TestResult)
 	return session.TestResult{
 		Success: true,
 		Error:   nil,
-		Body:    payloads.NewLatencies(len(latencies), latencies),
+		Body:    payloads.NewLatencies(latencies),
 	}
 }

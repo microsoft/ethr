@@ -157,7 +157,7 @@ func PingAggregator(seconds uint64, intermediateResults []session.TestResult) se
 		Success: true,
 		Error:   nil,
 		Body: payloads.PingPayload{
-			Latency:  payloads.NewLatencies(len(latencies), latencies),
+			Latency:  payloads.NewLatencies(latencies),
 			Sent:     uint32(len(intermediateResults)),
 			Lost:     uint32(lost),
 			Received: uint32(received),

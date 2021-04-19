@@ -60,7 +60,7 @@ func Init() error {
 	flag.BoolVar(&UseIPv4, "4", false, "")
 	flag.BoolVar(&UseIPv6, "6", false, "")
 	port := flag.Int("port", 8888, "")
-	rawIP := flag.String("ip", "", "")
+	rawIP := flag.String("ip", "localhost", "")
 	flag.BoolVar(&IsServer, "s", false, "")
 
 	flag.BoolVar(&ShowUI, "ui", false, "")
@@ -84,9 +84,13 @@ func Init() error {
 
 	flag.Parse()
 
-	LocalIP = net.ParseIP(*rawIP)
-	if LocalIP == nil || (UseIPv4 && LocalIP.To4() == nil) || (UseIPv6 && LocalIP.To16() == nil) {
-		return fmt.Errorf("invalid ip address: %s", *rawIP)
+	if *rawIP == "localhost" {
+		LocalIP = nil
+	} else {
+		LocalIP = net.ParseIP(*rawIP)
+		if LocalIP == nil || (UseIPv4 && LocalIP.To4() == nil) || (UseIPv6 && LocalIP.To16() == nil) {
+			return fmt.Errorf("invalid ip address: %s", *rawIP)
+		}
 	}
 
 	LocalPort = uint16(*lport)
@@ -110,7 +114,7 @@ func Init() error {
 
 	Protocol = ethr.ParseProtocol(*rawProtocol)
 	if Protocol == ethr.ProtocolUnknown {
-		return errors.New("invalid protocol")
+		return fmt.Errorf("invalid protocol: %s", *rawProtocol)
 	}
 
 	TestType = ethr.ParseTestType(*rawTestType)
@@ -144,6 +148,8 @@ func Init() error {
 	}
 
 	IsExternal = ExternalClientDest != ""
+
+	Debug = true
 
 	if IsServer {
 		return validateServerArgs()
@@ -192,7 +198,7 @@ func validateServerArgs() (err error) {
 	if TOS != 0 {
 		invalidFlags = append(invalidFlags, "-tos")
 	}
-	if ThreadCount != 1 {
+	if ThreadCount != 0 {
 		invalidFlags = append(invalidFlags, "-n")
 	}
 	if WarmupCount != 1 {
