@@ -8,9 +8,14 @@ import (
 	"runtime"
 	"syscall"
 
-	"weavelab.xyz/ethr/client"
-
 	"weavelab.xyz/ethr/server/udp"
+
+	"weavelab.xyz/ethr/session"
+	"weavelab.xyz/ethr/stats"
+
+	"weavelab.xyz/ethr/log"
+
+	"weavelab.xyz/ethr/client"
 
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/server/tcp"
@@ -21,7 +26,7 @@ import (
 	serverUi "weavelab.xyz/ethr/ui/server"
 )
 
-func mainX() {
+func main() {
 	//
 	// Set GOMAXPROCS to 1024 as running large number of goroutines that send
 	// data in a tight loop over network is resulting in unfair time allocation
@@ -30,14 +35,14 @@ func mainX() {
 	//
 	runtime.GOMAXPROCS(1024)
 
-	fmt.Println("\nEthr: Comprehensive Network Performance Measurement Tool (Version: " + gVersion + ")")
+	fmt.Println("\nEthr: Comprehensive Network Performance Measurement Tool (Version: " + config.Version + ")")
 	fmt.Println("Maintainer: Pankaj Garg (ipankajg @ LinkedIn | GitHub | Gmail | Twitter)")
 	fmt.Println("")
 
 	err := config.Init()
 	if err != nil {
 		fmt.Printf("Error: %v\n", err)
-		fmt.Printf("Please use \"ethr -h\" for complete list of command line arguments.\n")
+		fmt.Printf("Please use \"ethr -h\" for complete list of command line arguments\n")
 		os.Exit(1)
 	}
 
@@ -51,9 +56,6 @@ func mainX() {
 		cancel()
 	}()
 
-	// TODO init logging
-	var logger ethr.Logger
-
 	if config.IsServer {
 		cfg := server.Config{
 			IPVersion: config.IPVersion,
@@ -64,21 +66,27 @@ func mainX() {
 		term := serverUi.NewUI(config.ShowUI)
 		term.Display(ctx)
 
-		var err error
-		if config.Protocol == ethr.TCP {
-			// TODO stop server on ctx.cancel
-			err = tcp.Serve(ctx, &cfg, tcp.NewHandler(logger))
+		logger := configureLogger(ctx, term)
 
-		} else if config.Protocol == ethr.UDP {
-			// TODO stop server on ctx.cancel
-			err = udp.Serve(ctx, &cfg, udp.NewHandler(logger))
+		stats.StartTimer()
+		defer stats.StopTimer()
+
+		// TODO log listening ip and port
+		// TODO stop server on ctx.cancel
+		err := udp.Serve(ctx, &cfg, udp.NewHandler(logger))
+		if err != nil {
+			fmt.Printf("%v", err)
+			os.Exit(1)
 		}
+
+		err = tcp.Serve(ctx, &cfg, tcp.NewHandler(logger))
 		if err != nil {
 			fmt.Printf("%v", err)
 			os.Exit(1)
 		}
 	} else {
-		term := cUi.NewUI(config.Title, !config.NoConnectionStats)
+		logger := configureLogger(ctx, nil)
+		term := cUi.NewUI(config.Title, !config.NoConnectionStats, logger)
 		params := ethr.ClientParams{
 			NumThreads:  uint32(config.ThreadCount),
 			BufferSize:  uint32(config.BufferSize),
@@ -90,7 +98,7 @@ func mainX() {
 			BwRate:      config.BandwidthRate,
 			ToS:         uint8(config.TOS),
 		}
-		c, err := client.NewClient(config.IsExternal, logger, params, config.ClientDest, config.LocalIP, config.LocalPort)
+		c, err := client.NewClient(config.IsExternal, logger, params, config.RemoteIP, config.Port, config.LocalIP, config.LocalPort)
 		if err != nil {
 			fmt.Printf("%v", err)
 			os.Exit(1)
@@ -109,4 +117,34 @@ func mainX() {
 			os.Exit(1)
 		}
 	}
+}
+
+func configureLogger(ctx context.Context, term *serverUi.UI) ethr.Logger {
+	loglevel := log.LevelInfo
+	if config.Debug {
+		loglevel = log.LevelDebug
+	}
+	loggers := make([]ethr.Logger, 0)
+	if !config.NoOutput {
+		fileLogger, err := log.NewJSONLogger(config.OutputFile, loglevel)
+		if err != nil {
+			fmt.Printf("failed to initialize file logger: %s\n", err)
+		}
+		fileLogger.Init(ctx)
+		loggers = append(loggers, fileLogger)
+	}
+
+	if config.IsServer && config.ShowUI {
+		termLogger := log.NewTuiLogger(loglevel, term.Terminal)
+		termLogger.Init(ctx)
+		loggers = append(loggers, termLogger)
+	} else {
+		stdoutLogger := log.NewSTDOutLogger(loglevel)
+		stdoutLogger.Init(ctx)
+		loggers = append(loggers, stdoutLogger)
+	}
+	logger := log.NewAggregateLogger(loggers...)
+	session.Logger = logger
+	stats.Logger = logger
+	return logger
 }
