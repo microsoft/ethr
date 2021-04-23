@@ -4,7 +4,10 @@ import (
 	"bytes"
 	"fmt"
 	"net"
+	"os"
 	"time"
+
+	"weavelab.xyz/ethr/ui"
 
 	"golang.org/x/net/icmp"
 	"golang.org/x/net/ipv4"
@@ -18,8 +21,9 @@ import (
 func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
 	addr := &net.IPAddr{IP: test.RemoteIP}
 
-	threads := test.ClientParam.NumThreads
-	for th := uint32(0); th < threads; th++ {
+	//threads := test.ClientParam.NumThreads
+	threads := 1
+	for th := 0; th < threads; th++ {
 		go func() {
 			for {
 				select {
@@ -29,15 +33,15 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 					t0 := time.Now()
 					if warmupCount > 0 {
 						warmupCount--
-						_, _ = t.DoPing(addr)
+						_, _ = t.DoPing(addr, "[warmup]")
 					} else {
-						latency, err := t.DoPing(addr)
+						latency, err := t.DoPing(addr, "")
 						test.AddIntermediateResult(session.TestResult{
 							Success: err == nil,
 							Error:   err,
 							Body: payloads.RawPingPayload{
 								Latency: latency,
-								Lost:    err == nil,
+								Lost:    err != nil,
 							},
 						})
 					}
@@ -51,12 +55,20 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 	}
 }
 
-func (t Tests) DoPing(addr net.Addr) (time.Duration, error) {
+func (t Tests) DoPing(addr net.Addr, prefix string) (time.Duration, error) {
 	timeout := time.Second
-	latency, _, err := t.icmpPing(addr, timeout, 254, 255)
+	latency, peer, err := t.icmpPing(addr, timeout, 254, 255)
 	if err != nil {
 		return timeout, err
 	}
+
+	if peer.String() != addr.String() {
+		t.Logger.Info("[icmp] %sPing to %s: %s",
+			prefix, addr, "Non-EchoReply Received.")
+		return time.Second, os.ErrNotExist
+	}
+	t.Logger.Info("[icmp] %sPing to %s: %s",
+		prefix, addr, ui.DurationToString(latency))
 
 	return latency, nil
 }
@@ -136,10 +148,10 @@ func PingAggregator(seconds uint64, intermediateResults []session.TestResult) se
 	for _, r := range intermediateResults {
 		// ignore failed results
 		if body, ok := r.Body.(payloads.RawPingPayload); ok && r.Success {
-			latencies = append(latencies, body.Latency)
 			if body.Lost {
 				lost++
 			} else {
+				latencies = append(latencies, body.Latency)
 				received++
 			}
 		}

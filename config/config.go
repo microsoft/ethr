@@ -98,14 +98,24 @@ func Init() error {
 		IPVersion = ethr.IPv4
 	}
 
+	IsExternal = ExternalClientDest != ""
+
 	var err error
 	LocalIP, err = lookupIP(*rawIP)
 	if err != nil {
 		return fmt.Errorf("failed to determine local IP: %w", err)
 	}
-	RemoteIP, err = lookupIP(ClientDest)
-	if err != nil {
-		return fmt.Errorf("failed to determine remote IP: %w", err)
+
+	if IsExternal {
+		RemoteIP, err = lookupIP(ExternalClientDest)
+		if err != nil {
+			return fmt.Errorf("failed to determine remote IP: %w", err)
+		}
+	} else {
+		RemoteIP, err = lookupIP(ClientDest)
+		if err != nil {
+			return fmt.Errorf("failed to determine remote IP: %w", err)
+		}
 	}
 
 	if OutputFile == "" {
@@ -150,8 +160,6 @@ func Init() error {
 			ThreadCount = runtime.NumCPU()
 		}
 	}
-
-	IsExternal = ExternalClientDest != ""
 
 	Debug = true
 
@@ -275,12 +283,12 @@ func validateClientArgs() error {
 			default:
 				return unsupportedTest()
 			}
-		case ethr.ICMP:
-			switch TestType {
-			case ethr.TestTypePing, ethr.TestTypeTraceRoute, ethr.TestTypeMyTraceRoute:
-			default:
-				return unsupportedTest()
-			}
+		//case ethr.ICMP:
+		//	switch TestType {
+		//	case ethr.TestTypePing, ethr.TestTypeTraceRoute, ethr.TestTypeMyTraceRoute:
+		//	default:
+		//		return unsupportedTest()
+		//	}
 		default:
 			return unsupportedTest()
 		}

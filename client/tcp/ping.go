@@ -15,8 +15,8 @@ import (
 
 func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
 	//threads := test.ClientParam.NumThreads
-	threads := uint32(1)
-	for th := uint32(0); th < threads; th++ {
+	threads := 1
+	for th := 0; th < threads; th++ {
 		go func() {
 			for {
 				select {

@@ -41,7 +41,7 @@ func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, rI
 		NetTools:  tools,
 		TCPTests:  tcp.Tests{NetTools: tools, Logger: logger},
 		UDPTests:  udp.Tests{NetTools: tools},
-		ICMPTests: icmp.Tests{NetTools: tools},
+		ICMPTests: icmp.Tests{NetTools: tools, Logger: logger},
 		Params:    params,
 		Logger:    logger,
 	}, nil
