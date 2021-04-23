@@ -119,6 +119,12 @@ func (t *Test) StartPublishing() {
 
 }
 
+func (t *Test) Terminate() {
+	close(t.Done)
+	t.IsActive = false
+
+}
+
 func (t *Test) AddIntermediateResult(r TestResult) {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()

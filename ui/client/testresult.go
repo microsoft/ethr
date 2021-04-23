@@ -14,7 +14,7 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 	// TODO get rid of printCount nonsense
 	printCount := uint64(0)
 	var latestResult session.TestResult
-
+	exiting := false
 	paintTicker := time.NewTicker(time.Second)
 	for {
 		switch test.ID.Type {
@@ -31,7 +31,14 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 		case ethr.TestTypeTraceRoute:
 			fallthrough
 		case ethr.TestTypeMyTraceRoute:
-			u.PrintTraceroute(test, latestResult, printCount == 0)
+			select {
+			case r := <-test.Results:
+				u.PrintTraceroute(test, r, false)
+			default:
+				if printCount == 0 {
+					u.PrintTraceroute(test, session.TestResult{}, true)
+				}
+			}
 		default:
 			u.printUnknownResultType()
 		}
@@ -41,6 +48,13 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 		case <-paintTicker.C:
 			latestResult = test.LatestResult()
 			continue
+		case <-test.Done:
+			// Ensure one last paint
+			if exiting {
+				return
+			}
+			latestResult = test.LatestResult()
+			exiting = true
 		case <-ctx.Done():
 			return
 		}

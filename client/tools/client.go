@@ -8,6 +8,7 @@ import (
 
 type Tools struct {
 	IPVersion ethr.IPVersion
+	Logger    ethr.Logger
 
 	IsExternal bool
 	RemoteIP   net.IP
@@ -17,7 +18,7 @@ type Tools struct {
 	LocalIP   net.IP
 }
 
-func NewTools(isExternal bool, rIP net.IP, rPort uint16, localPort uint16, localIP net.IP) (*Tools, error) {
+func NewTools(isExternal bool, rIP net.IP, rPort uint16, localPort uint16, localIP net.IP, logger ethr.Logger) (*Tools, error) {
 	var ipVersion ethr.IPVersion
 	if rIP != nil {
 		if rIP.To4() != nil {
@@ -37,5 +38,6 @@ func NewTools(isExternal bool, rIP net.IP, rPort uint16, localPort uint16, local
 		RemotePort: rPort,
 		LocalPort:  localPort,
 		LocalIP:    localIP,
+		Logger:     logger,
 	}, nil
 }

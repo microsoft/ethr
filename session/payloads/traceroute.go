@@ -15,32 +15,35 @@ type TraceRoutePayload struct {
 
 func (p TraceRoutePayload) String() string {
 	parts := make([]string, 0, len(p.Hops))
-	for idx, hop := range p.Hops {
-		parts = append(parts, fmt.Sprintf("%2d.| %s", idx, hop))
+	for _, hop := range p.Hops {
+		parts = append(parts, hop.String())
 	}
 	return strings.Join(parts, "\n")
-
 }
 
 type NetworkHop struct {
-	Addr     net.Addr
-	Sent     uint32
-	Rcvd     uint32
-	Lost     uint32
-	Last     time.Duration
-	Best     time.Duration
-	Worst    time.Duration
-	Average  time.Duration
-	Total    time.Duration
-	Name     string
-	FullName string
+	HopNumber int
+	Addr      net.Addr
+	Sent      uint32
+	Rcvd      uint32
+	Lost      uint32
+	Last      time.Duration
+	Best      time.Duration
+	Worst     time.Duration
+	Average   time.Duration
+	Total     time.Duration
+	Name      string
+	FullName  string
 }
 
 func (h NetworkHop) String() string {
 	if h.Addr == nil {
-		return "--???"
+		return fmt.Sprintf("%2d | ???", h.HopNumber)
 	}
-	return fmt.Sprintf("--%-40s   %5d   %5d   %9s   %9s   %9s   %9s", h.Addr, h.Sent, h.Rcvd, ui.DurationToString(h.Last), ui.DurationToString(h.Average), ui.DurationToString(h.Best), ui.DurationToString(h.Worst))
+	if h.FullName != "" {
+		return fmt.Sprintf("%2d | %-70s\t%5d\t%5d\t%9s\t%9s\t%9s\t%9s", h.HopNumber, h.Addr.String()+"["+h.FullName+"]", h.Sent, h.Rcvd, ui.DurationToString(h.Last), ui.DurationToString(h.Average), ui.DurationToString(h.Best), ui.DurationToString(h.Worst))
+	}
+	return fmt.Sprintf("%2d | %-70s\t%5d\t%5d\t%9s\t%9s\t%9s\t%9s", h.HopNumber, h.Addr, h.Sent, h.Rcvd, ui.DurationToString(h.Last), ui.DurationToString(h.Average), ui.DurationToString(h.Best), ui.DurationToString(h.Worst))
 }
 
 func (h *NetworkHop) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {

@@ -32,7 +32,7 @@ type Client struct {
 }
 
 func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, rIP net.IP, rPort uint16, localIP net.IP, localPort uint16) (*Client, error) {
-	tools, err := tools.NewTools(isExternal, rIP, rPort, localPort, localIP)
+	tools, err := tools.NewTools(isExternal, rIP, rPort, localPort, localIP, logger)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initial network tools: %w", err)
 	}
@@ -103,12 +103,12 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run traceroute: %w", ErrPermission)
 			}
-			go c.TCPTests.TestTraceRoute(test, gap, false, 30)
+			go c.TCPTests.TestTraceRoute(test, gap, false, 30) // normal traceroute defaults to 64
 		case ethr.TestTypeMyTraceRoute:
 			if !c.NetTools.IsAdmin() {
 				return fmt.Errorf("must be admin to run mytraceroute: %w", ErrPermission)
 			}
-			go c.TCPTests.TestTraceRoute(test, gap, true, 30)
+			go c.TCPTests.TestTraceRoute(test, gap, true, 30) // normal traceroute defaults to 64
 		default:
 			return ErrNotImplemented
 		}
@@ -130,9 +130,9 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		case ethr.TestTypePing:
 			go c.ICMPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
 		case ethr.TestTypeTraceRoute:
-			go c.ICMPTests.TestTraceRoute(test, gap, false, 30)
+			go c.ICMPTests.TestTraceRoute(test, gap, false, 16) // normal traceroute defaults to 64
 		case ethr.TestTypeMyTraceRoute:
-			go c.ICMPTests.TestTraceRoute(test, gap, true, 30)
+			go c.ICMPTests.TestTraceRoute(test, gap, true, 16) // normal traceroute defaults to 64
 		default:
 			return ErrNotImplemented
 		}
@@ -145,21 +145,19 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 	select {
 	case <-testComplete:
 		stats.StopTimer()
-		close(test.Done)
-
-		test.IsActive = false
-
+		test.Terminate()
 		if test.ID.Type == ethr.TestTypePing {
 			time.Sleep(500 * time.Millisecond)
 		}
 
 		return nil
+	case <-test.Done:
+		stats.StopTimer()
+		time.Sleep(50 * time.Millisecond)
+		return nil
 	case <-ctx.Done():
 		stats.StopTimer()
-		close(test.Done)
-
-		test.IsActive = false
-
+		test.Terminate()
 		if test.ID.Type == ethr.TestTypePing {
 			time.Sleep(500 * time.Millisecond)
 		}

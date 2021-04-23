@@ -7,6 +7,7 @@ import (
 	"fmt"
 	"net"
 	"os"
+	"strings"
 	"syscall"
 	"time"
 
@@ -27,6 +28,7 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 			Error:   fmt.Errorf("destination (%s) not responding to TCP connection", test.RemoteIP),
 			Body:    payloads.TraceRoutePayload{Hops: hops},
 		})
+		test.Terminate()
 		return
 	}
 	if !mtrMode {
@@ -35,18 +37,31 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 			Error:   nil,
 			Body:    payloads.TraceRoutePayload{Hops: hops},
 		})
+		test.Terminate()
 		return
 	}
 	for i := 0; i < len(hops); i++ {
-		if hops[i].Addr.String() != "" {
+		if hops[i].Addr != nil && hops[i].Addr.String() != "" {
+			// TODO by probing all hosts in parallel the icmp replies often get mixed up
+			// This is a problem in the original code as well but definitely impacts
+			// Results
 			go t.probeHops(test, gap, i, hops)
 		}
 	}
-	test.AddDirectResult(session.TestResult{
-		Success: true,
-		Error:   nil,
-		Body:    payloads.TraceRoutePayload{Hops: hops},
-	})
+	resultsTicker := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-resultsTicker.C:
+			test.AddDirectResult(session.TestResult{
+				Success: true,
+				Error:   nil,
+				Body:    payloads.TraceRoutePayload{Hops: hops},
+			})
+		case <-test.Done:
+			return
+		}
+	}
+
 }
 
 func (t Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []payloads.NetworkHop) {
@@ -72,16 +87,23 @@ func (t Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []
 func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.NetworkHop, error) {
 	hops := make([]payloads.NetworkHop, maxHops)
 	for i := 0; i < maxHops; i++ {
-		var hopData payloads.NetworkHop
-		err, isLast := t.probeHop(test, i+1, "", &hopData)
+		hop := payloads.NetworkHop{
+			HopNumber: i,
+		}
+		err, isLast := t.probeHop(test, i+1, "", &hop)
 		if err != nil && errors.Is(err, syscall.EPERM) {
 			return nil, err
 		}
 		if err == nil {
-			name := lookupHopName(hopData.Addr.String())
-			hopData.Name, hopData.FullName = name, name
+			name := lookupHopName(hop.Addr.String())
+			hop.Name, hop.FullName = name, name
 		}
-		hops[i] = hopData
+		hops[i] = hop
+		test.AddIntermediateResult(session.TestResult{
+			Success: false,
+			Error:   nil,
+			Body:    hop,
+		})
 		if isLast {
 			return hops[:i+1], nil
 		}
@@ -128,7 +150,16 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 		for {
 			icmpMsg, peer, err := t.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
 			if err != nil {
-				fmt.Println("derpenstocks", err.Error())
+				if errors.Is(err, os.ErrDeadlineExceeded) {
+					break
+				}
+				// Go, sadly, doesn't export this error yet
+				// connection succeeded and closed on final hop
+				if strings.Contains(err.Error(), "use of closed network") {
+					break
+				}
+				t.Logger.Debug("failed to get icmp reply, retrying")
+				continue
 			}
 			if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
 				body := icmpMsg.Body.(*icmp.TimeExceeded).Data
@@ -137,6 +168,10 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 					peerAddr = peer
 					break
 				}
+			}
+			if icmpMsg.Type == ipv4.ICMPTypeDestinationUnreachable || icmpMsg.Type == ipv6.ICMPTypeDestinationUnreachable {
+				fmt.Println("derpt, moving on")
+				break
 			}
 		}
 
@@ -152,7 +187,8 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
 	// TODO dial addr probably shouldn't have port
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, localPort, hop, 0)
+	//t.Logger.Debug("Dialing %s with ttl %d", test.DialAddr, hop)
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, nil, localPort, hop, 0)
 	hopData.Sent++
 	if err != nil { // majority case
 		endTime = <-endTimeChan
@@ -168,7 +204,7 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 	}
 
 	elapsed := endTime.Sub(startTime)
-	if peerAddr.String() == "" || (hopIP != "" && peerAddr.String() != hopIP) {
+	if peerAddr == nil || peerAddr.String() == "" || (hopIP != "" && peerAddr.String() != hopIP) {
 		hopData.Lost++
 		return fmt.Errorf("failed to complete connection or receive ICMP TTL Exceeded: %w", os.ErrNotExist), isLast
 	}

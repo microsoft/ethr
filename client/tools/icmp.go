@@ -19,31 +19,25 @@ func (t Tools) ReceiveICMPFromPeer(pc net.PacketConn, timeout time.Duration, nee
 		return nil, nil, fmt.Errorf("failed to set deadline: %w", err)
 	}
 	for {
-		peerAddr := ""
 		b := make([]byte, 1500)
 		n, peer, err := pc.ReadFrom(b)
 		if err != nil {
-			//if protocol == ethr.ICMP {
-			//	// In case of non-ICMP TraceRoute, it is expected that no packet is received
-			//	// in some case, e.g. when packet reach final hop and TCP connection establishes.
-			//	ui.printDbg("Failed to receive ICMP packet. Error: %v", err)
-			//}
-			return nil, nil, fmt.Errorf("failed to receive ICMP packet: %w", err)
+			// In case of non-ICMP TraceRoute, it is expected that no packet is received
+			// in some case, e.g. when packet reach final hop and TCP connection establishes.
+			return nil, peer, fmt.Errorf("failed to receive ICMP packet: %w", err)
 		}
 		if n == 0 {
 			continue
 		}
 		//t.Logger.Debug("Packet:\n%s", hex.Dump(b[:n]))
-		//t.Logger.Debug("Finding Pattern\n%v", hex.Dump(neededSig[:4]))
 
-		peerAddr = peer.String()
-		if neededPeer != "" && peerAddr != neededPeer {
-			//t.Logger.Debug("Matching peer is not found.")
+		if neededPeer != "" && peer.String() != neededPeer {
+			//t.Logger.Debug("matching peer is not found, wanted %s found %s", neededPeer, peer)
 			continue
 		}
 		icmpMsg, err := icmp.ParseMessage(ethr.ICMPProtocolNumber(t.IPVersion), b[:n])
 		if err != nil {
-			//t.Logger.Debug("Failed to parse ICMP message: %w", err)
+			t.Logger.Debug("Failed to parse ICMP message: %w", err)
 			continue
 		}
 
