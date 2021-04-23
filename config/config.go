@@ -5,6 +5,8 @@ import (
 	"flag"
 	"fmt"
 	"net"
+	"os"
+	"regexp"
 	"runtime"
 	"time"
 
@@ -31,6 +33,7 @@ var (
 
 	// Client Only
 	ClientDest         string
+	RemoteIP           net.IP
 	BufferSize         uint64
 	BandwidthRate      uint64
 	LocalPort          uint16
@@ -49,8 +52,7 @@ var (
 	ExternalClientDest string
 )
 
-const latencyDefaultBufferLenStr = "1B"
-const defaultBufferLenStr = "16KB"
+var hasPortRegex = regexp.MustCompile(".+(:\\d+)")
 
 func Init() error {
 	flag.Usage = func() { Usage() }
@@ -68,7 +70,7 @@ func Init() error {
 	flag.StringVar(&ClientDest, "c", "", "")
 	bufferLen := flag.String("l", "", "")
 	bw := flag.String("b", "", "")
-	lport := flag.Int("cport", 0, "")
+	lport := flag.Int("cport", 9999, "")
 	flag.DurationVar(&Duration, "d", 10*time.Second, "")
 	flag.DurationVar(&Gap, "g", time.Second, "")
 	flag.IntVar(&Iterations, "i", 1000, "")
@@ -84,24 +86,26 @@ func Init() error {
 
 	flag.Parse()
 
-	if *rawIP == "localhost" {
-		LocalIP = nil
-	} else {
-		LocalIP = net.ParseIP(*rawIP)
-		if LocalIP == nil || (UseIPv4 && LocalIP.To4() == nil) || (UseIPv6 && LocalIP.To16() == nil) {
-			return fmt.Errorf("invalid ip address: %s", *rawIP)
-		}
-	}
-
 	LocalPort = uint16(*lport)
 	Port = uint16(*port)
 
+	// MUST set ip version before resolving IPs to resolve properly
 	if (!UseIPv4 && !UseIPv6) || (UseIPv4 && UseIPv6) {
 		IPVersion = ethr.IPAny
 	} else if UseIPv6 {
 		IPVersion = ethr.IPv6
 	} else {
 		IPVersion = ethr.IPv4
+	}
+
+	var err error
+	LocalIP, err = lookupIP(*rawIP)
+	if err != nil {
+		return fmt.Errorf("failed to determine local IP: %w", err)
+	}
+	RemoteIP, err = lookupIP(ClientDest)
+	if err != nil {
+		return fmt.Errorf("failed to determine remote IP: %w", err)
 	}
 
 	if OutputFile == "" {
@@ -222,6 +226,13 @@ func validateClientArgs() error {
 	if ClientDest != "" && ExternalClientDest != "" {
 		return fmt.Errorf("invalid argument, both \"-c\" and \"-x\" cannot be specified at the same time")
 	}
+	if IsExternal && Protocol == ethr.TCP && Port == 0 {
+		return fmt.Errorf("in external mode, port cannot be empty for TCP tests")
+	}
+
+	if ThreadCount < 1 {
+		return fmt.Errorf("must use at least 1 thread")
+	}
 
 	// Validate protocol, test type, and params configuration for tests
 	if IsExternal {
@@ -280,4 +291,38 @@ func validateClientArgs() error {
 
 func unsupportedTest() error {
 	return fmt.Errorf("unsupported test/protocol: (%s/%s)", TestType, Protocol)
+}
+
+func lookupIP(remote string) (addr net.IP, err error) {
+	addr = net.ParseIP(remote)
+	if addr != nil {
+		return
+	}
+
+	ips, err := net.LookupIP(remote)
+	if err != nil {
+		err = fmt.Errorf("failed to lookup IP for server %s: %w", remote, err)
+		return
+	}
+	for _, ip := range ips {
+		if IPVersion == ethr.IPAny || (IPVersion == ethr.IPv4 && ip.To4() != nil) || (IPVersion == ethr.IPv6 && ip.To16() != nil) {
+			addr = ip
+			return
+		}
+	}
+	err = fmt.Errorf("unable to resolve ip of server %s: %w", remote, os.ErrNotExist)
+	return
+}
+
+func GetAddrString(ip net.IP, port uint16) string {
+	if ip == nil {
+		return fmt.Sprintf(":%d", port) // listen on localhost for IPv4 AND IPv6 :/
+	}
+	if port == 0 {
+		return ip.String()
+	}
+	if ip.To16() != nil {
+		return fmt.Sprintf("[%s]:%d", ip, port)
+	}
+	return fmt.Sprintf("%s:%d", ip, port)
 }

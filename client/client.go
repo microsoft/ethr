@@ -16,14 +16,14 @@ import (
 )
 
 //alias to avoid naming collision on 'Tests'
-type TCPTests = tcp.Tests
-type ICMPTests = icmp.Tests
-type UPDTests = udp.Tests
+//type TCPTests = tcp.Tests
+//type ICMPTests = icmp.Tests
+//type UPDTests = udp.Tests
 
 type Client struct {
-	TCPTests
-	ICMPTests
-	UPDTests
+	TCPTests  tcp.Tests
+	ICMPTests icmp.Tests
+	UDPTests  udp.Tests
 
 	NetTools *tools.Tools
 
@@ -31,32 +31,23 @@ type Client struct {
 	Logger ethr.Logger
 }
 
-func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, remote string, localIP net.IP, localPort uint16) (*Client, error) {
-	tools, err := tools.NewTools(isExternal, remote, localPort, localIP)
+func NewClient(isExternal bool, logger ethr.Logger, params ethr.ClientParams, rIP net.IP, rPort uint16, localIP net.IP, localPort uint16) (*Client, error) {
+	tools, err := tools.NewTools(isExternal, rIP, rPort, localPort, localIP)
 	if err != nil {
 		return nil, fmt.Errorf("failed to initial network tools: %w", err)
 	}
 
 	return &Client{
-		NetTools: tools,
-		TCPTests: tcp.Tests{NetTools: tools},
-		Params:   params,
-		Logger:   logger,
+		NetTools:  tools,
+		TCPTests:  tcp.Tests{NetTools: tools, Logger: logger},
+		UDPTests:  udp.Tests{NetTools: tools},
+		ICMPTests: icmp.Tests{NetTools: tools},
+		Params:    params,
+		Logger:    logger,
 	}, nil
 }
 
 func (c Client) CreateTest(protocol ethr.Protocol, tt ethr.TestType) (*session.Test, error) {
-	if c.NetTools.IsExternal {
-		if protocol != ethr.ICMP && c.NetTools.RemotePort == 0 {
-			return nil, fmt.Errorf("in external mode, port cannot be empty for TCP tests")
-		}
-	} else {
-		if c.NetTools.RemotePort != 0 {
-			return nil, fmt.Errorf("in client mode, port (%s) cannot be specified in destination (%s)", c.NetTools.RemotePort, c.NetTools.RemoteRaw)
-		}
-		//port = gEthrPortStr // TODO figure out how to make this less confusing. Why allow a port in 'server' just to force it to the global var?
-	}
-
 	var aggregator session.ResultAggregator
 	if protocol == ethr.TCP {
 		switch tt {
@@ -82,8 +73,13 @@ func (c Client) CreateTest(protocol ethr.Protocol, tt ethr.TestType) (*session.T
 
 	}
 
-	c.Logger.Info("Using destination: %s, ip: %s, port: %s", c.NetTools.RemoteHostname, c.NetTools.RemoteIP, c.NetTools.RemotePort)
-	test, _ := session.CreateOrGetTest(c.NetTools.RemoteIP, c.NetTools.RemotePort, protocol, tt, aggregator)
+	c.Logger.Info("Using destination: %s, port: %d", c.NetTools.RemoteIP, c.NetTools.RemotePort)
+	publishInterval := time.Second
+	if tt == ethr.TestTypePing {
+		publishInterval = c.Params.Duration
+	}
+	test, _ := session.CreateOrGetTest(c.NetTools.RemoteIP, c.NetTools.RemotePort, protocol, tt, c.Params, aggregator, publishInterval)
+	test.ClientParam = c.Params
 	return test, nil
 }
 
@@ -98,9 +94,9 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		case ethr.TestTypeBandwidth:
 			go c.TCPTests.TestBandwidth(test)
 		case ethr.TestTypeLatency:
-			go c.TestLatency(test, gap)
+			go c.TCPTests.TestLatency(test, gap)
 		case ethr.TestTypeConnectionsPerSecond:
-			go c.TestConnectionsPerSecond(test)
+			go c.TCPTests.TestConnectionsPerSecond(test)
 		case ethr.TestTypePing:
 			go c.TCPTests.TestPing(test, gap, test.ClientParam.WarmupCount)
 		case ethr.TestTypeTraceRoute:
@@ -121,7 +117,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		case ethr.TestTypePacketsPerSecond:
 			fallthrough
 		case ethr.TestTypeBandwidth:
-			c.UPDTests.TestBandwidth(test)
+			c.UDPTests.TestBandwidth(test)
 		default:
 			return ErrNotImplemented
 		}
@@ -154,7 +150,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		test.IsActive = false
 
 		if test.ID.Type == ethr.TestTypePing {
-			time.Sleep(2 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		return nil
@@ -165,7 +161,7 @@ func (c Client) RunTest(ctx context.Context, test *session.Test) error {
 		test.IsActive = false
 
 		if test.ID.Type == ethr.TestTypePing {
-			time.Sleep(2 * time.Second)
+			time.Sleep(500 * time.Millisecond)
 		}
 
 		return nil

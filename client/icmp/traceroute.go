@@ -13,16 +13,7 @@ import (
 )
 
 func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
-	dstIPAddr, _, err := t.NetTools.LookupIP(test.RemoteIP.String())
-	if err != nil {
-		test.Results <- session.TestResult{
-			Success: false,
-			Error:   err,
-			Body:    nil,
-		}
-		return
-	}
-	hops, err := t.discoverHops(dstIPAddr, maxHops)
+	hops, err := t.discoverHops(&net.IPAddr{IP: test.RemoteIP}, maxHops)
 	if err != nil {
 		test.Results <- session.TestResult{
 			Success: false,
@@ -58,11 +49,11 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 
 }
 
-func (t Tests) discoverHops(dstIPAddr net.IPAddr, maxHops int) ([]payloads.NetworkHop, error) {
+func (t Tests) discoverHops(dest net.Addr, maxHops int) ([]payloads.NetworkHop, error) {
 	hops := make([]payloads.NetworkHop, maxHops)
 	for i := 0; i < maxHops; i++ {
 		var hopData payloads.NetworkHop
-		_, peer, err := t.icmpPing(&dstIPAddr, time.Second, i, 1)
+		_, peer, err := t.icmpPing(dest, time.Second, i, 1)
 		if err != nil && !errors.Is(err, ErrTTLExceeded) {
 			hopData.Lost++
 			continue

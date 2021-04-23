@@ -1,12 +1,25 @@
 package payloads
 
 import (
+	"fmt"
 	"net"
+	"strings"
 	"time"
+
+	"weavelab.xyz/ethr/ui"
 )
 
 type TraceRoutePayload struct {
 	Hops []NetworkHop
+}
+
+func (p TraceRoutePayload) String() string {
+	parts := make([]string, 0, len(p.Hops))
+	for idx, hop := range p.Hops {
+		parts = append(parts, fmt.Sprintf("%2d.| %s", idx, hop))
+	}
+	return strings.Join(parts, "\n")
+
 }
 
 type NetworkHop struct {
@@ -21,6 +34,13 @@ type NetworkHop struct {
 	Total    time.Duration
 	Name     string
 	FullName string
+}
+
+func (h NetworkHop) String() string {
+	if h.Addr == nil {
+		return "--???"
+	}
+	return fmt.Sprintf("--%-40s   %5d   %5d   %9s   %9s   %9s   %9s", h.Addr, h.Sent, h.Rcvd, ui.DurationToString(h.Last), ui.DurationToString(h.Average), ui.DurationToString(h.Best), ui.DurationToString(h.Worst))
 }
 
 func (h *NetworkHop) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {

@@ -35,7 +35,7 @@ func (h Handler) HandleConn(ctx context.Context, unused *session.Test, conn net.
 			}
 
 			if udpAddr, ok := raddr.(*net.UDPAddr); ok {
-				test, isNew := session.CreateOrGetTest(udpAddr.IP, uint16(udpAddr.Port), ethr.UDP, ethr.TestTypeServer, ServerAggregator)
+				test, isNew := session.CreateOrGetTest(udpAddr.IP, uint16(udpAddr.Port), ethr.UDP, ethr.TestTypeServer, ethr.ClientParams{}, ServerAggregator, time.Second)
 				if isNew {
 					h.logger.Debug("Creating UDP test from server: %v, lastAccess: %v", udpAddr.String(), time.Now())
 					go test.Session.PollInactive(ctx, 100*time.Millisecond) // cleanup based on last access

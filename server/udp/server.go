@@ -6,18 +6,14 @@ import (
 	"net"
 	"runtime"
 
+	"weavelab.xyz/ethr/config"
+
 	"weavelab.xyz/ethr/ethr"
 	"weavelab.xyz/ethr/server"
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	var addr string
-	if cfg.LocalIP != nil {
-		addr = fmt.Sprintf("%s:%d", cfg.LocalIP, cfg.LocalPort)
-	} else {
-		addr = fmt.Sprintf(":%d", cfg.LocalPort) // listen on localhost for IPv4 AND IPv6 :/
-	}
-
+	addr := config.GetAddrString(cfg.LocalIP, cfg.LocalPort)
 	udpAddr, err := net.ResolveUDPAddr(ethr.UDPVersion(cfg.IPVersion), addr)
 	if err != nil {
 		return fmt.Errorf("unable to resolve UDP address: %w", err)

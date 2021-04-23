@@ -9,19 +9,20 @@ import (
 )
 
 func (u *UI) PrintPing(test *session.Test, result session.TestResult, showHeader bool) {
-	if showHeader {
-		u.printPingDivider()
-		u.printPingHeader(test.RemoteIP)
-	}
 	switch r := result.Body.(type) {
 	case payloads.PingPayload:
+		u.printPingDivider()
+		u.printPingHeader(test.RemoteIP)
 		u.printPingResult(r.Sent, r.Lost, r.Received)
 		if r.Received > 0 {
+			u.printLatencyDivider()
 			u.printLatencyHeader()
-			u.printLatencyResult(r.Latency)
+			fmt.Printf("%s\n", r.Latency)
 		}
 	default:
-		u.printUnknownResultType()
+		if r != nil {
+			u.printUnknownResultType()
+		}
 	}
 }
 

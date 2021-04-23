@@ -69,7 +69,7 @@ var NoDetails StaticStringer
 
 type StaticStringer string
 
-func (s StaticStringer) String() string {
+func (s *StaticStringer) String() string {
 	return "UNKNOWN DETAILS"
 }
 
@@ -81,8 +81,8 @@ func (l *STDOutLogger) TestResult(tt ethr.TestType, success bool, protocol ethr.
 		}
 		result, ok := body.(fmt.Stringer)
 		if !ok {
-			result = NoDetails
+			result = &NoDetails
 		}
-		l.toLog <- fmt.Sprintf("[RESULT] %s: %s - %s:%d (%s):: %s", tt, status, rIP, rPort, protocol, result)
+		l.toLog <- fmt.Sprintf("[RESULT] %s: %s - %s:%d (%s) | %s", tt, status, rIP, rPort, protocol, result)
 	}
 }

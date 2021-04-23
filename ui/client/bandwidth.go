@@ -21,17 +21,22 @@ func (u *UI) PrintBandwidth(test *session.Test, result session.TestResult, showH
 		u.printConnectionsDivider()
 		u.printConnectionsHeader()
 	}
+	if result.Body == nil {
+		return
+	}
 	switch r := result.Body.(type) {
 	case payloads.BandwidthPayload:
-		for _, conn := range r.ConnectionBandwidths {
-			u.printBandwidthResult(protocol, conn.ConnectionID, printCount, printCount+1, conn.Bandwidth, conn.PacketsPerSecond)
+		if u.ShowConnectionStats {
+			for _, conn := range r.ConnectionBandwidths {
+				u.printBandwidthResult(protocol, conn.ConnectionID, printCount, printCount+1, conn.Bandwidth, conn.PacketsPerSecond)
+			}
 		}
 		u.printBandwidthResult(protocol, "SUM", printCount, printCount+1, r.TotalBandwidth, r.TotalPacketsPerSecond)
-		//logResults([]string{test.RemoteIP.String(), ethr.ProtocolToString(protocol),
-		//	ui.BytesToRate(cbw), "", ui.PpsToString(cpps), ""})
+		u.Logger.TestResult(ethr.TestTypeBandwidth, true, protocol, test.RemoteIP, test.RemotePort, r)
 	default:
-		u.printUnknownResultType()
-
+		if r != nil {
+			u.printUnknownResultType()
+		}
 	}
 }
 
@@ -45,11 +50,11 @@ func (u *UI) printBandwidthHeader(p ethr.Protocol) {
 	}
 }
 
-func (u *UI) printBandwidthResult(p ethr.Protocol, fd string, t0, t1, bw, pps uint64) {
+func (u *UI) printBandwidthResult(p ethr.Protocol, id string, t0, t1, bw, pps uint64) {
 	if p == ethr.UDP {
-		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s   %7s", fd, p.String(), t0, t1, ui.BytesToRate(bw), ui.PpsToString(pps))
+		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s   %7s\n", id, p, t0, t1, ui.BytesToRate(bw), ui.PpsToString(pps))
 	} else {
-		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s", fd, p.String(), t0, t1, ui.BytesToRate(bw))
+		fmt.Printf("[%5s]     %-5s    %03d-%03d sec   %7s\n", id, p, t0, t1, ui.BytesToRate(bw))
 	}
 }
 

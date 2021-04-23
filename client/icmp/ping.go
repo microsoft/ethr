@@ -16,15 +16,7 @@ import (
 )
 
 func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
-	addr, _, err := t.NetTools.LookupIP(test.DialAddr)
-	if err != nil {
-		test.Results <- session.TestResult{
-			Success: false,
-			Error:   err,
-			Body:    nil,
-		}
-		return
-	}
+	addr := &net.IPAddr{IP: test.RemoteIP}
 
 	threads := test.ClientParam.NumThreads
 	for th := uint32(0); th < threads; th++ {
@@ -37,9 +29,9 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 					t0 := time.Now()
 					if warmupCount > 0 {
 						warmupCount--
-						_, _ = t.DoPing(&addr)
+						_, _ = t.DoPing(addr)
 					} else {
-						latency, err := t.DoPing(&addr)
+						latency, err := t.DoPing(addr)
 						test.AddIntermediateResult(session.TestResult{
 							Success: err == nil,
 							Error:   err,

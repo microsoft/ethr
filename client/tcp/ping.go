@@ -3,8 +3,9 @@ package tcp
 import (
 	"fmt"
 	"net"
-	"sync"
 	"time"
+
+	"weavelab.xyz/ethr/ui"
 
 	"weavelab.xyz/ethr/session/payloads"
 
@@ -13,12 +14,10 @@ import (
 )
 
 func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32) {
-	threads := test.ClientParam.NumThreads
-	var wg sync.WaitGroup
+	//threads := test.ClientParam.NumThreads
+	threads := uint32(1)
 	for th := uint32(0); th < threads; th++ {
-		wg.Add(1)
 		go func() {
-			defer wg.Done()
 			for {
 				select {
 				case <-test.Done:
@@ -35,11 +34,12 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 							Error:   err,
 							Body: payloads.RawPingPayload{
 								Latency: latency,
-								Lost:    err == nil,
+								Lost:    err != nil,
 							},
 						})
 
 					}
+					// TODO build into select statement so we don't have to wait externally for results if gap and duration don't line up
 					t1 := time.Since(t0)
 					if t1 < g {
 						time.Sleep(g - t1)
@@ -48,16 +48,17 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 			}
 		}()
 	}
-	wg.Wait()
 }
 
 func (t Tests) DoPing(test *session.Test, prefix string) (time.Duration, error) {
 	t0 := time.Now()
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort, 0, 0) // TODO force client port to 0?
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, 0, 0, 0)
 	if err != nil {
 		return 0, fmt.Errorf("%sconnection to %s timed out: %w", prefix, test.DialAddr, err)
 	}
 	timeTaken := time.Since(t0)
+	t.Logger.Info("[tcp] %sConnection from %s to %s: %s",
+		prefix, conn.LocalAddr(), conn.RemoteAddr(), ui.DurationToString(timeTaken))
 	tcpconn, ok := conn.(*net.TCPConn)
 	if ok {
 		_ = tcpconn.SetLinger(0)
@@ -73,10 +74,10 @@ func PingAggregator(seconds uint64, intermediateResults []session.TestResult) se
 	for _, r := range intermediateResults {
 		// ignore failed results
 		if body, ok := r.Body.(payloads.RawPingPayload); ok && r.Success {
-			latencies = append(latencies, body.Latency)
 			if body.Lost {
 				lost++
 			} else {
+				latencies = append(latencies, body.Latency)
 				received++
 			}
 		}

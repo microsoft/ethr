@@ -48,5 +48,5 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 }
 
 func (u *UI) printUnknownResultType() {
-	fmt.Printf("Unknown test result...")
+	fmt.Printf("Unknown test result...\n")
 }

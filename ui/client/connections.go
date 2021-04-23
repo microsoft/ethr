@@ -17,10 +17,11 @@ func (u *UI) PrintConnectionsPerSecond(test *session.Test, result session.TestRe
 	switch r := result.Body.(type) {
 	case payloads.ConnectionsPerSecondPayload:
 		u.printConnectionsResult(test.ID.Protocol, printCount, r.Connections)
-		//logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
-		//	"", cpsToString(cps), "", ""})
+		u.Logger.TestResult(ethr.TestTypeConnectionsPerSecond, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, r)
 	default:
-		u.printUnknownResultType()
+		if r != nil {
+			u.printUnknownResultType()
+		}
 
 	}
 }
@@ -30,7 +31,7 @@ func (u *UI) printConnectionsHeader() {
 }
 
 func (u *UI) printConnectionsDivider() {
-	fmt.Printf("- - - - - - - - - - - - - - - - - - ")
+	fmt.Println("- - - - - - - - - - - - - - - - - - ")
 }
 
 func (u *UI) printConnectionsResult(protocol ethr.Protocol, printCount uint64, cps uint64) {

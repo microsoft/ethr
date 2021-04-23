@@ -11,21 +11,23 @@ import (
 )
 
 func (t Tools) Dial(p ethr.Protocol, dialAddr string, localIP net.IP, localPort uint16, ttl int, tos int) (net.Conn, error) {
-	var localAddr string
-	if localIP != nil {
-		localAddr = fmt.Sprintf("%s:%d", localIP, localPort)
-	} else {
-		localAddr = fmt.Sprintf(":%d", localPort) // listen on localhost for IPv4 AND IPv6 :/
-	}
 	var lAddr net.Addr
 	var network string
 	var err error
 	if p == ethr.TCP {
 		network = ethr.TCPVersion(t.IPVersion)
-		lAddr, err = net.ResolveTCPAddr(network, localAddr)
+		lAddr = &net.TCPAddr{
+			IP:   localIP,
+			Port: int(localPort),
+		}
+		//lAddr, err = net.ResolveTCPAddr(network, config.GetAddrString(localIP, localPort))
 	} else if p == ethr.UDP {
 		network = ethr.UDPVersion(t.IPVersion)
-		lAddr, err = net.ResolveUDPAddr(network, localAddr)
+		lAddr = &net.UDPAddr{
+			IP:   localIP,
+			Port: int(localPort),
+		}
+		//lAddr, err = net.ResolveUDPAddr(network, config.GetAddrString(localIP, localPort))
 	} else {
 		return nil, fmt.Errorf("only TCP or UDP are allowed in dial: %w", os.ErrInvalid)
 	}
@@ -34,6 +36,8 @@ func (t Tools) Dial(p ethr.Protocol, dialAddr string, localIP net.IP, localPort 
 	}
 
 	dialer := &net.Dialer{
+		LocalAddr: lAddr,
+		Timeout:   time.Second,
 		Control: func(network, address string, rc syscall.RawConn) error {
 			return rc.Control(func(fd uintptr) {
 				_ = t.setTTL(fd, ttl, t.IPVersion)
@@ -41,8 +45,6 @@ func (t Tools) Dial(p ethr.Protocol, dialAddr string, localIP net.IP, localPort 
 			})
 		},
 	}
-	dialer.LocalAddr = lAddr
-	dialer.Timeout = time.Second
 	conn, err := dialer.Dial(network, dialAddr)
 	if err != nil {
 		return nil, fmt.Errorf("error dialing remote: %w", err)

@@ -17,12 +17,10 @@ func (t Tests) TestBandwidth(test *session.Test) {
 	for th := uint32(0); th < test.ClientParam.NumThreads; th++ {
 		conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort+uint16(th), 0, 0) // referenced gTTL and gTOS which were never modified
 		if err != nil {
-			//t.Logger.Error("error dialing connection: %w", err)
 			continue
 		}
 		err = test.Session.HandshakeWithServer(test, conn)
 		if err != nil {
-			//t.Logger.Error("failed in handshake with the server: %w", err)
 			_ = conn.Close()
 			continue
 		}
@@ -80,7 +78,7 @@ func (t Tests) handleBandwidthConn(test *session.Test, conn net.Conn, id string)
 func BandwidthAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
 	totalBandwidth := uint64(0)
 	totalPackets := uint64(0)
-	connectionAggregates := make(map[string]payloads.RawBandwidthPayload)
+	connectionAggregates := make(map[string]*payloads.RawBandwidthPayload)
 
 	for _, r := range intermediateResults {
 		// ignore failed results
@@ -92,14 +90,15 @@ func BandwidthAggregator(seconds uint64, intermediateResults []session.TestResul
 				connection.Bandwidth += body.Bandwidth
 				connection.PacketsPerSecond += body.PacketsPerSecond
 			} else {
-				connectionAggregates[body.ConnectionID] = body
+				connectionAggregates[body.ConnectionID] = &body
 			}
 		}
 	}
 
 	connectionBandwidths := make([]payloads.RawBandwidthPayload, 0, len(connectionAggregates))
-	for _, v := range connectionAggregates {
+	for k, v := range connectionAggregates {
 		connectionBandwidths = append(connectionBandwidths, payloads.RawBandwidthPayload{
+			ConnectionID:     k,
 			Bandwidth:        v.Bandwidth / seconds,
 			PacketsPerSecond: v.PacketsPerSecond / seconds,
 		})

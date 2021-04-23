@@ -1,16 +1,22 @@
 package client
 
-import "fmt"
+import (
+	"fmt"
+
+	"weavelab.xyz/ethr/ethr"
+)
 
 type UI struct {
 	Title               string
 	ShowConnectionStats bool
+	Logger              ethr.Logger
 }
 
-func NewUI(title string, connectionStats bool) *UI {
+func NewUI(title string, connectionStats bool, logger ethr.Logger) *UI {
 	return &UI{
 		Title:               title,
 		ShowConnectionStats: connectionStats,
+		Logger:              logger,
 	}
 }
 

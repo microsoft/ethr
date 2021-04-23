@@ -3,10 +3,11 @@ package tcp
 import (
 	"bytes"
 	"encoding/binary"
+	"errors"
 	"fmt"
 	"net"
 	"os"
-	"sync"
+	"syscall"
 	"time"
 
 	"golang.org/x/net/icmp"
@@ -21,38 +22,34 @@ import (
 func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
 	hops, err := t.discoverHops(test, maxHops)
 	if err != nil {
-		test.Results <- session.TestResult{
+		test.AddDirectResult(session.TestResult{
 			Success: false,
 			Error:   fmt.Errorf("destination (%s) not responding to TCP connection", test.RemoteIP),
 			Body:    payloads.TraceRoutePayload{Hops: hops},
-		}
+		})
 		return
 	}
 	if !mtrMode {
-		test.Results <- session.TestResult{
+		test.AddDirectResult(session.TestResult{
 			Success: true,
 			Error:   nil,
 			Body:    payloads.TraceRoutePayload{Hops: hops},
-		}
+		})
 		return
 	}
-	var wg sync.WaitGroup
 	for i := 0; i < len(hops); i++ {
 		if hops[i].Addr.String() != "" {
-			wg.Add(1)
-			go t.probeHops(&wg, test, gap, i, hops)
+			go t.probeHops(test, gap, i, hops)
 		}
 	}
-	test.Results <- session.TestResult{
+	test.AddDirectResult(session.TestResult{
 		Success: true,
 		Error:   nil,
 		Body:    payloads.TraceRoutePayload{Hops: hops},
-	}
-	wg.Wait()
+	})
 }
 
-func (t Tests) probeHops(wg *sync.WaitGroup, test *session.Test, gap time.Duration, hop int, hops []payloads.NetworkHop) {
-	defer wg.Done()
+func (t Tests) probeHops(test *session.Test, gap time.Duration, hop int, hops []payloads.NetworkHop) {
 	seq := 0
 	for {
 		select {
@@ -77,6 +74,9 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 	for i := 0; i < maxHops; i++ {
 		var hopData payloads.NetworkHop
 		err, isLast := t.probeHop(test, i+1, "", &hopData)
+		if err != nil && errors.Is(err, syscall.EPERM) {
+			return nil, err
+		}
 		if err == nil {
 			name := lookupHopName(hopData.Addr.String())
 			hopData.Name, hopData.FullName = name, name
@@ -113,21 +113,23 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 		return fmt.Errorf("failed to create ICMP connection: %w", err), isLast
 	}
 	defer icmpConn.Close()
-	localPortNum := uint16(8888)
-	if t.NetTools.LocalPort != 0 {
-		localPortNum = t.NetTools.LocalPort
-	}
-	localPortNum += uint16(hop)
+	//localPortNum := uint16(8888)
+	//if t.NetTools.LocalPort != 0 {
+	//	localPortNum = t.NetTools.LocalPort
+	//}
+	localPort := t.NetTools.LocalPort + uint16(hop)
 	b := make([]byte, 4)
-	binary.BigEndian.PutUint16(b[0:], localPortNum)
+	binary.BigEndian.PutUint16(b[0:], localPort)
 	binary.BigEndian.PutUint16(b[2:], test.RemotePort)
 	peerAddrChan := make(chan net.Addr)
 	endTimeChan := make(chan time.Time)
 	go func() {
 		var peerAddr net.Addr
-		// TODO have max messages?
 		for {
-			icmpMsg, peer, _ := t.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
+			icmpMsg, peer, err := t.NetTools.ReceiveICMPFromPeer(icmpConn, time.Second*2, hopIP)
+			if err != nil {
+				fmt.Println("derpenstocks", err.Error())
+			}
 			if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
 				body := icmpMsg.Body.(*icmp.TimeExceeded).Data
 				index := bytes.Index(body, b[:4])
@@ -138,6 +140,7 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 			}
 		}
 
+		// TODO send one object so timeout is easier
 		endTimeChan <- time.Now()
 		peerAddrChan <- peerAddr
 	}()
@@ -148,7 +151,8 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
-	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, localPortNum, hop, 0)
+	// TODO dial addr probably shouldn't have port
+	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, localPort, hop, 0)
 	hopData.Sent++
 	if err != nil { // majority case
 		endTime = <-endTimeChan

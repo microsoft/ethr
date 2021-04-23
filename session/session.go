@@ -78,13 +78,13 @@ func (s *Session) PollInactive(ctx context.Context, gap time.Duration) {
 	}
 }
 
-func CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType ethr.TestType, aggregator ResultAggregator) (*Test, bool) {
+func CreateOrGetTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, testType ethr.TestType, params ethr.ClientParams, aggregator ResultAggregator, publishInterval time.Duration) (*Test, bool) {
 	isNew := false
 	session := getOrCreateSession(rIP)
 	test := session.getTest(protocol, testType)
 	if test == nil {
 		isNew = true
-		test, _ = session.newTest(rIP, rPort, protocol, testType, ethr.ClientParams{}, aggregator)
+		test, _ = session.newTest(rIP, rPort, protocol, testType, params, aggregator, publishInterval)
 		test.IsActive = true
 	}
 	test.LastAccess = time.Now()
@@ -120,9 +120,9 @@ func getOrCreateSession(rIP net.IP) *Session {
 	return session
 }
 
-func (s *Session) newTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt ethr.TestType, clientParam ethr.ClientParams, aggregator ResultAggregator) (*Test, error) {
+func (s *Session) newTest(rIP net.IP, rPort uint16, protocol ethr.Protocol, tt ethr.TestType, clientParam ethr.ClientParams, aggregator ResultAggregator, publishInterval time.Duration) (*Test, error) {
 	Logger.Debug("New test created from %s:%d", rIP, rPort)
-	test := NewTest(s, protocol, tt, rIP, rPort, clientParam, aggregator)
+	test := NewTest(s, protocol, tt, rIP, rPort, clientParam, aggregator, publishInterval)
 	s.Lock()
 	s.Tests[test.ID] = test
 	s.Unlock()

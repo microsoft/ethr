@@ -2,10 +2,11 @@ package tcp
 
 import (
 	"context"
-	"fmt"
 	"net"
 	"strconv"
 	"time"
+
+	"weavelab.xyz/ethr/config"
 
 	"weavelab.xyz/ethr/session"
 
@@ -14,12 +15,7 @@ import (
 )
 
 func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
-	var addr string
-	if cfg.LocalIP != nil {
-		addr = fmt.Sprintf("%s:%d", cfg.LocalIP, cfg.LocalPort)
-	} else {
-		addr = fmt.Sprintf(":%d", cfg.LocalPort) // listen on localhost for IPv4 AND IPv6 :/
-	}
+	addr := config.GetAddrString(cfg.LocalIP, cfg.LocalPort)
 	l, err := net.Listen(ethr.TCPVersion(cfg.IPVersion), addr)
 	if err != nil {
 		return err
@@ -59,7 +55,7 @@ func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
 		}
 		rIP := net.ParseIP(remote)
 		rPort, _ := strconv.Atoi(port)
-		test, _ := session.CreateOrGetTest(rIP, uint16(rPort), ethr.TCP, ethr.TestTypeServer, ServerAggregator)
+		test, _ := session.CreateOrGetTest(rIP, uint16(rPort), ethr.TCP, ethr.TestTypeServer, ethr.ClientParams{}, ServerAggregator, time.Second)
 		if test == nil {
 			continue
 		}
