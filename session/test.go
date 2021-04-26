@@ -27,7 +27,7 @@ type Test struct {
 	publishInterval     time.Duration
 	intermediateResults []TestResult
 	aggregator          ResultAggregator
-	latestResult        TestResult
+	latestResult        *TestResult
 }
 
 type TestResult struct {
@@ -62,7 +62,7 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP
 		publishInterval:     publishInterval,
 		intermediateResults: make([]TestResult, 0, 100),
 		aggregator:          aggregator,
-		latestResult:        TestResult{},
+		latestResult:        &TestResult{},
 	}
 }
 
@@ -86,7 +86,7 @@ func (t *Test) StartPublishing() {
 				}
 				r := t.aggregator(seconds, t.intermediateResults)
 				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
-				t.latestResult = r
+				t.latestResult = &r
 				t.resultLock.Unlock()
 
 				select {
@@ -105,7 +105,7 @@ func (t *Test) StartPublishing() {
 				case t.Results <- r:
 				default:
 				}
-				t.latestResult = r
+				t.latestResult = &r
 			}
 			if len(t.intermediateResults) > 0 {
 				// TODO make sure old array is GC'ed
@@ -131,7 +131,7 @@ func (t *Test) AddIntermediateResult(r TestResult) {
 	t.intermediateResults = append(t.intermediateResults, r)
 }
 
-func (t *Test) LatestResult() TestResult {
+func (t *Test) LatestResult() *TestResult {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()
 	return t.latestResult
@@ -140,7 +140,7 @@ func (t *Test) LatestResult() TestResult {
 func (t *Test) AddDirectResult(r TestResult) {
 	t.resultLock.Lock()
 	defer t.resultLock.Unlock()
-	t.latestResult = r
+	t.latestResult = &r
 	select {
 	case t.Results <- r:
 	default:

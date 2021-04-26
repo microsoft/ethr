@@ -52,7 +52,7 @@ func (h *NetworkHop) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {
 
 	h.Last = elapsed
 	h.Total += elapsed
-	if h.Best > elapsed {
+	if h.Best > elapsed || h.Best == 0 {
 		h.Best = elapsed
 	}
 	if h.Worst < elapsed {

@@ -9,15 +9,11 @@ import (
 	"weavelab.xyz/ethr/ui"
 )
 
-func (u *UI) PrintPacketsPerSecond(test *session.Test, result session.TestResult, showHeader bool, printCount uint64) {
-	if showHeader {
-		u.printPacketsDivider()
-		u.printPacketsHeader()
-	}
-
+func (u *UI) PrintPacketsPerSecond(test *session.Test, result *session.TestResult) {
 	switch r := result.Body.(type) {
 	case payloads.BandwidthPayload:
-		u.printPacketsResult(test.ID.Protocol, r, printCount)
+		u.printPacketsResult(test.ID.Protocol, r)
+		u.Logger.TestResult(ethr.TestTypePacketsPerSecond, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, result)
 		//logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
 		//	bytesToRate(bw), "", ppsToString(pps), ""})
 	default:
@@ -25,14 +21,12 @@ func (u *UI) PrintPacketsPerSecond(test *session.Test, result session.TestResult
 	}
 }
 
-func (u *UI) printPacketsHeader() {
+func (u *UI) PrintPacketsPerSecondHeader() {
 	fmt.Println("Protocol    Interval      Bits/s    Pkts/s")
-}
-
-func (u *UI) printPacketsDivider() {
 	fmt.Println("- - - - - - - - - - - - - - - - - - - - - - -")
+
 }
 
-func (u *UI) printPacketsResult(protocol ethr.Protocol, body payloads.BandwidthPayload, printCount uint64) {
-	fmt.Printf("  %-5s    %03d-%03d sec   %7s   %7s\n", protocol.String(), printCount, printCount+1, ui.BytesToRate(body.TotalBandwidth), ui.PpsToString(body.TotalPacketsPerSecond))
+func (u *UI) printPacketsResult(protocol ethr.Protocol, body payloads.BandwidthPayload) {
+	fmt.Printf("  %-5s    %03d-%03d sec   %7s   %7s\n", protocol.String(), u.lastPrintSeconds, u.currentPrintSeconds, ui.BytesToRate(body.TotalBandwidth), ui.PpsToString(body.TotalPacketsPerSecond))
 }

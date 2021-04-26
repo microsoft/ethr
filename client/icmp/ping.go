@@ -122,7 +122,7 @@ func (t Tests) icmpPing(dest net.Addr, timeout time.Duration, hop int, seq int) 
 				case *icmp.Echo:
 					seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
 					if seq == neededSeq {
-						return timeout, peer, ErrTTLExceeded
+						return time.Since(start), peer, ErrTTLExceeded
 					}
 				default:
 					// Ignore as this is not the right ICMP packet.

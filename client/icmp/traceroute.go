@@ -5,7 +5,7 @@ import (
 	"fmt"
 	"net"
 	"os"
-	"sync"
+	"syscall"
 	"time"
 
 	"weavelab.xyz/ethr/session"
@@ -13,13 +13,14 @@ import (
 )
 
 func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode bool, maxHops int) {
-	hops, err := t.discoverHops(&net.IPAddr{IP: test.RemoteIP}, maxHops)
+	hops, err := t.discoverHops(test, maxHops)
 	if err != nil {
 		test.Results <- session.TestResult{
 			Success: false,
 			Error:   fmt.Errorf("destination is not responding to ICMP echo: %w", err),
 			Body:    nil,
 		}
+		test.Terminate()
 		return
 	}
 	if !mtrMode {
@@ -29,41 +30,65 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 				Error:   nil,
 				Body:    payloads.TraceRoutePayload{Hops: hops},
 			}
+			test.Terminate()
 			return
 		}
 	}
 
-	var wg sync.WaitGroup
 	for i := 0; i < len(hops); i++ {
 		if hops[i].Addr.String() != "" {
-			wg.Add(1)
-			go t.probeHop(&wg, test.Done, gap, &hops[i], i)
+			// FIXME probe hop uses icmpPing which creates a new icmp connection.
+			// This results in n connections and reply packets often make it to the
+			// incorrect connection. Instead, create once connection and multiplex
+			// packets out to callers who can decide if it's relevant to get better stats.
+			go t.probeHop(test.Done, gap, &hops[i], i)
 		}
 	}
-	test.Results <- session.TestResult{
-		Success: true,
-		Error:   nil,
-		Body:    payloads.TraceRoutePayload{Hops: hops},
+	resultsTicker := time.NewTicker(time.Second)
+	for {
+		select {
+		case <-resultsTicker.C:
+			test.AddDirectResult(session.TestResult{
+				Success: true,
+				Error:   nil,
+				Body:    payloads.TraceRoutePayload{Hops: hops},
+			})
+		case <-test.Done:
+			return
+		}
 	}
-	wg.Wait()
 
 }
 
-func (t Tests) discoverHops(dest net.Addr, maxHops int) ([]payloads.NetworkHop, error) {
+func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.NetworkHop, error) {
 	hops := make([]payloads.NetworkHop, maxHops)
 	for i := 0; i < maxHops; i++ {
-		var hopData payloads.NetworkHop
-		_, peer, err := t.icmpPing(dest, time.Second, i, 1)
-		if err != nil && !errors.Is(err, ErrTTLExceeded) {
-			hopData.Lost++
+		hop := payloads.NetworkHop{
+			HopNumber: i,
+			Sent:      1,
+		}
+		latency, peer, err := t.icmpPing(&net.IPAddr{IP: test.RemoteIP}, time.Second, i, 1)
+		if err != nil && errors.Is(err, syscall.EPERM) {
+			return nil, err
+		} else if err != nil && (!errors.Is(err, ErrTTLExceeded) || peer == nil) {
+			hop.Lost++
 			continue
 		}
 
-		hopData.Addr = peer
-		hopData.Name, hopData.FullName = lookupHopName(hopData.Addr.String())
-		hops[i] = hopData
+		// expect ErrTTLExceeded for most hops
+		hop.UpdateStats(peer, latency)
+		name := t.NetTools.LookupHopName(hop.Addr.String())
+		hop.Name, hop.FullName = name, name
+
+		hops[i] = hop
+		test.AddIntermediateResult(session.TestResult{
+			Success: false,
+			Error:   nil,
+			Body:    hop,
+		})
+
 		// we got an echo from the desired addr and didn't exceed ttl so we are done
-		if err == nil {
+		if err == nil && peer.String() == test.RemoteIP.String() {
 			return hops[:i+1], nil
 		}
 
@@ -71,30 +96,7 @@ func (t Tests) discoverHops(dest net.Addr, maxHops int) ([]payloads.NetworkHop, 
 	return nil, os.ErrNotExist
 }
 
-func lookupHopName(addr string) (string, string) {
-	name := ""
-	tname := ""
-	if addr == "" {
-		return tname, name
-	}
-	names, err := net.LookupAddr(addr)
-	if err == nil && len(names) > 0 {
-		name = names[0]
-		sz := len(name)
-
-		if sz > 0 && name[sz-1] == '.' {
-			name = name[:sz-1]
-		}
-		tname = name
-		if len(name) > 16 {
-			tname = name[:16] + "..."
-		}
-	}
-	return tname, name
-}
-
-func (t Tests) probeHop(wg *sync.WaitGroup, done chan struct{}, gap time.Duration, hopData *payloads.NetworkHop, ttl int) {
-	defer wg.Done()
+func (t Tests) probeHop(done chan struct{}, gap time.Duration, hopData *payloads.NetworkHop, ttl int) {
 	seq := 0
 	for {
 		select {

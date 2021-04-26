@@ -42,9 +42,10 @@ func (t Tests) TestTraceRoute(test *session.Test, gap time.Duration, mtrMode boo
 	}
 	for i := 0; i < len(hops); i++ {
 		if hops[i].Addr != nil && hops[i].Addr.String() != "" {
-			// TODO by probing all hosts in parallel the icmp replies often get mixed up
-			// This is a problem in the original code as well but definitely impacts
-			// Results
+			// FIXME probe hop uses probeHop which creates a new icmp connection.
+			// This results in n connections and reply packets often make it to the
+			// incorrect connection. Instead, create once connection and multiplex
+			// packets out to callers who can decide if it's relevant to get better stats.
 			go t.probeHops(test, gap, i, hops)
 		}
 	}
@@ -95,7 +96,7 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 			return nil, err
 		}
 		if err == nil {
-			name := lookupHopName(hop.Addr.String())
+			name := t.NetTools.LookupHopName(hop.Addr.String())
 			hop.Name, hop.FullName = name, name
 		}
 		hops[i] = hop
@@ -109,23 +110,6 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 		}
 	}
 	return nil, os.ErrNotExist
-}
-
-func lookupHopName(addr string) string {
-	if addr == "" {
-		return ""
-	}
-	names, err := net.LookupAddr(addr)
-	if err == nil && len(names) > 0 {
-		name := names[0]
-		sz := len(name)
-
-		if sz > 0 && name[sz-1] == '.' {
-			name = name[:sz-1]
-		}
-		return name
-	}
-	return ""
 }
 
 func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.NetworkHop) (error, bool) {

@@ -11,41 +11,87 @@ import (
 )
 
 func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
-	// TODO get rid of printCount nonsense
-	printCount := uint64(0)
-	var latestResult session.TestResult
+	started := time.Now()
 	exiting := false
-	paintTicker := time.NewTicker(time.Second)
+	displayedHeader := false
+	var previousResult, latestResult *session.TestResult
+
+	tickInterval := 250 * time.Millisecond
+	if test.ID.Type == ethr.TestTypeBandwidth || test.ID.Type == ethr.TestTypePacketsPerSecond || test.ID.Type == ethr.TestTypeConnectionsPerSecond {
+		tickInterval = time.Second
+	}
+	paintTicker := time.NewTicker(tickInterval)
+
 	for {
+		// TODO probably want this a little more accurate than rounded seconds, some things it makes sense to print more than once a second
+		u.currentPrintSeconds = uint64(time.Since(started).Seconds())
 		switch test.ID.Type {
 		case ethr.TestTypePing:
-			u.PrintPing(test, latestResult, printCount == 0)
+			if latestResult != previousResult && latestResult != nil {
+				u.PrintPing(test, latestResult)
+			}
 		case ethr.TestTypePacketsPerSecond:
-			u.PrintPacketsPerSecond(test, latestResult, printCount == 0, printCount)
+			if !displayedHeader {
+				u.PrintPacketsPerSecondHeader()
+				displayedHeader = true
+			}
+			if latestResult != previousResult && latestResult != nil {
+				u.PrintPacketsPerSecond(test, latestResult)
+			}
 		case ethr.TestTypeBandwidth:
-			u.PrintBandwidth(test, latestResult, printCount == 0, printCount)
+			if !displayedHeader {
+				u.PrintBandwidthHeader(test.ID.Protocol)
+				displayedHeader = true
+			}
+			if latestResult != previousResult && latestResult != nil {
+				u.PrintBandwidth(test, latestResult)
+			}
 		case ethr.TestTypeLatency:
-			u.PrintLatency(test, latestResult, printCount == 0)
+			if !displayedHeader {
+				u.PrintLatencyHeader()
+				displayedHeader = true
+			}
+			if latestResult != previousResult && latestResult != nil {
+				u.PrintLatency(test, latestResult)
+			}
 		case ethr.TestTypeConnectionsPerSecond:
-			u.PrintConnectionsPerSecond(test, latestResult, printCount == 0, printCount)
+			if !displayedHeader {
+				u.PrintConnectionsHeader()
+				displayedHeader = true
+			}
+			if latestResult != previousResult && latestResult != nil {
+				u.PrintConnectionsPerSecond(test, latestResult)
+			}
 		case ethr.TestTypeTraceRoute:
 			fallthrough
 		case ethr.TestTypeMyTraceRoute:
+			if !displayedHeader {
+				u.PrintTracerouteHeader(test.RemoteIP)
+				displayedHeader = true
+			}
+			// if we are exiting drain the results to make sure everything gets printed
+			if exiting {
+				for r := range test.Results {
+					u.PrintTraceroute(test, &r)
+				}
+				return
+			}
+
 			select {
 			case r := <-test.Results:
-				u.PrintTraceroute(test, r, false)
+				u.PrintTraceroute(test, &r)
 			default:
-				if printCount == 0 {
-					u.PrintTraceroute(test, session.TestResult{}, true)
-				}
 			}
 		default:
 			u.printUnknownResultType()
 		}
-		printCount++
+		// TODO probably want this a little more accurate, some things it makes sense to print more than once a second
+		u.lastPrintSeconds = uint64(time.Since(started).Seconds())
 
 		select {
 		case <-paintTicker.C:
+			// TODO convert each test type to read from results chan
+			previousResult = latestResult
 			latestResult = test.LatestResult()
 			continue
 		case <-test.Done:
@@ -53,7 +99,6 @@ func (u *UI) PrintTestResults(ctx context.Context, test *session.Test) {
 			if exiting {
 				return
 			}
-			latestResult = test.LatestResult()
 			exiting = true
 		case <-ctx.Done():
 			return

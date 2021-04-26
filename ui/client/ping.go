@@ -8,15 +8,14 @@ import (
 	"weavelab.xyz/ethr/session/payloads"
 )
 
-func (u *UI) PrintPing(test *session.Test, result session.TestResult, showHeader bool) {
+func (u *UI) PrintPing(test *session.Test, result *session.TestResult) {
 	switch r := result.Body.(type) {
 	case payloads.PingPayload:
-		u.printPingDivider()
-		u.printPingHeader(test.RemoteIP)
+		u.PrintPingHeader(test.RemoteIP)
 		u.printPingResult(r.Sent, r.Lost, r.Received)
 		if r.Received > 0 {
-			u.printLatencyDivider()
-			u.printLatencyHeader()
+			u.PrintLatencyHeader()
+
 			fmt.Printf("%s\n", r.Latency)
 		}
 	default:
@@ -26,11 +25,8 @@ func (u *UI) PrintPing(test *session.Test, result session.TestResult, showHeader
 	}
 }
 
-func (u *UI) printPingDivider() {
+func (u *UI) PrintPingHeader(host net.IP) {
 	fmt.Println("-----------------------------------------------------------------------------------------")
-}
-
-func (u *UI) printPingHeader(host net.IP) {
 	fmt.Printf("TCP connect statistics for %s:\n", host.String())
 }
 

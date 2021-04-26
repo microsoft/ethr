@@ -10,6 +10,9 @@ type UI struct {
 	Title               string
 	ShowConnectionStats bool
 	Logger              ethr.Logger
+
+	lastPrintSeconds    uint64
+	currentPrintSeconds uint64
 }
 
 func NewUI(title string, connectionStats bool, logger ethr.Logger) *UI {
