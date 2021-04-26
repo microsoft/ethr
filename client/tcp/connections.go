@@ -16,7 +16,6 @@ func (t Tests) TestConnectionsPerSecond(test *session.Test) {
 				case <-test.Done:
 					return
 				default:
-					//conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, t.NetTools.LocalPort+uint16(th), 0, 0) // TODO need to force local port to 0?
 					conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, t.NetTools.LocalIP, 0, 0, 0)
 					if err != nil {
 						//t.Logger.Debug("unable to dial TCP connection to %s: %w", test.DialAddr, err)

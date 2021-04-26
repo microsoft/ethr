@@ -22,10 +22,11 @@ func Serve(ctx context.Context, cfg *server.Config, h Handler) error {
 	if err != nil {
 		return fmt.Errorf("error listening on %s for UDP pkt/s tests: %w", cfg.LocalPort, err)
 	}
-	// TODO figure out why this doesn't work
+
 	// Set socket buffer to 4MB per CPU so we can queue 4MB per CPU in case Ethr is not
 	// able to keep up temporarily.
-	//err = l.SetReadBuffer(runtime.NumCPU() * 4 * 1024 * 1024)
+	// TODO figure out why this doesn't work sometimes
+	_ = l.SetReadBuffer(runtime.NumCPU() * 4 * 1024 * 1024)
 	//if err != nil {
 	//	return fmt.Errorf("failed to set ReadBuffer on UDP socket: %w", err)
 	//}

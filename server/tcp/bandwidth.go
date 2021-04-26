@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"fmt"
 	"net"
 
@@ -10,7 +11,7 @@ import (
 	"weavelab.xyz/ethr/stats"
 )
 
-func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) error {
+func (h Handler) TestBandwidth(ctx context.Context, test *session.Test, clientParam ethr.ClientParams, conn net.Conn) error {
 	size := clientParam.BufferSize
 	buff := make([]byte, size)
 	for i := uint32(0); i < size; i++ {
@@ -21,6 +22,12 @@ func (h Handler) TestBandwidth(test *session.Test, clientParam ethr.ClientParams
 	sentBytes := uint64(0)
 	start, waitTime, bytesToSend := stats.BeginThrottle(totalBytesToSend, bufferLen)
 	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		n := 0
 		var err error
 		if clientParam.Reverse {

@@ -1,6 +1,7 @@
 package tcp
 
 import (
+	"context"
 	"fmt"
 	"io"
 	"net"
@@ -11,11 +12,17 @@ import (
 	"weavelab.xyz/ethr/session/payloads"
 )
 
-func (h Handler) TestLatency(test *session.Test, clientParam ethr.ClientParams, conn net.Conn) error {
+func (h Handler) TestLatency(ctx context.Context, test *session.Test, clientParam ethr.ClientParams, conn net.Conn) error {
 	bytes := make([]byte, clientParam.BufferSize)
 	rttCount := clientParam.RttCount
 	latencyNumbers := make([]time.Duration, rttCount)
 	for {
+		select {
+		case <-ctx.Done():
+			return nil
+		default:
+		}
+
 		_, err := io.ReadFull(conn, bytes)
 		if err != nil {
 			return fmt.Errorf("error receiving data for latency tests: %w", err)

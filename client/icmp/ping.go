@@ -94,12 +94,11 @@ func (t Tests) icmpPing(dest net.Addr, timeout time.Duration, hop int, seq int) 
 	if t.NetTools.IPVersion == ethr.IPv6 {
 		msg.Type = ipv6.ICMPTypeEchoRequest
 	}
-	// TODO when to start timer?
+	start := time.Now()
 	err = t.NetTools.SendICMP(c, dest, hop+1, timeout, &msg)
 	if err != nil {
 		return timeout, nil, err
 	}
-	start := time.Now()
 	reqBytes, _ := msg.Marshal(nil)
 	for {
 		neededSeq := hop<<8 | seq

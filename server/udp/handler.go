@@ -28,7 +28,14 @@ func (h Handler) HandleConn(ctx context.Context, unused *session.Test, conn net.
 	var err error
 	for err == nil {
 		if udpConn, ok := conn.(*net.UDPConn); ok {
-			bytes, raddr, err := udpConn.ReadFrom(readBuffer) // don't actually care about the packet just how many bytes we read 'n'
+			select {
+			case <-ctx.Done():
+				return
+			default:
+			}
+			var raddr net.Addr
+			var bytesRead int
+			bytesRead, raddr, err = udpConn.ReadFrom(readBuffer) // don't actually care about the packet just how many bytesRead we read 'n'
 			if err != nil {
 				h.logger.Debug("Error receiving data from UDP for bandwidth test: %v", err)
 				continue
@@ -46,7 +53,7 @@ func (h Handler) HandleConn(ctx context.Context, unused *session.Test, conn net.
 						Success: true,
 						Error:   nil,
 						Body: payloads.RawBandwidthPayload{
-							Bandwidth:        uint64(bytes),
+							Bandwidth:        uint64(bytesRead),
 							PacketsPerSecond: 1,
 						},
 					})

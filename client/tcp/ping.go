@@ -39,7 +39,6 @@ func (t Tests) TestPing(test *session.Test, g time.Duration, warmupCount uint32)
 						})
 
 					}
-					// TODO build into select statement so we don't have to wait externally for results if gap and duration don't line up
 					t1 := time.Since(t0)
 					if t1 < g {
 						time.Sleep(g - t1)

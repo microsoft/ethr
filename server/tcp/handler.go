@@ -52,18 +52,18 @@ func (h Handler) HandleConn(ctx context.Context, test *session.Test, conn net.Co
 	}
 	if testID.Protocol == ethr.TCP {
 		if testID.Type == ethr.TestTypeBandwidth {
-			_ = h.TestBandwidth(test, clientParam, conn)
+			_ = h.TestBandwidth(ctx, test, clientParam, conn)
 		} else if testID.Type == ethr.TestTypeLatency {
-			_ = h.TestLatency(test, clientParam, conn)
+			_ = h.TestLatency(ctx, test, clientParam, conn)
 		}
-		session.DeleteTest(test) // tests block until complete, cleanup
+		session.DeleteTest(test)
 	}
 }
 
 func ServerAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
 	connections := uint64(0)
 	totalBandwidth := uint64(0)
-	latencies := make([]time.Duration, 0, 100) // TODO figure out reasonable initial capacity to avoid to many resizes
+	latencies := make([]time.Duration, 0, 1024) // TODO figure out reasonable initial capacity to avoid to many resizes
 
 	for _, r := range intermediateResults {
 		// ignore failed results

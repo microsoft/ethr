@@ -14,10 +14,10 @@ type STDOutLogger struct {
 	toLog  chan string
 }
 
-func NewSTDOutLogger(ll LogLevel) *STDOutLogger {
+func NewSTDOutLogger(ll LogLevel, bufferSize int) *STDOutLogger {
 	return &STDOutLogger{
 		ll:    ll,
-		toLog: make(chan string, 64), // TODO determine adequate buffer
+		toLog: make(chan string, bufferSize),
 	}
 }
 

@@ -75,14 +75,12 @@ func (u *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *
 		if body, ok := result.Body.(payloads.ServerPayload); ok {
 			bwTestOn = true
 			bw = body.Bandwidth
-			agg.Stats.Bandwidth += body.Bandwidth
-			agg.Counts.Bandwidth++
+			agg.Bandwidth += body.Bandwidth
 
 			if protocol == ethr.TCP {
 				cpsTestOn = true
 				cps = body.ConnectionsPerSecond
-				agg.Stats.ConnectionsPerSecond += body.ConnectionsPerSecond
-				agg.Counts.ConnectionsPerSecond++
+				agg.ConnectionsPerSecond += body.ConnectionsPerSecond
 
 				if len(body.Latency.Raw) > 0 {
 					latTestOn = true
@@ -95,8 +93,7 @@ func (u *RawUI) getTestResults(s *session.Session, protocol ethr.Protocol, agg *
 			if protocol == ethr.UDP {
 				ppsTestOn = true
 				pps = body.PacketsPerSecond
-				agg.Stats.PacketsPerSecond += body.PacketsPerSecond
-				agg.Counts.PacketsPerSecond++
+				agg.PacketsPerSecond += body.PacketsPerSecond
 			}
 
 		}

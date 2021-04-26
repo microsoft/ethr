@@ -112,6 +112,11 @@ func (t Tests) discoverHops(test *session.Test, maxHops int) ([]payloads.Network
 	return nil, os.ErrNotExist
 }
 
+type basicHop struct {
+	addr    net.Addr
+	endTime time.Time
+}
+
 func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payloads.NetworkHop) (error, bool) {
 	isLast := false
 	icmpConn, err := t.NetTools.IcmpNewConn(test.RemoteIP.String())
@@ -119,16 +124,12 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 		return fmt.Errorf("failed to create ICMP connection: %w", err), isLast
 	}
 	defer icmpConn.Close()
-	//localPortNum := uint16(8888)
-	//if t.NetTools.LocalPort != 0 {
-	//	localPortNum = t.NetTools.LocalPort
-	//}
+
 	localPort := t.NetTools.LocalPort + uint16(hop)
 	b := make([]byte, 4)
 	binary.BigEndian.PutUint16(b[0:], localPort)
 	binary.BigEndian.PutUint16(b[2:], test.RemotePort)
-	peerAddrChan := make(chan net.Addr)
-	endTimeChan := make(chan time.Time)
+	icmpTTLChan := make(chan basicHop, 1)
 	go func() {
 		var peerAddr net.Addr
 		for {
@@ -158,40 +159,32 @@ func (t Tests) probeHop(test *session.Test, hop int, hopIP string, hopData *payl
 				break
 			}
 		}
-
-		// TODO send one object so timeout is easier
-		endTimeChan <- time.Now()
-		peerAddrChan <- peerAddr
+		icmpTTLChan <- basicHop{addr: peerAddr, endTime: time.Now()}
 	}()
-
-	startTime := time.Now()
-	var endTime time.Time
-	var peerAddr net.Addr
 
 	// For TCP Traceroute an ICMP error message will be sent for everything except the last connection which
 	// should establish correctly. The go routine above handles parsing the ICMP error into info used below.
-	// TODO dial addr probably shouldn't have port
-	//t.Logger.Debug("Dialing %s with ttl %d", test.DialAddr, hop)
+	startTime := time.Now()
 	conn, err := t.NetTools.Dial(ethr.TCP, test.DialAddr, nil, localPort, hop, 0)
-	hopData.Sent++
+
+	// assume next hop is last hop and overwrite from icmp ttl error if not
+	nextHop := basicHop{
+		endTime: time.Now(),
+		addr:    &net.IPAddr{IP: test.RemoteIP},
+	}
 	if err != nil { // majority case
-		endTime = <-endTimeChan
-		peerAddr = <-peerAddrChan
+		nextHop = <-icmpTTLChan
 	} else {
 		_ = conn.Close()
-		endTime = time.Now()
 		isLast = true
-		peerAddr = &net.IPAddr{
-			IP:   test.RemoteIP,
-			Zone: "",
-		}
 	}
 
-	elapsed := endTime.Sub(startTime)
-	if peerAddr == nil || peerAddr.String() == "" || (hopIP != "" && peerAddr.String() != hopIP) {
+	hopData.Sent++
+	hopData.UpdateStats(nextHop.addr, nextHop.endTime.Sub(startTime))
+	if nextHop.addr == nil || nextHop.addr.String() == "" || (hopIP != "" && nextHop.addr.String() != hopIP) {
 		hopData.Lost++
 		return fmt.Errorf("failed to complete connection or receive ICMP TTL Exceeded: %w", os.ErrNotExist), isLast
 	}
-	hopData.UpdateStats(peerAddr, elapsed)
+
 	return nil, isLast
 }

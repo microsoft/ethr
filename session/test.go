@@ -99,7 +99,6 @@ func (t *Test) StartPublishing() {
 			}
 		} else {
 			t.resultLock.Lock()
-			// TODO async publishing to avoid potential block? ordering wouldn't be guaranteed
 			for _, r := range t.intermediateResults {
 				select {
 				case t.Results <- r:

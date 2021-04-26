@@ -71,8 +71,7 @@ func main() {
 		stats.StartTimer()
 		defer stats.StopTimer()
 
-		// TODO log listening ip and port
-		// TODO stop server on ctx.cancel
+		logger.Info("Listening on TCP & UDP port %d", cfg.LocalPort)
 		err := udp.Serve(ctx, &cfg, udp.NewHandler(logger))
 		if err != nil {
 			fmt.Printf("%v", err)
@@ -126,7 +125,7 @@ func configureLogger(ctx context.Context, term *serverUi.UI) ethr.Logger {
 	}
 	loggers := make([]ethr.Logger, 0)
 	if !config.NoOutput {
-		fileLogger, err := log.NewJSONLogger(config.OutputFile, loglevel)
+		fileLogger, err := log.NewJSONLogger(config.OutputFile, loglevel, config.LogBufferSize)
 		if err != nil {
 			fmt.Printf("failed to initialize file logger: %s\n", err)
 		}
@@ -139,7 +138,7 @@ func configureLogger(ctx context.Context, term *serverUi.UI) ethr.Logger {
 		termLogger.Init(ctx)
 		loggers = append(loggers, termLogger)
 	} else {
-		stdoutLogger := log.NewSTDOutLogger(loglevel)
+		stdoutLogger := log.NewSTDOutLogger(loglevel, config.LogBufferSize)
 		stdoutLogger.Init(ctx)
 		loggers = append(loggers, stdoutLogger)
 	}

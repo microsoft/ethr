@@ -53,7 +53,7 @@ func (s *Session) PollInactive(ctx context.Context, gap time.Duration) {
 		case <-s.done:
 			return
 		case <-ticker.C:
-			// TODO make sure frequent locking doesn't block
+			// TODO make sure frequent locking doesn't block test creation (especially for high throughput like UDP Bandwidth)
 			toDelete := make([]*Test, 0)
 			s.RLock()
 			for k, v := range s.Tests {
@@ -101,7 +101,7 @@ func DeleteTest(t *Test) {
 		s.Unlock()
 		if len(s.Tests) == 0 {
 			close(s.done)
-			delete(sessions, t.RemoteIP.String()) // TODO locking here causes issues, maybe another solution?
+			delete(sessions, t.RemoteIP.String())
 		}
 	}
 }

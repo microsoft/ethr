@@ -29,10 +29,8 @@ func (t Tools) ReceiveICMPFromPeer(pc net.PacketConn, timeout time.Duration, nee
 		if n == 0 {
 			continue
 		}
-		//t.Logger.Debug("Packet:\n%s", hex.Dump(b[:n]))
 
 		if neededPeer != "" && peer.String() != neededPeer {
-			//t.Logger.Debug("matching peer is not found, wanted %s found %s", neededPeer, peer)
 			continue
 		}
 		icmpMsg, err := icmp.ParseMessage(ethr.ICMPProtocolNumber(t.IPVersion), b[:n])
@@ -61,23 +59,10 @@ func (t Tools) SendICMP(pc net.PacketConn, dest net.Addr, ttl int, timeout time.
 		return fmt.Errorf("failed to set deadline: %w", err)
 	}
 
-	//pid := os.Getpid() & 0xffff
-	//pid = 9999 // TODO wtf?
-	//wm := icmp.Message{
-	//	Type: ipv4.ICMPTypeEcho, Code: 0,
-	//	Body: &icmp.Echo{
-	//		ID: pid, Seq: hop<<8 | seq,
-	//		Data: []byte(body),
-	//	},
-	//}
-	//if t.IPVersion == ethr.IPv6 {
-	//	wm.Type = ipv6.ICMPTypeEchoRequest
-	//}
 	wb, err := msg.Marshal(nil)
 	if err != nil {
 		return fmt.Errorf("failed to marshal data: %w", err)
 	}
-	//start = time.Now()
 	if _, err := pc.WriteTo(wb, dest); err != nil {
 		return fmt.Errorf("failed to send ICMP data: %w", err)
 	}
@@ -109,6 +94,7 @@ func (t Tools) setICMPToS(pc net.PacketConn, tos int) error {
 	return os.ErrInvalid
 }
 
+// UnwrapICMPMessage parses out as much of the original icmp packet as possible
 // https://en.wikipedia.org/wiki/Internet_Control_Message_Protocol
 // ICMP errors return the original IP packet header and the first 8 bytes of the original message
 // This is useful in ICMP Traceroute to determine if this is a response to our original request
@@ -122,46 +108,3 @@ func (t Tools) UnwrapICMPMessage(index int, body []byte) (*icmp.Message, error) 
 	}
 	return unwrapped, nil
 }
-
-// TODO move this to a traceroute helper fn
-//if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
-//	body := icmpMsg.Body.(*icmp.TimeExceeded).Data
-//	index := bytes.Index(body, neededSig[:4])
-//	if index > 0 {
-//		if protocol == ethr.TCP {
-//			//c.Logger.Debug("Found correct ICMP error message. PeerAddr: %v", peerAddr)
-//			return peerAddr, isLast, nil
-//		} else if protocol == ethr.ICMP {
-//			if index < 4 {
-//				//c.Logger.Debug("Incorrect length of ICMP message.")
-//				continue
-//			}
-//			innerIcmpMsg, _ := icmp.ParseMessage(ethr.ICMPProtocolNumber(c.IPVersion), body[index-4:])
-//			switch innerIcmpMsg.Body.(type) {
-//			case *icmp.Echo:
-//				seq := innerIcmpMsg.Body.(*icmp.Echo).Seq
-//				if seq == neededIcmpSeq {
-//					return peerAddr, isLast, nil
-//				}
-//			default:
-//				// Ignore as this is not the right ICMP packet.
-//				//c.Logger.Debug("unable to recognize packet")
-//			}
-//		}
-//	} else {
-//		//c.Logger.Debug("Pattern %v not found.", hex.Dump(neededSig[:4]))
-//	}
-//}
-
-// TODO move this to a traceroute helper fn
-//if protocol == ethr.ICMP && (icmpMsg.Type == ipv4.ICMPTypeEchoReply || icmpMsg.Type == ipv6.ICMPTypeEchoReply) {
-//	_ = icmpMsg.Body.(*icmp.Echo)
-//	b, _ := icmpMsg.Body.Marshal(1)
-//	if string(b[4:]) != string(neededIcmpBody) {
-//		continue
-//	}
-//	isLast = true
-//	return peerAddr, isLast, nil
-//}
-//	}
-//}

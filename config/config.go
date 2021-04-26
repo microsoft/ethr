@@ -50,6 +50,9 @@ var (
 	WarmupCount        int
 	IsExternal         bool
 	ExternalClientDest string
+
+	// Tuning
+	LogBufferSize int
 )
 
 var hasPortRegex = regexp.MustCompile(".+(:\\d+)")
@@ -57,7 +60,7 @@ var hasPortRegex = regexp.MustCompile(".+(:\\d+)")
 func Init() error {
 	flag.Usage = func() { Usage() }
 	flag.BoolVar(&NoOutput, "no", false, "")
-	flag.StringVar(&OutputFile, "o", "", "") // TODO default after Parse
+	flag.StringVar(&OutputFile, "o", "", "")
 	flag.BoolVar(&Debug, "debug", false, "")
 	flag.BoolVar(&UseIPv4, "4", false, "")
 	flag.BoolVar(&UseIPv6, "6", false, "")
@@ -83,6 +86,8 @@ func Init() error {
 	flag.IntVar(&ThreadCount, "n", 0, "")
 	flag.IntVar(&WarmupCount, "w", 1, "")
 	flag.StringVar(&ExternalClientDest, "x", "", "")
+
+	flag.IntVar(&LogBufferSize, "logbuffer", 64, "maximum number of lines buffered in logger")
 
 	flag.Parse()
 

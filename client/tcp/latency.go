@@ -57,27 +57,26 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 				s1 := time.Now()
 				n, err := conn.Write(buff)
 				if err != nil || n < blen {
-					test.Results <- session.TestResult{
+					test.AddDirectResult(session.TestResult{
 						Success: false,
-						Error:   fmt.Errorf("error sending/receiving data on connection: %w", err), // TODO make an error template so we can check for this to know whether to keep listening
+						Error:   fmt.Errorf("error sending/receiving data on connection: %w", err),
 						Body:    nil,
-					}
+					})
 					break ExitSelect
 				}
 				_, err = io.ReadFull(conn, buff)
 				if err != nil {
-					test.Results <- session.TestResult{
+					test.AddDirectResult(session.TestResult{
 						Success: false,
-						Error:   fmt.Errorf("error sending/receiving data on connection: %w", err), // TODO make an error template so we can check for this to know whether to keep listening
+						Error:   fmt.Errorf("error sending/receiving data on connection: %w", err),
 						Body:    nil,
-					}
+					})
 					break ExitSelect
 				}
 				e2 := time.Since(s1)
 				latencyNumbers[i] = e2
 			}
-			// TODO temp code, fix it better, this is to allow server to do
-			// server side latency measurements as well.
+
 			_, _ = conn.Write(buff)
 			test.AddIntermediateResult(session.TestResult{
 				Success: true,

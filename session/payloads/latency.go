@@ -13,7 +13,6 @@ type RawLatencies struct {
 	Latencies []time.Duration
 }
 
-// TODO include jitter
 type LatencyPayload struct {
 	Raw    []time.Duration
 	Jitter time.Duration

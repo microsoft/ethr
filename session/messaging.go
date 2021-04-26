@@ -68,7 +68,7 @@ func (s Session) Receive(conn net.Conn) (msg *ethr.Msg, err error) {
 		return
 	}
 	msgSize := binary.BigEndian.Uint32(msgBytes[0:])
-	// TODO: Assuming max ethr message size as 16K sent over gob.
+	// Max ethr message size as 16K sent over gob.
 	if msgSize > 16384 {
 		return
 	}

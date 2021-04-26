@@ -19,7 +19,7 @@ type JSONLogger struct {
 	toLog   chan string
 }
 
-func NewJSONLogger(filename string, ll LogLevel) (*JSONLogger, error) {
+func NewJSONLogger(filename string, ll LogLevel, bufferSize int) (*JSONLogger, error) {
 	if filename == "" {
 		return nil, errors.New("filename required")
 	}
@@ -32,7 +32,7 @@ func NewJSONLogger(filename string, ll LogLevel) (*JSONLogger, error) {
 	log.SetOutput(logFile)
 	return &JSONLogger{
 		ll:    ll,
-		toLog: make(chan string, 64),
+		toLog: make(chan string, bufferSize),
 	}, nil
 }
 
