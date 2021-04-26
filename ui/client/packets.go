@@ -14,8 +14,6 @@ func (u *UI) PrintPacketsPerSecond(test *session.Test, result *session.TestResul
 	case payloads.BandwidthPayload:
 		u.printPacketsResult(test.ID.Protocol, r)
 		u.Logger.TestResult(ethr.TestTypePacketsPerSecond, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, result)
-		//logResults([]string{test.session.remoteIP, protoToString(test.testID.Protocol),
-		//	bytesToRate(bw), "", ppsToString(pps), ""})
 	default:
 		u.printUnknownResultType()
 	}
