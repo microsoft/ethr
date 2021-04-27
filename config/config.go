@@ -64,7 +64,7 @@ func Init() error {
 	flag.BoolVar(&Debug, "debug", false, "")
 	flag.BoolVar(&UseIPv4, "4", false, "")
 	flag.BoolVar(&UseIPv6, "6", false, "")
-	port := flag.Int("port", 8888, "")
+	port := flag.Int("port", 9999, "")
 	rawIP := flag.String("ip", "localhost", "")
 	flag.BoolVar(&IsServer, "s", false, "")
 
@@ -73,7 +73,7 @@ func Init() error {
 	flag.StringVar(&ClientDest, "c", "", "")
 	bufferLen := flag.String("l", "", "")
 	bw := flag.String("b", "", "")
-	lport := flag.Int("cport", 9999, "")
+	lport := flag.Int("cport", 8888, "")
 	flag.DurationVar(&Duration, "d", 10*time.Second, "")
 	flag.DurationVar(&Gap, "g", time.Second, "")
 	flag.IntVar(&Iterations, "i", 1000, "")
@@ -188,7 +188,7 @@ func validateServerArgs() (err error) {
 	if BandwidthRate != 0 {
 		invalidFlags = append(invalidFlags, "-b")
 	}
-	if LocalPort != 0 {
+	if LocalPort != 8888 {
 		invalidFlags = append(invalidFlags, "-cport")
 	}
 	if Duration != 10*time.Second {
@@ -307,6 +307,12 @@ func unsupportedTest() error {
 }
 
 func lookupIP(remote string) (addr net.IP, err error) {
+	if remote == "localhost" || remote == "" {
+		if IPVersion == ethr.IPv4 {
+			return net.IPv4(127, 0, 0, 1), nil
+		}
+		return net.IPv6loopback, nil
+	}
 	addr = net.ParseIP(remote)
 	if addr != nil {
 		return

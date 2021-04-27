@@ -143,9 +143,9 @@ func InitTui(tcp *AggregateStats, udp *AggregateStats, icmp *AggregateStats) (*T
 }
 
 // TODO change to milliseconds or smaller
-func (t *Tui) Paint(microseconds uint64) {
-	if microseconds < 1 {
-		microseconds = 1 // avoid divide by zero
+func (t *Tui) Paint(nanos uint64) {
+	if nanos < 1 {
+		nanos = 1 // avoid divide by zero
 	}
 	_ = tm.Clear(tm.ColorDefault, tm.ColorDefault)
 	defer tm.Flush()
@@ -237,7 +237,7 @@ func (t *Tui) Paint(microseconds uint64) {
 	w := t.statW
 	y := t.statY
 	for _, device := range currentStats.Devices {
-		nsDiff := stats.DiffNetDevStats(device, previousStats, microseconds)
+		nsDiff := stats.DiffNetDevStats(device, previousStats, nanos)
 		// TODO: Log the network adapter stats in file as well.
 		printText(x, y, w, fmt.Sprintf("if: %s", device.InterfaceName), tm.ColorWhite, tm.ColorBlack)
 		y++
@@ -260,7 +260,7 @@ func (t *Tui) Paint(microseconds uint64) {
 	}
 	printText(x, y, w,
 		fmt.Sprintf("Tcp Retrans: %s",
-			ui.NumberToUnit(1e6*(currentStats.TCP.RetransmittedSegments-previousStats.TCP.RetransmittedSegments)/microseconds)),
+			ui.NumberToUnit(1e9*(currentStats.TCP.RetransmittedSegments-previousStats.TCP.RetransmittedSegments)/nanos)),
 		tm.ColorDefault, tm.ColorDefault)
 }
 

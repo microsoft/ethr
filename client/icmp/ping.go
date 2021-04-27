@@ -140,7 +140,7 @@ func (t Tests) icmpPing(dest net.Addr, timeout time.Duration, hop int, seq int) 
 	}
 }
 
-func PingAggregator(microseconds uint64, intermediateResults []session.TestResult) session.TestResult {
+func PingAggregator(nanos uint64, intermediateResults []session.TestResult) session.TestResult {
 	lost := 0
 	received := 0
 	latencies := make([]time.Duration, 0, len(intermediateResults))

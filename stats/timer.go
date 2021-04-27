@@ -39,7 +39,7 @@ func GetNetStats() NetStat {
 	return *stats
 }
 
-func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, microseconds uint64) DeviceStats {
+func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, nanos uint64) DeviceStats {
 	for _, prevStats := range prevNetStats.Devices {
 		if prevStats.InterfaceName != curStats.InterfaceName {
 			continue
@@ -71,13 +71,13 @@ func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, microseconds ui
 
 		break
 	}
-	if microseconds < 1 {
-		microseconds = 1
+	if nanos < 1 {
+		nanos = 1
 	}
-	curStats.RXBytes = 1e6 * curStats.RXBytes / microseconds
-	curStats.TXBytes = 1e6 * curStats.TXBytes / microseconds
-	curStats.RXPackets = 1e6 * curStats.RXPackets / microseconds
-	curStats.TXPackets = 1e6 * curStats.TXPackets / microseconds
+	curStats.RXBytes = 1e9 * curStats.RXBytes / nanos
+	curStats.TXBytes = 1e9 * curStats.TXBytes / nanos
+	curStats.RXPackets = 1e9 * curStats.RXPackets / nanos
+	curStats.TXPackets = 1e9 * curStats.TXPackets / nanos
 	return curStats
 }
 

@@ -61,7 +61,7 @@ func (t Tests) handleBandwidthConn(test *session.Test, conn net.Conn, id string)
 	}
 }
 
-func BandwidthAggregator(microseconds uint64, intermediateResults []session.TestResult) session.TestResult {
+func BandwidthAggregator(nanos uint64, intermediateResults []session.TestResult) session.TestResult {
 	totalBandwidth := uint64(0)
 	totalPackets := uint64(0)
 	connectionAggregates := make(map[string]*payloads.RawBandwidthPayload)
@@ -85,8 +85,8 @@ func BandwidthAggregator(microseconds uint64, intermediateResults []session.Test
 	for k, v := range connectionAggregates {
 		connectionBandwidths = append(connectionBandwidths, payloads.RawBandwidthPayload{
 			ConnectionID:     k,
-			Bandwidth:        1e6 * v.Bandwidth / microseconds,
-			PacketsPerSecond: 1e6 * v.PacketsPerSecond / microseconds,
+			Bandwidth:        1e9 * v.Bandwidth / nanos,
+			PacketsPerSecond: 1e9 * v.PacketsPerSecond / nanos,
 		})
 	}
 
@@ -99,8 +99,8 @@ func BandwidthAggregator(microseconds uint64, intermediateResults []session.Test
 		Success: true,
 		Error:   nil,
 		Body: payloads.BandwidthPayload{
-			TotalBandwidth:        1e6 * totalBandwidth / microseconds,
-			TotalPacketsPerSecond: 1e6 * totalPackets / microseconds,
+			TotalBandwidth:        1e9 * totalBandwidth / nanos,
+			TotalPacketsPerSecond: 1e9 * totalPackets / nanos,
 			ConnectionBandwidths:  connectionBandwidths,
 		},
 	}

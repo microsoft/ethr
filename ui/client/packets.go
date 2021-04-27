@@ -13,7 +13,7 @@ func (u *UI) PrintPacketsPerSecond(test *session.Test, result *session.TestResul
 	switch r := result.Body.(type) {
 	case payloads.BandwidthPayload:
 		u.printPacketsResult(test.ID.Protocol, r)
-		u.Logger.TestResult(ethr.TestTypePacketsPerSecond, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, result)
+		u.Logger.TestResult(ethr.TestTypePacketsPerSecond, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, r)
 	default:
 		u.printUnknownResultType()
 	}

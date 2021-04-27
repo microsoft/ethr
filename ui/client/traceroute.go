@@ -19,7 +19,7 @@ func (u *UI) PrintTraceroute(test *session.Test, result *session.TestResult) {
 			u.PrintTracerouteHeader(test.RemoteIP)
 			fmt.Println(r)
 		}
-		u.Logger.TestResult(test.ID.Type, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, result)
+		u.Logger.TestResult(test.ID.Type, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, r)
 	default:
 		if r != nil {
 			u.printUnknownResultType()

@@ -47,7 +47,9 @@ func (h NetworkHop) String() string {
 }
 
 func (h *NetworkHop) UpdateStats(peerAddr net.Addr, elapsed time.Duration) {
-	h.Addr = peerAddr
+	if peerAddr != nil {
+		h.Addr = peerAddr
+	}
 	h.Rcvd++
 
 	h.Last = elapsed

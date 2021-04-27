@@ -68,54 +68,86 @@ func NewTest(s *Session, protocol ethr.Protocol, ttype ethr.TestType, rIP net.IP
 
 func (t *Test) StartPublishing() {
 	ticker := time.NewTicker(t.publishInterval) // most metrics are per second
-	// TODO figure out cleanup on test delete to avoid memory leak
-	for {
-		start := time.Now()
-		if t.aggregator != nil {
+	defer ticker.Stop()
+
+	if t.aggregator != nil {
+		t.republishAggregates(ticker)
+	} else {
+		t.republishAll(ticker)
+	}
+}
+
+func (t *Test) republishAll(ticker *time.Ticker) {
+	doRepublish := func() {
+		t.resultLock.Lock()
+		for _, r := range t.intermediateResults {
 			select {
-			case <-ticker.C:
-				t.resultLock.Lock()
-				if len(t.intermediateResults) == 0 {
-					t.resultLock.Unlock()
-					break
-				}
-
-				micros := uint64(time.Since(start).Microseconds())
-				if micros < 1 {
-					micros = 1
-				}
-				r := t.aggregator(micros, t.intermediateResults)
-				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
-				t.latestResult = &r
-				t.resultLock.Unlock()
-
-				select {
-				case t.Results <- r:
-				default:
-				}
-
+			case t.Results <- r:
 			default:
-				time.Sleep(100 * time.Millisecond)
 			}
-		} else {
-			t.resultLock.Lock()
-			for _, r := range t.intermediateResults {
-				select {
-				case t.Results <- r:
-				default:
-				}
-				t.latestResult = &r
-			}
-			if len(t.intermediateResults) > 0 {
-				// TODO make sure old array is GC'ed
-				t.intermediateResults = t.intermediateResults[:0]
-				//t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
-			}
-			t.resultLock.Unlock()
-			time.Sleep(100 * time.Millisecond)
+			t.latestResult = &r
 		}
+		if len(t.intermediateResults) > 0 {
+			// TODO make sure old array is GC'ed
+			t.intermediateResults = t.intermediateResults[:0]
+			//t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+		}
+		t.resultLock.Unlock()
 	}
 
+	for range ticker.C {
+		select {
+		case <-t.Done:
+			doRepublish()
+			close(t.Results)
+			return
+		default:
+			doRepublish()
+		}
+	}
+}
+
+func (t *Test) republishAggregates(ticker *time.Ticker) {
+	start := time.Now()
+
+	doAggregate := func(start time.Time) bool {
+		t.resultLock.Lock()
+		if len(t.intermediateResults) == 0 {
+			t.resultLock.Unlock()
+			return false
+		}
+
+		ns := uint64(time.Since(start).Nanoseconds())
+		if ns < 1 {
+			ns = 1
+		}
+		r := t.aggregator(ns, t.intermediateResults)
+		t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
+		t.latestResult = &r
+		t.resultLock.Unlock()
+
+		select {
+		case t.Results <- r:
+		default:
+		}
+		return true
+	}
+
+	for range ticker.C {
+		select {
+		case <-t.Done:
+			// cleanup any unpublished results
+			_ = doAggregate(start)
+			close(t.Results)
+			return
+		default:
+			republished := doAggregate(start)
+			if !republished {
+				continue
+			}
+			start = time.Now()
+		}
+	}
 }
 
 func (t *Test) Terminate() {

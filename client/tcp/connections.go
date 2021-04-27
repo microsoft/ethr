@@ -37,7 +37,7 @@ func (t Tests) TestConnectionsPerSecond(test *session.Test) {
 	}
 }
 
-func ConnectionsAggregator(microseconds uint64, intermediateResults []session.TestResult) session.TestResult {
+func ConnectionsAggregator(nanos uint64, intermediateResults []session.TestResult) session.TestResult {
 	connections := uint64(0)
 	for _, r := range intermediateResults {
 		// ignore failed results
@@ -50,7 +50,7 @@ func ConnectionsAggregator(microseconds uint64, intermediateResults []session.Te
 		Success: true,
 		Error:   nil,
 		Body: payloads.ConnectionsPerSecondPayload{
-			Connections: 1e6 * connections / microseconds,
+			Connections: 1e9 * connections / nanos,
 		},
 	}
 }

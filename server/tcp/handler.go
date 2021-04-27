@@ -60,7 +60,7 @@ func (h Handler) HandleConn(ctx context.Context, test *session.Test, conn net.Co
 	}
 }
 
-func ServerAggregator(microseconds uint64, intermediateResults []session.TestResult) session.TestResult {
+func ServerAggregator(nanos uint64, intermediateResults []session.TestResult) session.TestResult {
 	connections := uint64(0)
 	totalBandwidth := uint64(0)
 	latencies := make([]time.Duration, 0, 1024) // TODO figure out reasonable initial capacity to avoid to many resizes
@@ -84,8 +84,8 @@ func ServerAggregator(microseconds uint64, intermediateResults []session.TestRes
 		Success: true,
 		Error:   nil,
 		Body: payloads.ServerPayload{
-			ConnectionsPerSecond: 1e6 * connections / microseconds,
-			Bandwidth:            1e6 * totalBandwidth / microseconds,
+			ConnectionsPerSecond: 1e9 * connections / nanos,
+			Bandwidth:            1e9 * totalBandwidth / nanos,
 			Latency:              payloads.NewLatencies(latencies),
 		},
 	}

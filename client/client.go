@@ -63,7 +63,7 @@ func (c Client) CreateTest(protocol ethr.Protocol, tt ethr.TestType) (*session.T
 			// no aggregator for traceroute (single result w/ pointer updates for mtr)
 		}
 	} else if protocol == ethr.UDP {
-		if tt == ethr.TestTypeBandwidth {
+		if tt == ethr.TestTypeBandwidth || tt == ethr.TestTypePacketsPerSecond {
 			aggregator = udp.BandwidthAggregator
 		}
 	} else if protocol == ethr.ICMP {

@@ -13,7 +13,7 @@ func (u *UI) PrintLatency(test *session.Test, result *session.TestResult) {
 	switch r := result.Body.(type) {
 	case payloads.LatencyPayload:
 		fmt.Printf("%s\n", r)
-		u.Logger.TestResult(ethr.TestTypeLatency, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, result)
+		u.Logger.TestResult(ethr.TestTypeLatency, result.Success, test.ID.Protocol, test.RemoteIP, test.RemotePort, r)
 	default:
 		if r != nil {
 			u.printUnknownResultType()
