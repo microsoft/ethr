@@ -93,7 +93,7 @@ func (t Tests) TestLatency(test *session.Test, g time.Duration) {
 	}
 }
 
-func LatencyAggregator(seconds uint64, intermediateResults []session.TestResult) session.TestResult {
+func LatencyAggregator(microseconds uint64, intermediateResults []session.TestResult) session.TestResult {
 	latencies := make([]time.Duration, 0)
 
 	for _, r := range intermediateResults {

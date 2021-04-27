@@ -80,11 +80,11 @@ func (t *Test) StartPublishing() {
 					break
 				}
 
-				seconds := uint64(time.Since(start).Seconds())
-				if seconds < 1 {
-					seconds = 1
+				micros := uint64(time.Since(start).Microseconds())
+				if micros < 1 {
+					micros = 1
 				}
-				r := t.aggregator(seconds, t.intermediateResults)
+				r := t.aggregator(micros, t.intermediateResults)
 				t.intermediateResults = make([]TestResult, 0, cap(t.intermediateResults))
 				t.latestResult = &r
 				t.resultLock.Unlock()

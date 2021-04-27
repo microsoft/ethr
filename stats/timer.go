@@ -29,29 +29,17 @@ type TCPStat struct {
 func GetNetStats() NetStat {
 	stats := &NetStat{}
 	getNetDevStats(stats)
-	/*
-		devStats, err := osStats.GetNetDevStats()
-		if err != nil {
-			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net device stats")
-		}
-	*/
+
 	sort.SliceStable(stats.Devices, func(i, j int) bool {
 		return stats.Devices[i].InterfaceName < stats.Devices[j].InterfaceName
 	})
+
 	getTCPStats(stats)
 
-	/*
-		TCP, err := osStats.GetTCPStats()
-		if err != nil {
-			return stats.EthrNetStats{}, errors.Wrap(err, "getNetworkStats: could not get net TCP stats")
-		}
-
-		return stats.EthrNetStats{NetDevStats: devStats, TCPStats: TCP}, nil
-	*/
 	return *stats
 }
 
-func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, seconds uint64) DeviceStats {
+func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, microseconds uint64) DeviceStats {
 	for _, prevStats := range prevNetStats.Devices {
 		if prevStats.InterfaceName != curStats.InterfaceName {
 			continue
@@ -83,13 +71,13 @@ func DiffNetDevStats(curStats DeviceStats, prevNetStats NetStat, seconds uint64)
 
 		break
 	}
-	if seconds < 1 {
-		seconds = 1
+	if microseconds < 1 {
+		microseconds = 1
 	}
-	curStats.RXBytes /= seconds
-	curStats.TXBytes /= seconds
-	curStats.RXPackets /= seconds
-	curStats.TXPackets /= seconds
+	curStats.RXBytes = 1e6 * curStats.RXBytes / microseconds
+	curStats.TXBytes = 1e6 * curStats.TXBytes / microseconds
+	curStats.RXPackets = 1e6 * curStats.RXPackets / microseconds
+	curStats.TXPackets = 1e6 * curStats.TXPackets / microseconds
 	return curStats
 }
 
@@ -136,11 +124,6 @@ func StopTimer() {
 
 var lastStatsTime = time.Now()
 
-//func timeToNextTick() time.Duration {
-//	nextTick := lastStatsTime.Add(time.Second)
-//	return time.Until(nextTick)
-//}
-
 func LatestStats() NetStat {
 	return latestStats
 }
@@ -153,30 +136,7 @@ var latestStats NetStat
 var historicalStats NetStat
 
 func sampleStats() {
-	d := time.Since(lastStatsTime)
 	lastStatsTime = time.Now()
-	seconds := int64(d.Seconds())
-	if seconds < 1 {
-		seconds = 1
-	}
 	historicalStats = latestStats
 	latestStats = GetNetStats()
-	// Handle UI output externally
-	//ui.emitTestResultBegin()
-	//emitTestResults(uint64(seconds))
-	//ui.emitTestResultEnd()
-	//ui.emitStats(getNetworkStats())
-	//ui.paint(uint64(seconds))
 }
-
-// Get stats from chan/return and print externally
-//func emitTestResults(s uint64) {
-//	gSessionLock.RLock()
-//	defer gSessionLock.RUnlock()
-//	for _, k := range gSessionKeys {
-//		v := gSessions[k]
-//		ui.emitTestResult(v, TCP, s)
-//		ui.emitTestResult(v, UDP, s)
-//		ui.emitTestResult(v, ICMP, s)
-//	}
-//}

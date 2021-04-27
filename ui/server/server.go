@@ -59,8 +59,8 @@ func (u *UI) Display(ctx context.Context) {
 			case <-ctx.Done():
 				return
 			case <-paintTicker.C:
-				seconds := uint64(time.Since(start).Seconds())
-				u.Terminal.Paint(seconds)
+				micros := uint64(time.Since(start).Microseconds())
+				u.Terminal.Paint(micros)
 				start = time.Now()
 			}
 		}
