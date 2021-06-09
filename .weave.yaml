@@ -1,0 +1,28 @@
+schema: "2"
+name: ethr
+slug: ethr
+owner: acl-dev-team-data-infrastructure@getweave.com
+slack: "#squad-data-infra-alerts"
+namespace: data-infra
+deploy:
+  wsf-prod-1-gke1-west3:
+    service:
+    - name: ethr
+      ports:
+      - name: tcp
+        number: 8888
+      - name: udp
+        number: 8888
+        protocol: udp
+    resources:
+      scaling:
+        replicas: 1
+    #ingress:
+    #- host: ethr.weavelab.ninja
+    #  public: true
+    #  paths:
+    #  - path: /
+    #    serviceName: ethr
+    #    servicePort: 8888
+    #featureFlags:
+    #  auto-deploy: true
