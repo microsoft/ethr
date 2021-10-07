@@ -165,7 +165,7 @@ func srvrRunTCPBandwidthTest(test *ethrTest, clientParam EthrClientParam, conn n
 			ui.printDbg("Error sending/receiving data on a connection for bandwidth test: %v", err)
 			break
 		}
-		atomic.AddUint64(&test.testResult.bw, uint64(size))
+		atomic.AddUint64(&test.testResult.bw, uint64(n))
 		if clientParam.Reverse {
 			sentBytes += uint64(n)
 			start, waitTime, sentBytes, bytesToSend = enforceThrottle(start, waitTime, totalBytesToSend, sentBytes, bufferLen)
