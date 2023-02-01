@@ -129,7 +129,7 @@ func logResults(s []string) {
 	}
 }
 
-func logLatency(remoteIP, proto string, avg, min, p50, p90, p95, p99, p999, p9999, max time.Duration) {
+func logLatency(remoteIP, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration) {
 	if loggingActive {
 		logData := logLatencyData{}
 		logData.Time = time.Now().UTC().Format(time.RFC3339)
