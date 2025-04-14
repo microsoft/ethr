@@ -1,8 +1,8 @@
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 // Copyright (C) Microsoft. All rights reserved.
 // Licensed under the MIT license.
 // See LICENSE.txt file in the project root for full license information.
-//-----------------------------------------------------------------------------
+// -----------------------------------------------------------------------------
 package main
 
 import (
@@ -239,6 +239,7 @@ func main() {
 			uint64(bwRate),
 			uint8(*tos)}
 		validateClientParams(testId, clientParam)
+		gTOS = uint8(*tos)
 
 		rServer := destination
 		runClient(testId, *title, clientParam, rServer)
