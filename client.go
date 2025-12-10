@@ -88,6 +88,58 @@ func handshakeWithServer(test *ethrTest, conn net.Conn) (err error) {
 	return
 }
 
+// handshakeWithServerSync performs handshake and synchronizes start time with server
+// Client aligns to server's stats interval timing
+func handshakeWithServerSync(test *ethrTest, conn net.Conn) (startTime time.Time, err error) {
+	// Step 1: Send SYN and receive ACK (existing handshake)
+	ethrMsg := createSynMsg(test.testID, test.clientParam)
+	err = sendSessionMsg(conn, ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to send SYN message to Ethr server. Error: %v", err)
+		return
+	}
+	ethrMsg = recvSessionMsg(conn)
+	if ethrMsg.Type != EthrAck {
+		ui.printDbg("Failed to receive ACK message from Ethr server. Error: %v", err)
+		err = os.ErrInvalid
+		return
+	}
+
+	// Step 2: Request sync timing from server
+	// Record time BEFORE sending so we can measure RTT
+	sendTime := time.Now()
+	ethrMsg = createSyncStartMsg()
+	err = sendSessionMsg(conn, ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to send SyncStart message to Ethr server. Error: %v", err)
+		return
+	}
+
+	// Step 3: Receive server's delay until next stats interval
+	ethrMsg = recvSessionMsg(conn)
+	recvTime := time.Now() // Record time AFTER receiving
+	if ethrMsg.Type != EthrSyncReady {
+		ui.printDbg("Failed to receive SyncReady message from Ethr server. Error: %v", err)
+		err = os.ErrInvalid
+		return
+	}
+	delayNs := ethrMsg.SyncReady.DelayNs
+
+	if delayNs == 0 {
+		// Single-client mode: server started immediately after sending
+		// We start immediately after receiving - this is the sync point
+		startTime = recvTime
+	} else {
+		// Multi-client mode: align to server's existing stats timer
+		// Calculate when server's next interval starts accounting for RTT
+		rtt := recvTime.Sub(sendTime)
+		oneWayLatency := rtt / 2
+		startTime = sendTime.Add(oneWayLatency + time.Duration(delayNs))
+		waitUntilTime(startTime)
+	}
+	return
+}
+
 func getServerIPandPort(server string) (string, string, string, error) {
 	hostName := ""
 	hostIP := ""
@@ -166,39 +218,56 @@ func runClient(testID EthrTestID, title string, clientParam EthrClientParam, ser
 
 func runTest(test *ethrTest) {
 	toStop := make(chan int, 16)
-	startStatsTimer()
 	gap := test.clientParam.Gap
 	duration := test.clientParam.Duration
-	runDurationTimer(duration, toStop)
 	test.isActive = true
 	if test.testID.Protocol == TCP {
 		if test.testID.Type == Bandwidth {
-			tcpRunBandwidthTest(test, toStop)
+			// For bandwidth tests, use synchronized start
+			tcpRunBandwidthTestSync(test, toStop, duration)
 		} else if test.testID.Type == Latency {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go runTCPLatencyTest(test, gap, toStop)
 		} else if test.testID.Type == Cps {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go tcpRunCpsTest(test)
 		} else if test.testID.Type == Ping {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
 			VerifyPermissionForTest(test.testID)
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go tcpRunTraceRoute(test, gap, toStop)
 		} else if test.testID.Type == MyTraceRoute {
 			VerifyPermissionForTest(test.testID)
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go tcpRunMyTraceRoute(test, gap, toStop)
 		}
 	} else if test.testID.Protocol == UDP {
 		if test.testID.Type == Bandwidth ||
 			test.testID.Type == Pps {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			runUDPBandwidthAndPpsTest(test)
 		}
 	} else if test.testID.Protocol == ICMP {
 		VerifyPermissionForTest(test.testID)
 		if test.testID.Type == Ping {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go clientRunPingTest(test, gap, test.clientParam.WarmupCount)
 		} else if test.testID.Type == TraceRoute {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go icmpRunTraceRoute(test, gap, toStop)
 		} else if test.testID.Type == MyTraceRoute {
+			startStatsTimer()
+			runDurationTimer(duration, toStop)
 			go icmpRunMyTraceRoute(test, gap, toStop)
 		}
 	}
@@ -221,6 +290,138 @@ func runTest(test *ethrTest) {
 		ui.printMsg("Ethr done, connection terminated.")
 	}
 	return
+}
+
+// tcpRunBandwidthTestSync runs bandwidth test with synchronized start time
+// Client aligns to server's stats interval timing
+func tcpRunBandwidthTestSync(test *ethrTest, toStop chan int, duration time.Duration) {
+	var wg sync.WaitGroup
+	
+	// Phase 1: Establish control connection and do sync handshake FIRST
+	// This must happen before other connections so server knows this is the control connection
+	controlConn, err := ethrDialInc(TCP, test.dialAddr, 0)
+	if err != nil {
+		ui.printErr("Error dialing control connection: %v", err)
+		toStop <- disconnect
+		return
+	}
+
+	// Do basic handshake (SYN/ACK)
+	err = handshakeWithServer(test, controlConn)
+	if err != nil {
+		ui.printErr("Failed in handshake with the server. Error: %v", err)
+		controlConn.Close()
+		toStop <- disconnect
+		return
+	}
+
+	// Immediately do sync handshake on control connection
+	sendTime := time.Now()
+	ethrMsg := createSyncStartMsg()
+	err = sendSessionMsg(controlConn, ethrMsg)
+	if err != nil {
+		ui.printErr("Failed to send SyncStart message. Error: %v", err)
+		controlConn.Close()
+		toStop <- disconnect
+		return
+	}
+
+	// Wait for server's response
+	ethrMsg = recvSessionMsg(controlConn)
+	recvTime := time.Now()
+	if ethrMsg.Type != EthrSyncReady {
+		ui.printErr("Failed to receive SyncReady message from server.")
+		controlConn.Close()
+		toStop <- disconnect
+		return
+	}
+	delayNs := ethrMsg.SyncReady.DelayNs
+	rtt := recvTime.Sub(sendTime)
+	rttNs := rtt.Nanoseconds()
+
+	// Calculate start time and send RTT back to server
+	var startTime time.Time
+	if delayNs == 0 {
+		// Single-client mode: 3-way handshake
+		// Send RTT back to server, then START immediately
+		ethrMsg = createSyncGoMsg(rttNs)
+		err = sendSessionMsg(controlConn, ethrMsg)
+		if err != nil {
+			ui.printErr("Failed to send SyncGo message. Error: %v", err)
+			controlConn.Close()
+			toStop <- disconnect
+			return
+		}
+		// Start immediately after sending
+		startTime = time.Now()
+	} else {
+		// Multi-client mode: align to server's existing stats timer
+		oneWayLatency := rtt / 2
+		adjustedDelay := time.Duration(delayNs) - oneWayLatency
+		if adjustedDelay < 0 {
+			adjustedDelay = 0
+		}
+		startTime = time.Now().Add(adjustedDelay)
+		
+		// Send RTT back to server
+		ethrMsg = createSyncGoMsg(rttNs)
+		err = sendSessionMsg(controlConn, ethrMsg)
+		if err != nil {
+			ui.printErr("Failed to send SyncGo message. Error: %v", err)
+			controlConn.Close()
+			toStop <- disconnect
+			return
+		}
+		
+		// Wait until the adjusted start time
+		waitUntilTime(startTime)
+	}
+
+	// Phase 2: Establish remaining connections (they skip sync on server side)
+	var connections []net.Conn
+	connections = append(connections, controlConn)
+	
+	for th := uint32(1); th < test.clientParam.NumThreads; th++ {
+		conn, err := ethrDialInc(TCP, test.dialAddr, uint16(th))
+		if err != nil {
+			ui.printErr("Error dialing connection: %v", err)
+			continue
+		}
+
+		// Do basic handshake (SYN/ACK) - server will skip sync for these
+		err = handshakeWithServer(test, conn)
+		if err != nil {
+			ui.printErr("Failed in handshake with the server. Error: %v", err)
+			conn.Close()
+			continue
+		}
+		connections = append(connections, conn)
+	}
+
+	// Phase 3: Start all threads simultaneously
+	startBarrier := make(chan struct{})
+	for _, conn := range connections {
+		wg.Add(1)
+		go func(c net.Conn) {
+			<-startBarrier // All threads wait here
+			runTCPBandwidthTestHandler(test, c, &wg)
+		}(conn)
+	}
+
+	// Set the test start time and start stats timer
+	test.startTime = startTime
+	startStatsTimerAt(startTime)
+	
+	// Release all threads simultaneously - this is when data transfer begins
+	close(startBarrier)
+	
+	// Start duration timer
+	runDurationTimer(duration, toStop)
+
+	go func() {
+		wg.Wait()
+		toStop <- disconnect
+	}()
 }
 
 func tcpRunBandwidthTest(test *ethrTest, toStop chan int) {

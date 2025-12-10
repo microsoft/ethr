@@ -92,32 +92,63 @@ func getNetDevStatDiff(curStats ethrNetDevStat, prevNetStats ethrNetStat, second
 }
 
 var statsEnabled bool
+var statsTicker *time.Ticker
 
 func startStatsTimer() {
 	if statsEnabled {
 		return
 	}
 
-	// In an ideal setup, client and server should print stats at the same time.
-	// However, instead of building a whole time synchronization mechanism, a
-	// hack is used that starts stat at a second granularity. This is done on
-	// both client and sever, and as long as both client & server have time
-	// synchronized e.g. with a time server, both would print stats of the running
-	// test at _almost_ the same time.
+	// Start stats at second boundary so that client can align to server's timing
 	SleepUntilNextWholeSecond()
 
 	lastStatsTime = time.Now()
-	ticker := time.NewTicker(time.Second)
+	statsTicker = time.NewTicker(time.Second)
 	statsEnabled = true
 	go func() {
 		for statsEnabled {
 			select {
-			case <-ticker.C:
+			case <-statsTicker.C:
 				emitStats()
 			}
 		}
-		ticker.Stop()
+		statsTicker.Stop()
+	}()
+}
+
+// startStatsTimerAt starts the stats timer synchronized to a specific start time
+// This is used when client and server have negotiated an exact start time
+// Uses absolute time targets to prevent timer drift
+func startStatsTimerAt(startTime time.Time) {
+	if statsEnabled {
 		return
+	}
+
+	// Set lastStatsTime to the synchronized start time
+	lastStatsTime = startTime
+	statsEnabled = true
+
+	// Run the timer in a goroutine so we don't block the caller
+	go func() {
+		// Use absolute time targets to prevent drift
+		// Each measurement happens at exactly startTime + N seconds
+		interval := 1
+		for statsEnabled {
+			// Calculate the exact target time for this interval
+			targetTime := startTime.Add(time.Duration(interval) * time.Second)
+			sleepDuration := time.Until(targetTime)
+			
+			if sleepDuration > 0 {
+				time.Sleep(sleepDuration)
+			}
+			
+			if !statsEnabled {
+				break
+			}
+			
+			emitStats()
+			interval++
+		}
 	}()
 }
 
@@ -135,18 +166,19 @@ func timeToNextTick() time.Duration {
 func emitStats() {
 	d := time.Since(lastStatsTime)
 	lastStatsTime = time.Now()
-	seconds := int64(d.Seconds())
-	if seconds < 1 {
-		seconds = 1
+	// Use actual elapsed time for accurate rate calculations
+	seconds := d.Seconds()
+	if seconds < 1.0 {
+		seconds = 1.0
 	}
 	ui.emitTestResultBegin()
-	emitTestResults(uint64(seconds))
+	emitTestResults(seconds)
 	ui.emitTestResultEnd()
 	ui.emitStats(getNetworkStats())
 	ui.paint(uint64(seconds))
 }
 
-func emitTestResults(s uint64) {
+func emitTestResults(s float64) {
 	gSessionLock.RLock()
 	defer gSessionLock.RUnlock()
 	for _, k := range gSessionKeys {

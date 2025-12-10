@@ -55,15 +55,21 @@ const (
 	EthrInv EthrMsgType = iota
 	EthrSyn
 	EthrAck
+	EthrSyncStart  // Client sends sync request to server
+	EthrSyncReady  // Server sends timing info to client
+	EthrSyncGo     // Client sends RTT back, server uses it to sync
 )
 
 type EthrMsgVer uint32
 
 type EthrMsg struct {
-	Version EthrMsgVer
-	Type    EthrMsgType
-	Syn     *EthrMsgSyn
-	Ack     *EthrMsgAck
+	Version   EthrMsgVer
+	Type      EthrMsgType
+	Syn       *EthrMsgSyn
+	Ack       *EthrMsgAck
+	SyncStart *EthrMsgSyncStart
+	SyncReady *EthrMsgSyncReady
+	SyncGo    *EthrMsgSyncGo
 }
 
 type EthrMsgSyn struct {
@@ -72,6 +78,19 @@ type EthrMsgSyn struct {
 }
 
 type EthrMsgAck struct {
+}
+
+type EthrMsgSyncStart struct {
+	// Empty - just a request from client to get server's timing
+}
+
+type EthrMsgSyncReady struct {
+	DelayNs int64  // Nanoseconds until server's next stats interval (multi-client mode)
+	                // In single-client mode: 0 means "measure RTT and send back"
+}
+
+type EthrMsgSyncGo struct {
+	RttNs int64  // Client's measured RTT in nanoseconds
 }
 
 type ethrTestResult struct {
@@ -97,6 +116,7 @@ type ethrTest struct {
 	done        chan struct{}
 	connList    *list.List
 	lastAccess  time.Time
+	startTime   time.Time  // Track when the test started for sync purposes
 }
 
 type ethrIPVer uint32
@@ -120,7 +140,8 @@ type EthrClientParam struct {
 }
 
 type ethrServerParam struct {
-	showUI bool
+	showUI    bool
+	oneClient bool
 }
 
 var gIPVersion ethrIPVer = ethrIPAny
@@ -252,6 +273,7 @@ func createOrGetTest(remoteIP string, proto EthrProtocol, testType EthrTestType)
 		testID := EthrTestID{proto, testType}
 		test, _ = newTestInternal(remoteIP, testID, EthrClientParam{})
 		test.isActive = true
+		test.startTime = time.Now()  // Track when this test started
 	}
 	atomic.AddInt32(&test.refCount, 1)
 	return
@@ -316,6 +338,43 @@ func createAckMsg() (ethrMsg *EthrMsg) {
 	ethrMsg = &EthrMsg{Version: 0, Type: EthrAck}
 	ethrMsg.Ack = &EthrMsgAck{}
 	return
+}
+
+func createSyncStartMsg() (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyncStart}
+	ethrMsg.SyncStart = &EthrMsgSyncStart{}
+	return
+}
+
+func createSyncReadyMsg(delayNs int64) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyncReady}
+	ethrMsg.SyncReady = &EthrMsgSyncReady{DelayNs: delayNs}
+	return
+}
+
+func createSyncGoMsg(rttNs int64) (ethrMsg *EthrMsg) {
+	ethrMsg = &EthrMsg{Version: 0, Type: EthrSyncGo}
+	ethrMsg.SyncGo = &EthrMsgSyncGo{RttNs: rttNs}
+	return
+}
+
+// getTimeToNextTick returns the nanoseconds until the next stats timer tick
+// This is used by the server to tell clients when to start
+func getTimeToNextTick() int64 {
+	return int64(timeToNextTick())
+}
+
+// waitUntilTime blocks until the specified time, with nanosecond precision
+func waitUntilTime(targetTime time.Time) {
+	// First do a coarse sleep to get close
+	remaining := time.Until(targetTime)
+	if remaining > 10*time.Millisecond {
+		time.Sleep(remaining - 5*time.Millisecond)
+	}
+	// Then busy-wait for precise timing
+	for time.Now().Before(targetTime) {
+		// Busy wait for nanosecond precision
+	}
 }
 
 func recvSessionMsg(conn net.Conn) (ethrMsg *EthrMsg) {

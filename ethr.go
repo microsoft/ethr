@@ -53,9 +53,11 @@ func main() {
 	use6 := flag.Bool("6", false, "")
 	port := flag.Int("port", 8888, "")
 	ip := flag.String("ip", "", "")
+	precision := flag.Int("dp", 1, "")
 	// Server
 	isServer := flag.Bool("s", false, "")
 	showUI := flag.Bool("ui", false, "")
+	oneClient := flag.Bool("1", false, "")
 	// Client & External Client
 	clientDest := flag.String("c", "", "")
 	bufLenStr := flag.String("l", "", "")
@@ -75,6 +77,12 @@ func main() {
 	xClientDest := flag.String("x", "", "")
 
 	flag.Parse()
+
+	// Set precision for rate display (1 or 2 decimal places)
+	if *precision < 1 || *precision > 2 {
+		printUsageError("Invalid precision value. Use 1 or 2.")
+	}
+	gPrecision = *precision
 
 	if *isServer {
 		if *clientDest != "" {
@@ -178,7 +186,7 @@ func main() {
 	if *isServer {
 		// Server side parameter processing.
 		testType = All
-		serverParam := ethrServerParam{*showUI}
+		serverParam := ethrServerParam{showUI: *showUI, oneClient: *oneClient}
 		runServer(serverParam)
 	} else {
 		gIsExternalClient = false
@@ -390,6 +398,8 @@ func ethrUsage() {
 	printFlagUsage("debug", "", "Enable debug information in logging output.")
 	printFlagUsage("4", "", "Use only IP v4 version")
 	printFlagUsage("6", "", "Use only IP v6 version")
+	printFlagUsage("dp", "<1|2>", "Decimal precision for bandwidth display (default: 1).",
+		"Use 2 for higher precision comparison between client and server.")
 
 	fmt.Println("\nMode: Server")
 	fmt.Println("================================================================================")
@@ -399,6 +409,8 @@ func ethrUsage() {
 	printIPUsage()
 	printPortUsage()
 	printFlagUsage("ui", "", "Show output in text UI.")
+	printFlagUsage("1", "", "Handle one client connection then exit (like iPerf3).",
+		"Provides precise synchronization for accurate client/server bandwidth matching.")
 
 	fmt.Println("\nMode: Client")
 	fmt.Println("================================================================================")

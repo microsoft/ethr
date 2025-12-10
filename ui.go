@@ -220,7 +220,7 @@ type ethrUI interface {
 	emitLatencyHdr()
 	emitLatencyResults(remote, proto string, avg, min, max, p50, p90, p95, p99, p999, p9999 time.Duration)
 	emitTestResultBegin()
-	emitTestResult(*ethrSession, EthrProtocol, uint64)
+	emitTestResult(*ethrSession, EthrProtocol, float64)
 	printTestResults([]string)
 	emitTestResultEnd()
 	emitStats(ethrNetStat)

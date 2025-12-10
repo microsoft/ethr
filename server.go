@@ -37,12 +37,21 @@ func showAcceptedIPVersion() {
 	ui.printMsg("Accepting IP version: %s", ipVerString)
 }
 
+var gOneClient bool
+
 func runServer(serverParam ethrServerParam) {
+	gOneClient = serverParam.oneClient
 	defer stopStatsTimer()
 	initServer(serverParam.showUI)
-	startStatsTimer()
+	if !gOneClient {
+		// In multi-client mode, start stats timer immediately
+		startStatsTimer()
+	}
 	fmt.Println("-----------------------------------------------------------")
 	showAcceptedIPVersion()
+	if gOneClient {
+		ui.printMsg("Running in single-client mode (one-off)")
+	}
 	ui.printMsg("Listening on port %d for TCP & UDP", gEthrPort)
 	srvrRunUDPServer()
 	err := srvrRunTCPServer()
@@ -64,6 +73,133 @@ func handshakeWithClient(test *ethrTest, conn net.Conn) (testID EthrTestID, clie
 	clientParam = ethrMsg.Syn.ClientParam
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(conn, ethrMsg)
+	return
+}
+
+// handshakeWithClientSync performs handshake and synchronizes start time with client
+// Server tells client when its next stats interval starts, client aligns to that
+func handshakeWithClientSync(test *ethrTest, conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
+	// Step 1: Receive SYN and send ACK (existing handshake)
+	ethrMsg := recvSessionMsg(conn)
+	if ethrMsg.Type != EthrSyn {
+		ui.printDbg("Failed to receive SYN message from client.")
+		err = os.ErrInvalid
+		return
+	}
+	testID = ethrMsg.Syn.TestID
+	clientParam = ethrMsg.Syn.ClientParam
+	ethrMsg = createAckMsg()
+	err = sendSessionMsg(conn, ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to send ACK message to client. Error: %v", err)
+		return
+	}
+
+	// Step 2: Receive sync request from client
+	ethrMsg = recvSessionMsg(conn)
+	if ethrMsg.Type != EthrSyncStart {
+		ui.printDbg("Failed to receive SyncStart message from client.")
+		err = os.ErrInvalid
+		return
+	}
+
+	// Step 3: Tell client how long until our next stats interval
+	delayNs := getTimeToNextTick()
+	// Calculate the exact start time (next interval boundary)
+	startTime := time.Now().Add(time.Duration(delayNs))
+	
+	ethrMsg = createSyncReadyMsg(delayNs)
+	err = sendSessionMsg(conn, ethrMsg)
+	if err != nil {
+		ui.printDbg("Failed to send SyncReady message to client. Error: %v", err)
+		return
+	}
+
+	// Step 4: Wait until the next stats interval starts
+	time.Sleep(time.Duration(delayNs))
+
+	// Step 5: Set the test start time to the exact interval boundary
+	test.startTime = startTime
+	return
+}
+
+// syncStartWithClient synchronizes the start time for bandwidth tests
+// The server tells the client when its next stats interval starts,
+// and the client aligns to that timing.
+// Returns true if this was a control connection (did sync), false if data-only connection
+func trySyncStartWithClient(test *ethrTest, conn net.Conn) (isControl bool, err error) {
+	// Set a short read deadline to detect if this is a control connection
+	// Control connections send SyncStart immediately after basic handshake
+	// Data connections don't send anything - they just start the bandwidth test
+	conn.SetReadDeadline(time.Now().Add(100 * time.Millisecond))
+	ethrMsg := recvSessionMsg(conn)
+	conn.SetReadDeadline(time.Time{}) // Clear deadline
+	
+	if ethrMsg.Type != EthrSyncStart {
+		// Not a control connection - this is a data connection
+		// It will just do bandwidth test without sync
+		isControl = false
+		return
+	}
+	
+	// This is a control connection - do the sync handshake
+	isControl = true
+
+	if gOneClient {
+		// Single-client mode: 3-way handshake to measure RTT
+		// Step 1: Send SyncReady with delay=0 (signals single-client mode)
+		ethrMsg = createSyncReadyMsg(0)
+		err = sendSessionMsg(conn, ethrMsg)
+		if err != nil {
+			ui.printDbg("Failed to send SyncReady message to client. Error: %v", err)
+			return
+		}
+		
+		// Step 2: Wait for client to send back RTT measurement
+		ethrMsg = recvSessionMsg(conn)
+		if ethrMsg.Type != EthrSyncGo {
+			ui.printDbg("Failed to receive SyncGo message from client.")
+			err = os.ErrInvalid
+			return
+		}
+		rttNs := ethrMsg.SyncGo.RttNs
+		
+		// Step 3: Sleep RTT/2, then both sides start at the same moment
+		// When client sent SyncGo, it started. That message takes RTT/2 to arrive.
+		// So we sleep RTT/2 after receiving it, and we're synchronized.
+		halfRtt := time.Duration(rttNs / 2)
+		time.Sleep(halfRtt)
+		
+		startTime := time.Now()
+		test.startTime = startTime
+		startStatsTimerAt(startTime)
+	} else {
+		// Multi-client mode: align to existing stats timer
+		// Account for RTT/2: the delayNs we send should be reduced by RTT/2
+		// because the message takes RTT/2 to reach the client
+		delayNs := getTimeToNextTick()
+		
+		ethrMsg = createSyncReadyMsg(delayNs)
+		err = sendSessionMsg(conn, ethrMsg)
+		if err != nil {
+			ui.printDbg("Failed to send SyncReady message to client. Error: %v", err)
+			return
+		}
+		
+		// Wait for client to send back RTT (so client can adjust)
+		ethrMsg = recvSessionMsg(conn)
+		if ethrMsg.Type != EthrSyncGo {
+			ui.printDbg("Failed to receive SyncGo message from client.")
+			err = os.ErrInvalid
+			return
+		}
+		
+		// In multi-client mode, we just wait for the next tick
+		// Client has already adjusted the delay by RTT/2
+		time.Sleep(time.Duration(delayNs))
+		startTime := time.Now()
+		test.startTime = startTime
+	}
 	return
 }
 
@@ -127,6 +263,7 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	// those cases as well.
 	atomic.AddUint64(&test.testResult.cps, 1)
 
+	// First do the basic handshake to determine test type
 	testID, clientParam, err := handshakeWithClient(test, conn)
 	if err != nil {
 		ui.printDbg("Failed in handshake with the client. Error: %v", err)
@@ -135,6 +272,14 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	isCPSorPing = false
 	if testID.Protocol == TCP {
 		if testID.Type == Bandwidth {
+			// For bandwidth tests, try to do synchronization
+			// Control connections send SyncStart, data connections don't
+			// This works for multiple clients from same IP and multiple threads
+			_, err = trySyncStartWithClient(test, conn)
+			if err != nil {
+				ui.printDbg("Failed to synchronize start time with client. Error: %v", err)
+				return
+			}
 			srvrRunTCPBandwidthTest(test, clientParam, conn)
 		} else if testID.Type == Latency {
 			ui.emitLatencyHdr()

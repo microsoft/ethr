@@ -115,7 +115,7 @@ func printBwTestResult(p EthrProtocol, fd string, t0, t1, bw, pps uint64) {
 	}
 }
 
-func printTestResult(test *ethrTest, seconds uint64) {
+func printTestResult(test *ethrTest, seconds float64) {
 	if test.testID.Type == Bandwidth &&
 		(test.testID.Protocol == TCP || test.testID.Protocol == UDP) {
 		if gInterval == 0 {
@@ -128,7 +128,8 @@ func printTestResult(test *ethrTest, seconds uint64) {
 		test.connListDo(func(ec *ethrConn) {
 			bw := atomic.SwapUint64(&ec.bw, 0)
 			pps := atomic.SwapUint64(&ec.pps, 0)
-			bw /= seconds
+			// Use actual elapsed time for precise rate calculation
+			bw = uint64(float64(bw) / seconds)
 			if !gNoConnectionStats {
 				fd := fmt.Sprintf("%5d", ec.fd)
 				printBwTestResult(test.testID.Protocol, fd, gInterval, gInterval+1, bw, pps)
@@ -192,7 +193,7 @@ func printTestResult(test *ethrTest, seconds uint64) {
 	gInterval++
 }
 
-func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
+func (u *clientUI) emitTestResult(s *ethrSession, proto EthrProtocol, seconds float64) {
 	var testList = []EthrTestType{Bandwidth, Cps, Pps, TraceRoute, MyTraceRoute}
 
 	for _, testType := range testList {

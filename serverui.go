@@ -181,7 +181,7 @@ func (u *serverTui) emitTestResultBegin() {
 	u.results = nil
 }
 
-func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
+func (u *serverTui) emitTestResult(s *ethrSession, proto EthrProtocol, seconds float64) {
 	str := getTestResults(s, proto, seconds)
 	if len(str) > 0 {
 		ui.printTestResults(str)
@@ -341,7 +341,7 @@ func (u *serverCli) emitTestResultBegin() {
 	}
 }
 
-func (u *serverCli) emitTestResult(s *ethrSession, proto EthrProtocol, seconds uint64) {
+func (u *serverCli) emitTestResult(s *ethrSession, proto EthrProtocol, seconds float64) {
 	str := getTestResults(s, proto, seconds)
 	if len(str) > 0 {
 		ui.printTestResults(str)
@@ -402,7 +402,7 @@ func emitAggregate(proto EthrProtocol) {
 	}
 }
 
-func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string {
+func getTestResults(s *ethrSession, proto EthrProtocol, seconds float64) []string {
 	var bwTestOn, cpsTestOn, ppsTestOn, latTestOn bool
 	var bw, cps, pps, latency uint64
 	aggTestResult, _ := gAggregateTestResults[proto]
@@ -410,14 +410,35 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 	if found && test.isActive {
 		bwTestOn = true
 		bw = atomic.SwapUint64(&test.testResult.bw, 0)
-		bw /= seconds
+		// Use actual elapsed time for precise rate calculation
+		bw = uint64(float64(bw) / seconds)
+
+		// Don't print results for intervals before the test started
+		// The startTime is set during sync handshake to indicate when data transfer begins
+		if !test.startTime.IsZero() {
+			// This interval covers [lastStatsTime - seconds, lastStatsTime]
+			// For synchronized tests, startTime should be at the interval boundary.
+			// Use a small tolerance (50ms) to account for timing jitter.
+			intervalStart := lastStatsTime.Add(-time.Duration(seconds * float64(time.Second)))
+			tolerance := 50 * time.Millisecond
+			
+			if test.startTime.After(intervalStart.Add(tolerance)) {
+				// Test started well after this interval began - skip
+				atomic.SwapUint64(&test.testResult.cps, 0)
+				atomic.SwapUint64(&test.testResult.pps, 0)
+				return []string{}
+			}
+			// Test started at or before this interval - report it
+			test.startTime = time.Time{}
+		}
+
 		aggTestResult.bw += bw
 		aggTestResult.cbw++
 
 		if proto == TCP {
 			cpsTestOn = true
 			cps = atomic.SwapUint64(&test.testResult.cps, 0)
-			cps /= seconds
+			cps = uint64(float64(cps) / seconds)
 			aggTestResult.cps += cps
 			aggTestResult.ccps++
 		}
@@ -425,7 +446,7 @@ func getTestResults(s *ethrSession, proto EthrProtocol, seconds uint64) []string
 		if proto == UDP {
 			ppsTestOn = true
 			pps = atomic.SwapUint64(&test.testResult.pps, 0)
-			pps /= seconds
+			pps = uint64(float64(pps) / seconds)
 			aggTestResult.pps += pps
 			aggTestResult.cpps++
 		}

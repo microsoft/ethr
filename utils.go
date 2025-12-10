@@ -32,6 +32,9 @@ const (
 	TERA = 1000 * 1000 * 1000 * 1000
 )
 
+// gPrecision controls decimal places for rate display (1 or 2)
+var gPrecision int = 1
+
 func numberToUnit(num uint64) string {
 	unit := ""
 	value := float64(num)
@@ -51,8 +54,12 @@ func numberToUnit(num uint64) string {
 		value = value / KILO
 	}
 
-	result := strconv.FormatFloat(value, 'f', 2, 64)
-	result = strings.TrimSuffix(result, ".00")
+	result := strconv.FormatFloat(value, 'f', gPrecision, 64)
+	if gPrecision == 1 {
+		result = strings.TrimSuffix(result, ".0")
+	} else {
+		result = strings.TrimSuffix(result, ".00")
+	}
 	return result + unit
 }
 
@@ -317,10 +324,12 @@ func (ln tcpKeepAliveListener) Accept() (c net.Conn, err error) {
 }
 
 func SleepUntilNextWholeSecond() {
+	// Sleep until the next whole second boundary (when nanoseconds = 0)
+	// This ensures both client and server align to the same clock boundaries
 	t0 := time.Now()
-	t1 := t0.Add(time.Second)
-	res := t1.Round(time.Second)
-	time.Sleep(time.Until(res))
+	// Truncate to current second, then add 1 second to get next boundary
+	nextSecond := t0.Truncate(time.Second).Add(time.Second)
+	time.Sleep(time.Until(nextSecond))
 }
 
 func ethrSetTTL(fd uintptr, ttl int) {
