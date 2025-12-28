@@ -371,7 +371,7 @@ func ethrDialAll(p EthrProtocol, dialAddr string) (conn net.Conn, err error) {
 }
 
 func ethrDialEx(p EthrProtocol, dialAddr, localIP string, localPortNum uint16, ttl int, tos int) (conn net.Conn, err error) {
-	localAddr := fmt.Sprintf("%v:%v", localIP, localPortNum)
+	localAddr := fmt.Sprintf("[%v]:%v", localIP, localPortNum)
 	var la net.Addr
 	network := Tcp()
 	if p == TCP {

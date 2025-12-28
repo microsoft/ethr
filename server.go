@@ -204,7 +204,7 @@ func trySyncStartWithClient(test *ethrTest, conn net.Conn) (isControl bool, err 
 }
 
 func srvrRunTCPServer() error {
-	l, err := net.Listen(Tcp(), gLocalIP+":"+gEthrPortStr)
+	l, err := net.Listen(Tcp(), "["+gLocalIP+"]:"+gEthrPortStr)
 	if err != nil {
 		return err
 	}
@@ -378,7 +378,7 @@ func srvrRunTCPLatencyTest(test *ethrTest, clientParam EthrClientParam, conn net
 }
 
 func srvrRunUDPServer() error {
-	udpAddr, err := net.ResolveUDPAddr(Udp(), gLocalIP+":"+gEthrPortStr)
+	udpAddr, err := net.ResolveUDPAddr(Udp(), "["+gLocalIP+"]:"+gEthrPortStr)
 	if err != nil {
 		ui.printDbg("Unable to resolve UDP address: %v", err)
 		return err
