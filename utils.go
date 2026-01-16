@@ -35,6 +35,30 @@ const (
 // gPrecision controls decimal places for rate display (1 or 2)
 var gPrecision int = 1
 
+// formatListenAddress formats a local IP and port into a proper listen address.
+// For IPv4, it returns "ip:port".
+// For IPv6, it returns "[ip]:port".
+// Empty IP returns ":port" (listen on all interfaces).
+func formatListenAddress(ip string, port string) string {
+	if ip == "" {
+		return ":" + port
+	}
+
+	parsedIP := net.ParseIP(ip)
+	if parsedIP == nil {
+		// Not a valid IP, return as-is
+		return ip + ":" + port
+	}
+
+	if parsedIP.To4() == nil {
+		// IPv6 address - wrap in brackets
+		return "[" + ip + "]:" + port
+	}
+
+	// IPv4 address
+	return ip + ":" + port
+}
+
 func numberToUnit(num uint64) string {
 	unit := ""
 	value := float64(num)

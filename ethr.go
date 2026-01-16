@@ -157,7 +157,12 @@ func main() {
 	}
 
 	if *ip != "" {
-		gLocalIP = *ip
+		ipToParse := *ip
+		// Strip brackets from IPv6 addresses if present (e.g., "[2001:db8::1]")
+		if strings.HasPrefix(ipToParse, "[") && strings.HasSuffix(ipToParse, "]") {
+			ipToParse = ipToParse[1 : len(ipToParse)-1]
+		}
+		gLocalIP = ipToParse
 		ipAddr := net.ParseIP(gLocalIP)
 		if ipAddr == nil {
 			printUsageError(fmt.Sprintf("Invalid IP address: <%s> specified.", *ip))
