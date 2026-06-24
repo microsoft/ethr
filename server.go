@@ -78,7 +78,7 @@ func runServer(serverParam ethrServerParam) {
 	}
 }
 
-func handshakeWithClient(test *ethrTest, conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
+func handshakeWithClient(conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
 	ethrMsg := recvSessionMsg(conn)
 	if ethrMsg.Type != EthrSyn {
 		ui.printDbg("Failed to receive SYN message from client.")
@@ -316,7 +316,7 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	atomic.AddUint64(&test.testResult.cps, 1)
 
 	// First do the basic handshake to determine test type
-	testID, clientParam, err := handshakeWithClient(test, conn)
+	testID, clientParam, err := handshakeWithClient(conn)
 	if err != nil {
 		ui.printDbg("Failed in handshake with the client. Error: %v", err)
 		return
