@@ -10,6 +10,7 @@ import (
 	"fmt"
 	"log"
 	"os"
+	"sync"
 	"time"
 )
 
@@ -60,6 +61,8 @@ type logTestResults struct {
 
 var loggingActive = false
 var logChan = make(chan string, 64)
+var logDone = make(chan struct{})
+var logFiniOnce sync.Once
 
 func logInit(fileName string) {
 	if fileName == "" {
@@ -77,15 +80,25 @@ func logInit(fileName string) {
 }
 
 func logFini() {
-	loggingActive = false
+	// Signal runLogger to stop. Without this the goroutine blocks forever on
+	// the logChan receive and the log file is never closed. The once guard
+	// keeps logFini safe to call more than once.
+	logFiniOnce.Do(func() {
+		loggingActive = false
+		close(logDone)
+	})
 }
 
 func runLogger(logFile *os.File) {
-	for loggingActive {
-		s := <-logChan
-		log.Println(s)
+	for {
+		select {
+		case <-logDone:
+			_ = logFile.Close()
+			return
+		case s := <-logChan:
+			log.Println(s)
+		}
 	}
-	logFile.Close()
 }
 
 func logMsg(prefix, msg string) {
