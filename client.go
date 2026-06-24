@@ -123,6 +123,13 @@ func handshakeWithServerSync(test *ethrTest, conn net.Conn) (startTime time.Time
 		err = os.ErrInvalid
 		return
 	}
+	// A SyncReady whose payload was omitted decodes with a nil SyncReady
+	// pointer; the Type check above does not prove otherwise.
+	if ethrMsg.SyncReady == nil {
+		ui.printDbg("Received SyncReady message with nil payload from Ethr server.")
+		err = os.ErrInvalid
+		return
+	}
 	delayNs := ethrMsg.SyncReady.DelayNs
 
 	if delayNs == 0 {
@@ -331,6 +338,14 @@ func tcpRunBandwidthTestSync(test *ethrTest, toStop chan int, duration time.Dura
 	recvTime := time.Now()
 	if ethrMsg.Type != EthrSyncReady {
 		ui.printErr("Failed to receive SyncReady message from server.")
+		controlConn.Close()
+		toStop <- disconnect
+		return
+	}
+	// A SyncReady whose payload was omitted decodes with a nil SyncReady
+	// pointer; the Type check above does not prove otherwise.
+	if ethrMsg.SyncReady == nil {
+		ui.printErr("Received SyncReady message with nil payload from server.")
 		controlConn.Close()
 		toStop <- disconnect
 		return
