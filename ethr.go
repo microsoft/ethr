@@ -206,7 +206,7 @@ func main() {
 		}
 		bufLen := unitToNumber(*bufLenStr)
 		if bufLen == 0 {
-			printUsageError(fmt.Sprintf("Invalid length specified: %s" + *bufLenStr))
+			printUsageError(fmt.Sprintf("Invalid length specified: %s", *bufLenStr))
 		}
 
 		// Check specific bwRate if any.
