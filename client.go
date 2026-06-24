@@ -1130,7 +1130,12 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			continue
 		}
 		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
-			body := icmpMsg.Body.(*icmp.TimeExceeded).Data
+			te, ok := icmpMsg.Body.(*icmp.TimeExceeded)
+			if !ok {
+				ui.printDbg("Received TimeExceeded ICMP message with unexpected body type.")
+				continue
+			}
+			body := te.Data
 			index := bytes.Index(body, neededSig[:4])
 			if index > 0 {
 				if proto == TCP {
@@ -1159,7 +1164,11 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 		}
 
 		if proto == ICMP && (icmpMsg.Type == ipv4.ICMPTypeEchoReply || icmpMsg.Type == ipv6.ICMPTypeEchoReply) {
-			echo := icmpMsg.Body.(*icmp.Echo)
+			echo, ok := icmpMsg.Body.(*icmp.Echo)
+			if !ok {
+				ui.printDbg("Received EchoReply ICMP message with unexpected body type.")
+				continue
+			}
 			ethrUnused(echo)
 			b, _ := icmpMsg.Body.Marshal(1)
 			if string(b[4:]) != string(neededIcmpBody) {
