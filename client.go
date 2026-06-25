@@ -123,6 +123,13 @@ func handshakeWithServerSync(test *ethrTest, conn net.Conn) (startTime time.Time
 		err = os.ErrInvalid
 		return
 	}
+	// A SyncReady whose payload was omitted decodes with a nil SyncReady
+	// pointer; the Type check above does not prove otherwise.
+	if ethrMsg.SyncReady == nil {
+		ui.printDbg("Received SyncReady message with nil payload from Ethr server.")
+		err = os.ErrInvalid
+		return
+	}
 	delayNs := ethrMsg.SyncReady.DelayNs
 
 	if delayNs == 0 {
@@ -331,6 +338,14 @@ func tcpRunBandwidthTestSync(test *ethrTest, toStop chan int, duration time.Dura
 	recvTime := time.Now()
 	if ethrMsg.Type != EthrSyncReady {
 		ui.printErr("Failed to receive SyncReady message from server.")
+		controlConn.Close()
+		toStop <- disconnect
+		return
+	}
+	// A SyncReady whose payload was omitted decodes with a nil SyncReady
+	// pointer; the Type check above does not prove otherwise.
+	if ethrMsg.SyncReady == nil {
+		ui.printErr("Received SyncReady message with nil payload from server.")
 		controlConn.Close()
 		toStop <- disconnect
 		return
@@ -1115,7 +1130,12 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 			continue
 		}
 		if icmpMsg.Type == ipv4.ICMPTypeTimeExceeded || icmpMsg.Type == ipv6.ICMPTypeTimeExceeded {
-			body := icmpMsg.Body.(*icmp.TimeExceeded).Data
+			te, ok := icmpMsg.Body.(*icmp.TimeExceeded)
+			if !ok {
+				ui.printDbg("Received TimeExceeded ICMP message with unexpected body type.")
+				continue
+			}
+			body := te.Data
 			index := bytes.Index(body, neededSig[:4])
 			if index > 0 {
 				if proto == TCP {
@@ -1144,7 +1164,11 @@ func icmpRecvMsg(c net.PacketConn, proto EthrProtocol, timeout time.Duration, ne
 		}
 
 		if proto == ICMP && (icmpMsg.Type == ipv4.ICMPTypeEchoReply || icmpMsg.Type == ipv6.ICMPTypeEchoReply) {
-			echo := icmpMsg.Body.(*icmp.Echo)
+			echo, ok := icmpMsg.Body.(*icmp.Echo)
+			if !ok {
+				ui.printDbg("Received EchoReply ICMP message with unexpected body type.")
+				continue
+			}
 			ethrUnused(echo)
 			b, _ := icmpMsg.Body.Marshal(1)
 			if string(b[4:]) != string(neededIcmpBody) {
