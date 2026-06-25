@@ -18,6 +18,22 @@ import (
 
 var gCert []byte
 
+const (
+	// maxServerBufferSize bounds a client-supplied buffer length before the
+	// server allocates it. It matches the largest value a legitimate client
+	// sends (the -l upper limit for TCP) while rejecting hostile values that
+	// would otherwise force an oversized allocation.
+	maxServerBufferSize = 2 * GIGA
+	// maxServerRttCount bounds the latency round-trip count. A zero value would
+	// divide by zero or index an empty slice, and a huge value would drive an
+	// oversized allocation and a runaway loop.
+	maxServerRttCount = 1000 * 1000
+	// maxRttSyncSleep bounds the half-RTT sleep used to align client and server
+	// start times. The RTT value arrives from the client over the wire, so it
+	// must be capped to stop a hostile value from pinning the goroutine.
+	maxRttSyncSleep = time.Second
+)
+
 func initServer(showUI bool) {
 	initServerUI(showUI)
 }
@@ -62,10 +78,17 @@ func runServer(serverParam ethrServerParam) {
 	}
 }
 
-func handshakeWithClient(test *ethrTest, conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
+func handshakeWithClient(conn net.Conn) (testID EthrTestID, clientParam EthrClientParam, err error) {
 	ethrMsg := recvSessionMsg(conn)
 	if ethrMsg.Type != EthrSyn {
 		ui.printDbg("Failed to receive SYN message from client.")
+		err = os.ErrInvalid
+		return
+	}
+	// A SYN whose payload was omitted decodes with a nil Syn pointer; the Type
+	// check above does not prove otherwise, so guard it before dereferencing.
+	if ethrMsg.Syn == nil {
+		ui.printDbg("Received SYN message with nil payload from client.")
 		err = os.ErrInvalid
 		return
 	}
@@ -74,6 +97,21 @@ func handshakeWithClient(test *ethrTest, conn net.Conn) (testID EthrTestID, clie
 	ethrMsg = createAckMsg()
 	err = sendSessionMsg(conn, ethrMsg)
 	return
+}
+
+// validClientParam reports whether the parameters a client carried in its SYN
+// message are within sane bounds. The server must validate these itself rather
+// than trust the client: a malformed or hostile SYN can otherwise drive oversized
+// allocations or a zero RttCount that panics later on a divide-by-zero or an
+// index-out-of-range.
+func validClientParam(p EthrClientParam) bool {
+	if p.BufferSize == 0 || p.BufferSize > maxServerBufferSize {
+		return false
+	}
+	if p.RttCount == 0 || p.RttCount > maxServerRttCount {
+		return false
+	}
+	return true
 }
 
 // handshakeWithClientSync performs handshake and synchronizes start time with client
@@ -162,12 +200,26 @@ func trySyncStartWithClient(test *ethrTest, conn net.Conn) (isControl bool, err 
 			err = os.ErrInvalid
 			return
 		}
+		// The SyncGo payload may be nil even though the Type matches, so guard
+		// it before reading the RTT the client measured.
+		if ethrMsg.SyncGo == nil {
+			ui.printDbg("Received SyncGo message with nil payload from client.")
+			err = os.ErrInvalid
+			return
+		}
 		rttNs := ethrMsg.SyncGo.RttNs
 		
 		// Step 3: Sleep RTT/2, then both sides start at the same moment
 		// When client sent SyncGo, it started. That message takes RTT/2 to arrive.
 		// So we sleep RTT/2 after receiving it, and we're synchronized.
 		halfRtt := time.Duration(rttNs / 2)
+		// Clamp the wire-controlled delay to a sane bound: a negative or huge
+		// value must not pin this goroutine.
+		if halfRtt < 0 {
+			halfRtt = 0
+		} else if halfRtt > maxRttSyncSleep {
+			halfRtt = maxRttSyncSleep
+		}
 		time.Sleep(halfRtt)
 		
 		startTime := time.Now()
@@ -264,9 +316,13 @@ func srvrHandleNewTcpConn(conn net.Conn) {
 	atomic.AddUint64(&test.testResult.cps, 1)
 
 	// First do the basic handshake to determine test type
-	testID, clientParam, err := handshakeWithClient(test, conn)
+	testID, clientParam, err := handshakeWithClient(conn)
 	if err != nil {
 		ui.printDbg("Failed in handshake with the client. Error: %v", err)
+		return
+	}
+	if !validClientParam(clientParam) {
+		ui.printDbg("Rejecting connection: client supplied invalid BufferSize or RttCount.")
 		return
 	}
 	isCPSorPing = false
